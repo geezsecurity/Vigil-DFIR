@@ -175,7 +175,7 @@
   .privacy{margin-top:18px;font-size:11px;color:var(--txt-faint);font-family:var(--mono)}
 
   #progress{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-            background:rgba(8,11,16,.86);z-index:20;backdrop-filter:blur(2px)}
+            background:rgba(8,11,16,.98);z-index:20;backdrop-filter:blur(3px)}
   #progress .box{width:380px;text-align:center}
   #progress .lbl{font-family:var(--mono);font-size:12px;color:var(--txt-dim);margin-bottom:10px}
   .track{height:6px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:4px;overflow:hidden}
@@ -4380,7 +4380,7 @@ $("gridwrap").addEventListener("drop",e=>{ e.preventDefault();drop.classList.rem
   if(e.dataTransfer&&e.dataTransfer.files.length)loadFiles(e.dataTransfer.files); });
 
 /* ---------- progress ---------- */
-function showProgress(on){ const p=$("progress"); p.style.display=on?"flex":"none"; if(!on)p.classList.remove("indet"); if(on)setProgress(0,0,1); }
+function showProgress(on){ const p=$("progress"); p.style.display=on?"flex":"none"; if(!on)p.classList.remove("indet"); if(on){ setProgress(0,0,1); $("empty").style.display="none"; } }
 function setProgress(f,d,t){ $("progFill").style.width=(f*100).toFixed(1)+"%";
   $("progLbl").textContent="parsing  "+d.toLocaleString()+" / "+t.toLocaleString()+" lines"; }
 function setProgressPct(pct,label){ $("progFill").style.width=Math.max(0,Math.min(100,pct)).toFixed(1)+"%";
