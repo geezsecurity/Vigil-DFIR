@@ -159,6 +159,69 @@ async function eventRecords(cap){
     if(cap && recs.length>=cap){ rl.close(); break; } }
   return recs; }
 
+/* ---------- byte-offset index (random access into events.jsonl) ----------------
+   events.jsonl is one JSON event per line. events.idx holds the byte offset of each
+   line start as consecutive little-endian Float64 (safe past 2^53 bytes). This lets
+   any event be fetched by index with a single seek+read instead of scanning the file,
+   powering fetch-on-scroll and server-side search without loading bodies into RAM.   */
+const EVENTS_IDX = path.join(DATA, "events.idx");
+let _idxCache = null;   // { mtimeMs, size, offsets: Float64Array }
+function idxFresh(){
+  try{ const a=fs.statSync(EVENTS), b=fs.statSync(EVENTS_IDX);
+    return b.mtimeMs>=a.mtimeMs && b.size>0 && b.size%8===0; }catch{ return false; }
+}
+// Stream the file as raw bytes and record the start offset of every non-final line.
+async function buildEventsIndex(){
+  const fh=await fsopen(EVENTS,"r");
+  const ws=fs.createWriteStream(EVENTS_IDX);
+  const CHUNK=1<<20; const buf=NodeBuffer.allocUnsafe(CHUNK);
+  const rec=NodeBuffer.allocUnsafe(8);
+  let pos=0, started=false, pending=-1;
+  const emit=(off)=>{ rec.writeDoubleLE(off,0); if(!ws.write(NodeBuffer.from(rec)) ) {} };
+  try{
+    while(true){
+      const { bytesRead }=await fh.read(buf,0,CHUNK,pos);
+      if(!bytesRead) break;
+      for(let j=0;j<bytesRead;j++){
+        const abs=pos+j;
+        if(!started){ emit(0); started=true; }
+        if(pending>=0){ emit(pending); pending=-1; }   // a later byte confirms this line start
+        if(buf[j]===0x0A) pending=abs+1;               // next line begins after the newline
+      }
+      pos+=bytesRead;
+    }
+  } finally { await fh.close(); }
+  await new Promise(r=>ws.end(r));   // a trailing newline leaves `pending` unconfirmed -> correctly dropped
+}
+async function getOffsets(){
+  if(!fs.existsSync(EVENTS)) return null;
+  const st=fs.statSync(EVENTS);
+  if(_idxCache && _idxCache.mtimeMs===st.mtimeMs && _idxCache.size===st.size) return _idxCache;
+  if(!idxFresh()) await buildEventsIndex();
+  const raw=fs.readFileSync(EVENTS_IDX);
+  const offsets=new Float64Array(raw.buffer, raw.byteOffset, Math.floor(raw.length/8));
+  _idxCache={ mtimeMs:st.mtimeMs, size:st.size, offsets, fileSize:st.size };
+  return _idxCache;
+}
+// Read raw JSON lines for the given event indices (in the order requested).
+async function readBodies(ids){
+  const idx=await getOffsets(); if(!idx) return [];
+  const { offsets, fileSize }=idx; const n=offsets.length;
+  const fh=await fsopen(EVENTS,"r"); const out=new Array(ids.length);
+  try{
+    for(let k=0;k<ids.length;k++){ const i=ids[k];
+      if(i==null||i<0||i>=n){ out[k]=null; continue; }
+      const start=offsets[i], end=(i+1<n?offsets[i+1]:fileSize);
+      const len=end-start; if(len<=0){ out[k]=null; continue; }
+      const b=NodeBuffer.allocUnsafe(len);
+      const { bytesRead }=await fh.read(b,0,len,start);
+      let s=b.toString("utf8",0,bytesRead); if(s.endsWith("\n"))s=s.slice(0,-1); if(s.endsWith("\r"))s=s.slice(0,-1);
+      out[k]=s;
+    }
+  } finally { await fh.close(); }
+  return out;
+}
+
 /* =====================  ROUTES  ===================== */
 app.get("/api/meta", (req,res)=> res.json({ ok:true, meta:readMeta(), rules:ruleCounts(),
   hasDetections: fs.existsSync(DETS), browseCap: BROWSE_CAP }));
@@ -342,13 +405,87 @@ app.get("/api/dashboard", (req,res)=>{
 });
 
 
-app.get("/api/event/:idx", (req,res)=>{
+app.get("/api/event/:idx", async (req,res)=>{
   const idx=parseInt(req.params.idx,10); if(isNaN(idx)||idx<0) return res.status(400).end();
   if(!fs.existsSync(EVENTS)) return res.status(404).end();
-  const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
-  let i=0, found=null;
-  rl.on("line", l=>{ if(i===idx){ found=l; rl.close(); } i++; });
-  rl.on("close", ()=>{ if(found==null) return res.status(404).end(); res.type("application/json").send(found); });
+  try{ const [line]=await readBodies([idx]);
+    if(line==null) return res.status(404).end();
+    res.type("application/json").send(line);
+  }catch(err){ res.status(500).json({error:String(err.message||err)}); }
+});
+
+/* ---------- fetch-on-scroll: server-side search + body fetch --------------------
+   The grid holds only the visible rows. /api/search returns the ordered global ids
+   (and detection level) matching the active filter across the WHOLE log; /api/bodies
+   returns just the event bodies for the ids currently on screen. Semantics mirror the
+   client's applyFilter so behavior is identical whether windowed or streamed.        */
+const SEVNUM_S={critical:4,high:3,medium:2,low:1,informational:0,info:0};
+function sevNumS(l){ const n=SEVNUM_S[String(l||"").toLowerCase()]; return n==null?2:n; }
+
+app.post("/api/bodies", async (req,res)=>{
+  try{
+    const ids=Array.isArray(req.body&&req.body.ids)?req.body.ids.filter(n=>Number.isInteger(n)&&n>=0):[];
+    res.type("application/x-ndjson");
+    if(!ids.length) return res.end();
+    const lines=await readBodies(ids);
+    for(const s of lines) res.write((s==null?"null":s)+"\n");
+    res.end();
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
+app.post("/api/search", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, total:0, ids:[], levels:[] });
+    const b=req.body||{};
+    const q=String(b.q||"").toLowerCase();
+    const eid=(b.eid!=null&&b.eid!=="")?String(b.eid):"";
+    const src=b.src||null, provider=b.provider||null;   // provider = include-only
+    const excluded=new Set(Array.isArray(b.excluded)?b.excluded:[]);
+    const detOnly=!!b.det, ruleId=b.ruleId||"", flaggedOnly=!!b.flagged;
+    const tr=(b.timeRange&&isFinite(b.timeRange.from)&&isFinite(b.timeRange.to))?b.timeRange:null;
+    const sortKey=(b.sort&&b.sort.key)||"ts", sortDir=(b.sort&&b.sort.dir===-1)?-1:1;
+
+    let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{ hits={}; }
+    let flags=null; if(flaggedOnly){ try{ flags=new Set(JSON.parse(fs.readFileSync(FLAGS,"utf8"))); }catch{ flags=new Set(); } }
+
+    const matched=[];
+    const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
+    let i=-1;
+    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+      if(ev._cat==="firewall"||ev._cat==="vpn") continue;
+      const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+      const prov=getProvider(ev);
+      if(provider){ if(prov!==provider) continue; } else if(excluded.has(prov)) continue;
+      const eidv=String(getEventId(sys)||"");
+      if(eid && eidv!==eid) continue;
+      const srcv=ev._src||ev._source||"";
+      if(src && srcv!==src) continue;
+      if(flaggedOnly && !flags.has(i)) continue;
+      const hit=hits[i];
+      if(detOnly && !(hit&&hit.length)) continue;
+      if(ruleId && !(hit&&hit.some(h=>h.ruleId===ruleId))) continue;
+      const ts=getTime(ev); const tms=ts?Date.parse(ts):NaN;
+      if(tr){ if(!(tms>=tr.from&&tms<tr.to)) continue; }
+      if(q){ const comp=getComputer(ev), data=getData(ev);
+        let s=prov+" "+eidv+" "+comp+" "+srcv;
+        for(const k in data){ const v=data[k]; s+=" "+(v==null?"":(typeof v==="object"?JSON.stringify(v):v)); }
+        if(s.toLowerCase().indexOf(q)===-1) continue; }
+      let lvl=-1; if(hit&&hit.length){ for(const h of hit){ const n=sevNumS(h.level); if(n>lvl)lvl=n; } }
+      let sv; switch(sortKey){
+        case "eventId": sv=Number(eidv); if(Number.isNaN(sv))sv=eidv; break;
+        case "provider": sv=prov; break;
+        case "computer": sv=getComputer(ev); break;
+        case "det": sv=lvl; break;
+        default: sv=ts||""; }
+      matched.push({ i, sv, lvl });
+    }
+    matched.sort((a,c)=>{ let x=a.sv,y=c.sv; const nx=+x,ny=+y;
+      if(x!==""&&y!==""&&!Number.isNaN(nx)&&!Number.isNaN(ny)) return (nx-ny)*sortDir;
+      x=x==null?"":String(x); y=y==null?"":String(y); return x<y?-sortDir:x>y?sortDir:0; });
+    const ids=new Array(matched.length), levels=new Array(matched.length);
+    for(let k=0;k<matched.length;k++){ ids[k]=matched[k].i; levels[k]=matched[k].lvl; }
+    res.json({ ok:true, total:ids.length, ids, levels });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
 // flagged events (★) — persisted so they survive a refresh; indices align with the stored log
