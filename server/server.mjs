@@ -488,6 +488,115 @@ app.post("/api/search", async (req,res)=>{
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
+/* ---------- fetch-on-scroll support: Firewall/VPN listing + server-side Evidence ----
+   In true fetch-on-scroll mode the browser holds no dense rows[], so these tabs are
+   served from the stored log instead of mined in the browser.                          */
+function svSummary(data){ let o="",n=0; for(const k in data){ if(n++)o+="  ·  "; const v=data[k];
+  o+=k+"="+(v==null?"":(typeof v==="object"?JSON.stringify(v):String(v))); if(o.length>400)break; } return o; }
+
+// Firewall / VPN events (kept out of the main grid) — bounded list for their dedicated tabs
+app.post("/api/cat", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, total:0, rows:[] });
+    const cat=(req.body&&req.body.cat)==="vpn"?"vpn":"firewall";
+    const CAP=20000; const out=[]; let total=0;
+    const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
+    let i=-1;
+    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+      if(ev._cat!==cat) continue; total++;
+      if(out.length<CAP){ const data=getData(ev);
+        out.push({ i, ts:getTime(ev), src:ev._src||ev._source||"", msg:(data&&data.Message)||svSummary(data) }); }
+    }
+    res.json({ ok:true, total, rows:out });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
+// Map/Set-preserving JSON so the browser rebuilds the exact Evidence structure renderEvidence expects
+function mapSetReplacer(k,v){ if(v instanceof Map) return {__t:"M",v:[...v.entries()]};
+  if(v instanceof Set) return {__t:"S",v:[...v]}; return v; }
+function privIp(ip){ const m=/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(ip||""); if(!m)return true;
+  const a=+m[1],b=+m[2]; return a===10||a===127||a===0||(a===192&&b===168)||(a===172&&b>=16&&b<=31)||(a===169&&b===254); }
+function isExtIp(ip){ return ip && ip!=="-" && ip!=="::1" && /^\d+\.\d+\.\d+\.\d+$/.test(ip) && !privIp(ip); }
+
+// Server-side Evidence extraction — mirrors the client buildEvidence() exactly (same EIDs, same fields, same global i)
+app.get("/api/evidence", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, evidence:null });
+    const AR=20000;   // per-array cap (plain lists); Maps/Sets are naturally bounded by cardinality
+    const E={ accountsCreated:[], groupAdds:[], pwResets:[], acctState:[], explicitCreds:[],
+      extLogons:new Map(), failedBySrc:new Map(), specialPriv:new Map(),
+      procs:[], psBlocks:[], services:[], tasks:[], runKeys:[], fileWrites:[],
+      netConns:new Map(), dns:new Map(), shareAccess:[], logCleared:[], defender:[],
+      kerberos:[], kerbRoast:0, ntlm:[], auditChanges:[], wmiPersist:[], rdpSessions:[], bits:[],
+      lsassAccess:[], remoteThread:[], rawAccess:[], procTamper:[], appBlocks:[], timeChange:[],
+      ips:new Map(), users:new Set(), hosts:new Set(), hashes:new Set(), domains:new Set() };
+    const push=(a,x)=>{ if(a.length<AR)a.push(x); };
+    const isSys=p=>/sysmon/i.test(p||"");
+    const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
+    let i=-1;
+    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+      const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+      const provider=getProvider(ev), computer=getComputer(ev), ts=getTime(ev), d=getData(ev)||{};
+      const id=String(getEventId(sys)||"");
+      const U=k=>d[k]!=null?String(d[k]):"";
+      if(computer)E.hosts.add(computer);
+      switch(id){
+        case "4720": { const u=U("TargetUserName"); push(E.accountsCreated,{i,user:u,by:U("SubjectUserName"),ts}); if(u)E.users.add(u); break; }
+        case "4722": case "4725": case "4726": case "4738":
+          push(E.acctState,{i,user:U("TargetUserName"),act:{"4722":"enabled","4725":"disabled","4726":"deleted","4738":"changed"}[id],ts}); break;
+        case "4723": case "4724": push(E.pwResets,{i,user:U("TargetUserName"),act:id==="4724"?"reset by admin":"changed",by:U("SubjectUserName"),ts}); break;
+        case "4728": case "4732": case "4756":
+          push(E.groupAdds,{i,member:U("MemberName")||U("MemberSid"),group:U("TargetUserName")||U("GroupName"),by:U("SubjectUserName"),ts}); break;
+        case "4672": { const u=U("SubjectUserName"); if(u&&!/\$$/.test(u))E.specialPriv.set(u,(E.specialPriv.get(u)||0)+1); break; }
+        case "4624": { const ip=U("IpAddress"), lt=U("LogonType"), u=U("TargetUserName");
+          if(u)E.users.add(u);
+          if(lt==="10"||isExtIp(ip)){ const key=u+"|"+ip+"|"+lt; const e=E.extLogons.get(key)||{i,user:u,ip,lt,count:0}; e.count++; e.i=i; E.extLogons.set(key,e); }
+          if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
+        case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0}; e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName")); E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
+        case "4648": push(E.explicitCreds,{i,subj:U("SubjectUserName"),target:U("TargetUserName"),server:U("TargetServerName")||U("TargetInfo"),ip:U("IpAddress"),ts}); break;
+        case "4688": { const cmd=U("CommandLine")||U("NewProcessName"); if(cmd)push(E.procs,{i,cmd,parent:U("ParentProcessName"),user:U("SubjectUserName"),ts}); break; }
+        case "1": if(isSys(provider)){ const cmd=U("CommandLine")||U("Image"); if(cmd)push(E.procs,{i,cmd,parent:U("ParentImage"),user:U("User"),ts});
+          const h=U("Hashes"); if(h)h.split(",").forEach(x=>{x=x.trim();if(x)E.hashes.add(x);}); } break;
+        case "4104": { const sb=U("ScriptBlockText"); if(sb&&sb.length>3)push(E.psBlocks,{i,text:sb,ts}); break; }
+        case "7045": push(E.services,{i,name:U("ServiceName"),path:U("ImagePath"),start:U("StartType"),ts}); break;
+        case "4697": push(E.services,{i,name:U("ServiceName"),path:U("ServiceFileName"),ts}); break;
+        case "4698": case "4702": case "4699": case "4700": case "4701":
+          push(E.tasks,{i,name:U("TaskName"),act:{"4698":"created","4699":"deleted","4700":"enabled","4701":"disabled","4702":"updated"}[id],ts}); break;
+        case "3": if(isSys(provider)){ const ip=U("DestinationIp"),port=U("DestinationPort"); const key=ip+":"+port;
+          const e=E.netConns.get(key)||{i,ip,port,host:U("DestinationHostname"),image:U("Image"),count:0}; e.count++; e.i=i; E.netConns.set(key,e);
+          if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); } break;
+        case "22": if(isSys(provider)){ const q=U("QueryName"); if(q){ E.dns.set(q,(E.dns.get(q)||0)+1); E.domains.add(q);} } break;
+        case "13": if(isSys(provider)){ const tgt=U("TargetObject"); if(/\\Run\\|\\RunOnce|CurrentVersion\\Run/i.test(tgt))push(E.runKeys,{i,key:tgt,val:U("Details"),image:U("Image"),ts}); } break;
+        case "11": if(isSys(provider)){ const f=U("TargetFilename"); if(f)push(E.fileWrites,{i,file:f,image:U("Image"),ts}); } break;
+        case "5140": case "5145": push(E.shareAccess,{i,share:U("ShareName"),ip:U("IpAddress"),user:U("SubjectUserName"),ts}); break;
+        case "1102": case "104": push(E.logCleared,{i,prov:provider,by:U("SubjectUserName"),ts}); break;
+        case "1116": case "1117": case "1006": case "1015": case "5001": case "5007":
+          push(E.defender,{i,eid:id,threat:U("Threat Name")||U("ThreatName")||U("Product Name")||"(setting change)",ts}); break;
+        case "4769": case "4768": { const enc=U("TicketEncryptionType"); const svc=U("ServiceName"); const usr=U("TargetUserName")||U("UserName");
+          const rc4=/0x17|0x18/.test(enc); push(E.kerberos,{i,user:usr,service:svc,enc,rc4,ip:U("IpAddress"),ts}); if(rc4)E.kerbRoast++; break; }
+        case "4776": push(E.ntlm,{i,user:U("TargetUserName")||U("UserName"),workstation:U("Workstation")||U("WorkstationName"),status:U("Status"),ts}); break;
+        case "4719": push(E.auditChanges,{i,by:U("SubjectUserName"),cat:U("CategoryId")||U("SubcategoryGuid")||U("Subcategory"),ts}); break;
+        case "19": case "20": case "21": if(isSys(provider))
+          push(E.wmiPersist,{i,kind:{"19":"FilterToConsumerBinding","20":"ConsumerToFilter","21":"FilterActivity"}[id]||"WMI",name:U("Name")||U("Operation")||U("Consumer")||U("Filter"),user:U("User"),ts}); break;
+        case "1149": push(E.rdpSessions,{i,user:U("User")||U("Param1"),ip:U("Address")||U("Param3")||U("SourceNetworkAddress"),ts}); break;
+        case "59": case "60": if(/bits/i.test(provider||"")) push(E.bits,{i,url:U("url")||U("Url")||U("RemoteName"),file:U("name")||U("LocalName"),ts}); break;
+        case "10": if(isSys(provider)){ const tgt=U("TargetImage"), ga=U("GrantedAccess");
+          if(/lsass\.exe/i.test(tgt)) push(E.lsassAccess,{i,src:U("SourceImage"),ga,user:U("SourceUser")||U("User"),ts}); } break;
+        case "8": if(isSys(provider)) push(E.remoteThread,{i,src:U("SourceImage"),tgt:U("TargetImage"),start:U("StartFunction")||U("StartModule"),ts}); break;
+        case "9": if(isSys(provider)) push(E.rawAccess,{i,img:U("Image"),dev:U("Device"),ts}); break;
+        case "25": if(isSys(provider)) push(E.procTamper,{i,img:U("Image"),type:U("Type"),ts}); break;
+        case "8003": case "8004": case "8006": case "8007":
+          push(E.appBlocks,{i,kind:(id==="8004"||id==="8007")?"blocked":"audit",file:U("FullFilePath")||U("FilePath")||U("TargetFilename"),src:"AppLocker",ts}); break;
+        case "3077": case "3033":
+          push(E.appBlocks,{i,kind:"blocked",file:U("File Name")||U("FileNameBuffer")||U("ProcessNameBuffer")||U("FileName"),src:"CodeIntegrity",ts}); break;
+        case "4616": { const u=U("SubjectUserName"); if(u && !/\$$/.test(u) && !/^(LOCAL SERVICE|SYSTEM|NETWORK SERVICE)$/i.test(u))
+          push(E.timeChange,{i,by:u,prev:U("PreviousTime"),nw:U("NewTime"),ts}); break; }
+      }
+    }
+    res.type("application/json").send(JSON.stringify({ ok:true, evidence:E }, mapSetReplacer));
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
 // flagged events (★) — persisted so they survive a refresh; indices align with the stored log
 app.get("/api/flags", (req,res)=>{ let a=[]; try{ a=JSON.parse(fs.readFileSync(FLAGS,"utf8")); }catch{} res.json({ ok:true, indices:a }); });
 app.post("/api/flags", (req,res)=>{
