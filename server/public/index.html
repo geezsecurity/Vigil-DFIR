@@ -4159,13 +4159,22 @@ function getEventId(s){ let e=s&&s.EventID;
 function getTime(ev){ const s=(ev.Event&&ev.Event.System)||ev.System||{}; const tc=s.TimeCreated;
   return ev.SystemTime||(tc&&(tc.SystemTime||(tc["#attributes"]&&tc["#attributes"].SystemTime)))
     ||(s.TimeCreated_attributes&&s.TimeCreated_attributes.SystemTime)||""; }
-function getData(ev){ let d=(ev.Event&&ev.Event.EventData)||ev.EventData||{};
-  if(d&&Array.isArray(d.Data)){ const o={}; let i=0;
+function scalarizeVal(v){ if(v&&typeof v==="object"&&!Array.isArray(v)){ if(v["#text"]!=null)return v["#text"]; if(v.Value!=null)return v.Value; if(v["#attributes"]!=null&&Object.keys(v).length===1)return ""; } return v; }
+function getData(ev){ const E=ev.Event||ev;
+  let d=E.EventData!=null?E.EventData:ev.EventData;
+  if(d==null && E.UserData){ const u=E.UserData; const ks=(u&&typeof u==="object")?Object.keys(u):[]; d=(ks.length===1&&u[ks[0]]&&typeof u[ks[0]]==="object")?u[ks[0]]:u; }
+  if(d==null) d={};
+  let o;
+  if(d&&Array.isArray(d.Data)){ o={}; let i=0;
     for(const it of d.Data){
       if(it&&typeof it==="object"&&it.Name!==undefined) o[it.Name]=it["#text"]!=null?it["#text"]:(it.Value!=null?it.Value:"");
       else o["Data"+(++i)]=it; }
-    for(const k in d) if(k!=="Data") o[k]=d[k]; return o; }
-  return (d&&typeof d==="object")?d:{value:d}; }
+    for(const k in d) if(k!=="Data") o[k]=d[k]; }
+  else if(d&&typeof d==="object") o=d;
+  else return {value:d};
+  let nested=false; for(const k in o){ const v=o[k]; if(v&&typeof v==="object"&&!Array.isArray(v)&&(v["#text"]!=null||v.Value!=null)){ nested=true; break; } }
+  if(!nested) return o;
+  const out={}; for(const k in o) out[k]=scalarizeVal(o[k]); return out; }
 function getComputer(ev){ const s=(ev.Event&&ev.Event.System)||ev.System||{}; return s.Computer||ev.Computer||""; }
 function getChannel(ev){ const s=(ev.Event&&ev.Event.System)||ev.System||{}; return s.Channel||ev.Channel||""; }
 
@@ -6210,6 +6219,7 @@ function buildEvidence(){
     lsassAccess:[], remoteThread:[], rawAccess:[], procTamper:[], appBlocks:[], timeChange:[],
     ips:new Map(), users:new Set(), hosts:new Set(), hashes:new Set(), domains:new Set(), sessions:[] };
   const isSys=p=>/sysmon/i.test(p||"");
+  const LSASS_DUMP=/procdump(64)?(\.exe)?[^\n]*\blsass|comsvcs(\.dll)?[^\n]*minidump|minidump[^\n]*lsass|lsass[^\n]*minidump|rundll32[^\n]*comsvcs|nanodump|dumpert|handlekatz|createdump[^\n]*lsass|sqldumper[^\n]*lsass|sekurlsa|invoke-mimikatz|out-minidump|lsass\.dmp|-ma\s+lsass|\blsass\.exe\b[^\n]*(dump|dmp)/i;
   const sessById=new Map(); const SESS_TYPES=new Set(["2","3","7","9","10","11"]);
   for(let i=0;i<rows.length;i++){ const r=rows[i], d=r.data||{}, id=String(r.eventId);
     const U=k=>d[k]!=null?String(d[k]):"";
@@ -6234,8 +6244,10 @@ function buildEvidence(){
         if(s && s.offTms==null) s.offTms=r.tms; break; }
       case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0}; e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName")); E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
       case "4648": E.explicitCreds.push({i,subj:U("SubjectUserName"),target:U("TargetUserName"),server:U("TargetServerName")||U("TargetInfo"),ip:U("IpAddress"),ts:r.ts}); break;
-      case "4688": { const cmd=U("CommandLine")||U("NewProcessName"); if(cmd)E.procs.push({i,cmd,parent:U("ParentProcessName"),user:U("SubjectUserName"),ts:r.ts}); break; }
-      case "1": if(isSys(r.provider)){ const cmd=U("CommandLine")||U("Image"); if(cmd)E.procs.push({i,cmd,parent:U("ParentImage"),user:U("User"),ts:r.ts});
+      case "4688": { const cmd=U("CommandLine")||U("NewProcessName"); if(cmd){ E.procs.push({i,cmd,parent:U("ParentProcessName"),user:U("SubjectUserName"),ts:r.ts});
+        if(LSASS_DUMP.test(cmd)) E.lsassAccess.push({i,src:U("NewProcessName")||cmd.slice(0,90),ga:"process dump",user:U("SubjectUserName"),ts:r.ts,via:"process"}); } break; }
+      case "1": if(isSys(r.provider)){ const cmd=U("CommandLine")||U("Image"); if(cmd){ E.procs.push({i,cmd,parent:U("ParentImage"),user:U("User"),ts:r.ts});
+        if(LSASS_DUMP.test(cmd)) E.lsassAccess.push({i,src:U("Image")||cmd.slice(0,90),ga:"process dump",user:U("User"),ts:r.ts,via:"process"}); }
         const h=U("Hashes"); if(h)h.split(",").forEach(x=>{x=x.trim();if(x)E.hashes.add(x);}); } break;
       case "4104": { const sb=U("ScriptBlockText"); if(sb&&sb.length>3)E.psBlocks.push({i,text:sb,ts:r.ts}); break; }
       case "7045": E.services.push({i,name:U("ServiceName"),path:U("ImagePath"),start:U("StartType"),ts:r.ts}); break;
@@ -6260,8 +6272,10 @@ function buildEvidence(){
         E.wmiPersist.push({i,kind:{"19":"FilterToConsumerBinding","20":"ConsumerToFilter","21":"FilterActivity"}[id]||"WMI",name:U("Name")||U("Operation")||U("Consumer")||U("Filter"),user:U("User"),ts:r.ts}); break;
       case "1149": E.rdpSessions.push({i,user:U("User")||U("Param1"),ip:U("Address")||U("Param3")||U("SourceNetworkAddress"),ts:r.ts}); break;
       case "59": case "60": if(/bits/i.test(r.provider||"")) E.bits.push({i,url:U("url")||U("Url")||U("RemoteName"),file:U("name")||U("LocalName"),ts:r.ts}); break;
-      case "10": if(isSys(r.provider)){ const tgt=U("TargetImage"), ga=U("GrantedAccess");
-        if(/lsass\.exe/i.test(tgt)) E.lsassAccess.push({i,src:U("SourceImage"),ga,user:U("SourceUser")||U("User"),ts:r.ts}); } break;
+      case "10": { const tgt=U("TargetImage"), ga=U("GrantedAccess");   // lsass target is distinctive; don't require provider match
+        if(/lsass\.exe/i.test(tgt)) E.lsassAccess.push({i,src:U("SourceImage"),ga,user:U("SourceUser")||U("User"),ts:r.ts,via:"handle"}); break; }
+      case "4656": case "4663": { const obj=U("ObjectName");
+        if(/lsass\.exe/i.test(obj)) E.lsassAccess.push({i,src:U("ProcessName")||U("Image"),ga:U("AccessMask")||U("Accesses")||"object access",user:U("SubjectUserName"),ts:r.ts,via:"handle"}); break; }
       case "8": if(isSys(r.provider)) E.remoteThread.push({i,src:U("SourceImage"),tgt:U("TargetImage"),start:U("StartFunction")||U("StartModule"),ts:r.ts}); break;
       case "9": if(isSys(r.provider)) E.rawAccess.push({i,img:U("Image"),dev:U("Device"),ts:r.ts}); break;
       case "25": if(isSys(r.provider)) E.procTamper.push({i,img:U("Image"),type:U("Type"),ts:r.ts}); break;
@@ -6396,8 +6410,8 @@ function renderEvidence(){
      E.defender.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.eid},{t:x.threat}],"",x.eid)));
   // credential access / lateral
   // ---- high-signal threat hunting (rendered near the top of credential-access section) ----
-  h+=evPanel("LSASS access — possible credential dumping (Sysmon 10)",E.lsassAccess.length,["Time","Source process","Granted","User"],
-     E.lsassAccess.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.src,cls:"ev-trunc",title:x.src},{html:'<span class="ev-tag bad">'+esc(x.ga)+'</span>'},{t:x.user}],x.src)),"alert");
+  h+=evPanel("LSASS access — possible credential dumping (Sysmon 10, process dumps, handle access)",E.lsassAccess.length,["Time","Source / process","Access","User"],
+     E.lsassAccess.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.src,cls:"ev-trunc",title:x.src},{html:'<span class="ev-tag bad">'+esc(x.ga)+'</span>'+(x.via?' <span class="ev-tag">'+esc(x.via)+'</span>':'')},{t:x.user}],x.src)),"alert");
   h+=evPanel("CreateRemoteThread — injection (Sysmon 8)",E.remoteThread.length,["Time","Source","Target","Start"],
      E.remoteThread.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.src,cls:"ev-trunc",title:x.src},{t:x.tgt,cls:"ev-trunc",title:x.tgt},{t:x.start,cls:"ev-trunc",title:x.start}],x.tgt)),E.remoteThread.length?"alert":"");
   h+=evPanel("Process tampering (Sysmon 25)",E.procTamper.length,["Time","Image","Type"],
