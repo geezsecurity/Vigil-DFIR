@@ -371,6 +371,9 @@
     font-size:11px;padding:3px 8px;cursor:pointer}
   .rel-chip:hover{border-color:var(--accent);background:var(--panel)}
   .rel-chip b{color:var(--txt-dim);font-weight:600;margin-left:3px}
+  .ent-bd tr[data-rule],.ent-bd tr[data-idx]{cursor:pointer}
+  .ent-bd tr[data-rule]:hover,.ent-bd tr[data-idx]:hover{background:var(--panel)}
+  .ent-bd tr[data-rule] td:nth-child(2){color:var(--accent)}
   /* Super-timeline */
   .tl-hist{display:flex;align-items:flex-end;gap:1px;height:130px;padding:6px 2px;background:var(--panel-2);
     border:1px solid var(--line);border-radius:8px;margin:6px 0}
@@ -5661,6 +5664,7 @@ function openEntityProfile(type,name){
       if(e.target===ov||e.target.closest("[data-entclose]")){ ov.style.display="none"; return; }
       const ep=e.target.closest("[data-eprof]"); if(ep){ openEntityProfile(ep.getAttribute("data-eptype"),ep.getAttribute("data-eprof")); return; }
       const pv=e.target.closest("[data-entpivot]"); if(pv){ ov.style.display="none"; entityGridPivot(pv.getAttribute("data-entpivot")); return; }
+      const rr=e.target.closest("tr[data-rule]"); if(rr){ ov.style.display="none"; entityRulePivot(rr.getAttribute("data-entname"),rr.getAttribute("data-rule"),rr.getAttribute("data-label")); return; }
       const evr=e.target.closest("[data-idx]"); if(evr){ const i=+evr.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
     });
     document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&ov.style.display!=="none")ov.style.display="none"; });
@@ -5677,6 +5681,14 @@ function entityGridPivot(name){
   clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
   showDetOnly=false; $("detBtn").classList.remove("on"); ruleFilter=""; techniqueFilter=""; renderDetChip();
   query=name.toLowerCase(); escQ=esc(query); $("q").value=name;
+  view=defaultView(); buildProviderList(); buildColPicker(); applyFilter(); setTab("events");
+}
+// pivot from a profile's "Detections by rule" row -> the grid, filtered to that rule + this entity
+function entityRulePivot(name, ruleId, label){
+  clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
+  showDetOnly=false; $("detBtn").classList.remove("on"); techniqueFilter="";
+  setRuleFilter(ruleId, label||ruleId);
+  query=(name||"").toLowerCase(); escQ=esc(query); $("q").value=name||"";
   view=defaultView(); buildProviderList(); buildColPicker(); applyFilter(); setTab("events");
 }
 function renderProfileInto(ov,p){
@@ -5700,8 +5712,9 @@ function renderProfileInto(ov,p){
   }
   h+='<div class="detgrid">';
   // detections by rule
-  if(p.rules.length){ h+='<div class="panel"><h3>Detections by rule</h3><div class="dtscroll"><table class="dt"><tbody>';
-    for(const r of p.rules) h+='<tr><td><span class="sev" style="background:'+numColor(sevNum(r.level))+'"></span></td><td>'+esc(r.title)+
+  if(p.rules.length){ h+='<div class="panel"><h3>Detections by rule <span class="pill">click a rule to view its events</span></h3><div class="dtscroll"><table class="dt clickrows"><tbody>';
+    for(const r of p.rules) h+='<tr data-rule="'+esc(r.ruleId||r.title)+'" data-label="'+esc(r.title)+'" data-entname="'+esc(p.name)+'" title="show the events for this detection">'+
+      '<td><span class="sev" style="background:'+numColor(sevNum(r.level))+'"></span></td><td>'+esc(r.title)+
       '</td><td><span class="src-badge '+esc(r.source)+'">'+esc(String(r.source)[0].toUpperCase())+'</span></td><td class="cnt">'+r.count.toLocaleString()+'</td></tr>';
     h+='</tbody></table></div></div>'; }
   // related entities (click to open their profile)
