@@ -383,6 +383,30 @@ function testRec(rule, rec){ if(!rule._fulltext){} rec._fulltext = Engine.buildF
   ok(lc.length>=2, "activity spanning >24h splits into multiple chains ("+lc.length+")");
 })();
 
+/* =====================================================================
+   8. COMMAND-LINE ARTIFACT EXTRACTION (smart Evidence)
+   ===================================================================== */
+(function testProcArtifacts(){
+  const P=Engine.parseProcessArtifacts.bind(Engine);
+  // local account creation
+  eq(P('net user hacker P@ss123 /add').accounts[0].user, "hacker", "net user /add -> account");
+  eq(P('C:\\Windows\\System32\\net1 user svc_evil pass /add /domain').accounts[0].user, "svc_evil", "net1 user /add");
+  eq(P('powershell New-LocalUser -Name backdoor -NoPassword').accounts[0].user, "backdoor", "New-LocalUser -> account");
+  ok(P('net user').accounts.length===0, "bare 'net user' (enumerate) -> no account");
+  // privileged group add
+  { const g=P('net localgroup Administrators hacker /add').groups[0]; ok(g&&g.group==="Administrators"&&g.member==="hacker", "net localgroup /add -> group+member"); }
+  { const g=P('Add-LocalGroupMember -Group "Administrators" -Member evil').groups[0]; ok(g&&g.member==="evil", "Add-LocalGroupMember -> member"); }
+  // scheduled task
+  { const t=P('schtasks /create /tn "EvilTask" /tr "C:\\temp\\bad.exe" /sc onlogon').tasks[0]; ok(t&&t.name==="EvilTask"&&/bad\.exe/.test(t.cmd), "schtasks /create -> task name+cmd"); }
+  ok(P('schtasks /query').tasks.length===0, "schtasks /query -> no task");
+  // service
+  { const s=P('sc create evilsvc binPath= C:\\temp\\evil.exe start= auto').services[0]; ok(s&&s.name==="evilsvc"&&/evil\.exe/.test(s.path), "sc create -> service name+path"); }
+  { const s=P('New-Service -Name backdoorsvc -BinaryPathName C:\\temp\\b.exe').services[0]; ok(s&&s.name==="backdoorsvc", "New-Service -> service"); }
+  // benign command -> nothing
+  const none=P('cmd.exe /c dir C:\\Users');
+  ok(none.accounts.length===0&&none.groups.length===0&&none.tasks.length===0&&none.services.length===0, "benign command -> no artifacts");
+})();
+
 /* ---- summary ---- */
 console.log("\nengine.cjs tests: "+passed+" passed, "+failed+" failed");
 if(failed){ console.log("\nFAILURES:"); for(const f of fails) console.log("  ✗ "+f); process.exit(1); }

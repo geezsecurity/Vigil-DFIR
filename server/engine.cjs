@@ -428,6 +428,31 @@ function compileYaraCondition(cond, ids){
   return orE();
 }
 
+/* ----------------- COMMAND-LINE ARTIFACT EXTRACTION -----------------------
+   Smart DFIR: recover forensic artifacts from process command lines even when the
+   dedicated Security audit events (4720/4728/4698/7045…) were never logged — a very
+   common real-world gap. Pure + testable; used by the Evidence extractor.          */
+function parseProcessArtifacts(cmd){
+  const out={ accounts:[], groups:[], tasks:[], services:[] };
+  if(!cmd) return out; const s=String(cmd); let m;
+  // local account creation:  net user <name> <pw> /add   |   New-LocalUser <name>
+  if((m=/\bnet1?\s+user\s+([^\s\/"']+)\b[^\/]*\/add\b/i.exec(s))) out.accounts.push({user:m[1]});
+  else if((m=/\bnew-localuser\b[^\n]*?(?:-name\s+)?["']?([A-Za-z0-9._$-]{1,64})["']?/i.exec(s))) out.accounts.push({user:m[1]});
+  // privileged group membership:  net localgroup "Administrators" <member> /add  | Add-LocalGroupMember | Add-ADGroupMember
+  if((m=/\bnet1?\s+localgroup\s+["']?([^"'\/]+?)["']?\s+([^\s\/"']+)\s+[^\/]*\/add\b/i.exec(s))) out.groups.push({group:m[1].trim(),member:m[2]});
+  else if((m=/\badd-localgroupmember\b[^\n]*?-group\s+["']?([^"'\s]+)["']?[^\n]*?-member\s+["']?([^"'\s]+)/i.exec(s))) out.groups.push({group:m[1],member:m[2]});
+  else if((m=/\badd-adgroupmember\b[^\n]*?["']?([^"'\s]+)["']?[^\n]*?-members?\s+["']?([^"'\s]+)/i.exec(s))) out.groups.push({group:m[1],member:m[2]});
+  // scheduled task creation:  schtasks /create /tn <name> /tr <cmd>   |   Register-ScheduledTask
+  if(/\bschtasks(?:\.exe)?\b[^\n]*\/create\b/i.test(s)){
+    const tn=/\/tn\s+["']?([^"'\r\n]+?)["']?(?:\s+\/|\s*$)/i.exec(s), tr=/\/tr\s+["']?([^"'\r\n]+?)["']?(?:\s+\/|\s*$)/i.exec(s);
+    out.tasks.push({name:tn?tn[1].trim():"(unnamed)", cmd:tr?tr[1].trim():""}); }
+  else if(/\bregister-scheduledtask\b/i.test(s)){ const tn=/-taskname\s+["']?([^"'\s]+)/i.exec(s); out.tasks.push({name:tn?tn[1]:"(PowerShell task)", cmd:""}); }
+  // service creation:  sc create <name> binPath= <path>   |   New-Service
+  if((m=/\bsc(?:\.exe)?\s+(?:\\\\[^\s]+\s+)?create\s+([^\s]+)/i.exec(s))){ const bp=/binpath=\s*["']?([^"'\r\n]+?)["']?(?:\s|$)/i.exec(s); out.services.push({name:m[1],path:bp?bp[1].trim():""}); }
+  else if((m=/\bnew-service\b[^\n]*?-name\s+["']?([^"'\s]+)/i.exec(s))){ const bp=/-binarypathname\s+["']?([^"'\r\n]+?)["']?(?:\s|$)/i.exec(s); out.services.push({name:m[1],path:bp?bp[1]:""}); }
+  return out;
+}
+
 /* ----------------- MITRE ATT&CK -------------------------------------------
    Sigma rules already carry attack.* tags; heuristics get tagged below. These
    helpers turn tags into technique/tactic facts the UI aggregates + exports as a
@@ -754,7 +779,7 @@ const Engine={
   resolveField, compileSigmaRule, compileYaraRules, runHeuristics, buildFulltext, base64OffsetVariants, compileCondition,
   parseAttack, techniqueFromTag, tacticFromTag,
   attack:{ tactics:ATTACK_TACTIC_NAMES, tacticOrder:ATTACK_TACTIC_ORDER, techniques:ATTACK_TECHNIQUES },
-  extractEntities, makeEntityScorer, buildAttackChains,
+  extractEntities, makeEntityScorer, buildAttackChains, parseProcessArtifacts,
   parseSigmaDocs(yamlText, yamlLoadAll){
     const docs=yamlLoadAll(yamlText)||[]; const rules=[], skipped=[], errors=[];
     for (const doc of docs){

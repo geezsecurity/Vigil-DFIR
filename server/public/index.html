@@ -3741,6 +3741,24 @@ function compileYaraCondition(cond, ids){
   return orE();
 }
 
+/* ----------------- COMMAND-LINE ARTIFACT EXTRACTION (inlined — keep in sync with engine.cjs) */
+function parseProcessArtifacts(cmd){
+  const out={ accounts:[], groups:[], tasks:[], services:[] };
+  if(!cmd) return out; const s=String(cmd); let m;
+  if((m=/\bnet1?\s+user\s+([^\s\/"']+)\b[^\/]*\/add\b/i.exec(s))) out.accounts.push({user:m[1]});
+  else if((m=/\bnew-localuser\b[^\n]*?(?:-name\s+)?["']?([A-Za-z0-9._$-]{1,64})["']?/i.exec(s))) out.accounts.push({user:m[1]});
+  if((m=/\bnet1?\s+localgroup\s+["']?([^"'\/]+?)["']?\s+([^\s\/"']+)\s+[^\/]*\/add\b/i.exec(s))) out.groups.push({group:m[1].trim(),member:m[2]});
+  else if((m=/\badd-localgroupmember\b[^\n]*?-group\s+["']?([^"'\s]+)["']?[^\n]*?-member\s+["']?([^"'\s]+)/i.exec(s))) out.groups.push({group:m[1],member:m[2]});
+  else if((m=/\badd-adgroupmember\b[^\n]*?["']?([^"'\s]+)["']?[^\n]*?-members?\s+["']?([^"'\s]+)/i.exec(s))) out.groups.push({group:m[1],member:m[2]});
+  if(/\bschtasks(?:\.exe)?\b[^\n]*\/create\b/i.test(s)){
+    const tn=/\/tn\s+["']?([^"'\r\n]+?)["']?(?:\s+\/|\s*$)/i.exec(s), tr=/\/tr\s+["']?([^"'\r\n]+?)["']?(?:\s+\/|\s*$)/i.exec(s);
+    out.tasks.push({name:tn?tn[1].trim():"(unnamed)", cmd:tr?tr[1].trim():""}); }
+  else if(/\bregister-scheduledtask\b/i.test(s)){ const tn=/-taskname\s+["']?([^"'\s]+)/i.exec(s); out.tasks.push({name:tn?tn[1]:"(PowerShell task)", cmd:""}); }
+  if((m=/\bsc(?:\.exe)?\s+(?:\\\\[^\s]+\s+)?create\s+([^\s]+)/i.exec(s))){ const bp=/binpath=\s*["']?([^"'\r\n]+?)["']?(?:\s|$)/i.exec(s); out.services.push({name:m[1],path:bp?bp[1].trim():""}); }
+  else if((m=/\bnew-service\b[^\n]*?-name\s+["']?([^"'\s]+)/i.exec(s))){ const bp=/-binarypathname\s+["']?([^"'\r\n]+?)["']?(?:\s|$)/i.exec(s); out.services.push({name:m[1],path:bp?bp[1]:""}); }
+  return out;
+}
+
 /* ----------------- MITRE ATT&CK (inlined copy — keep in sync with engine.cjs) --- */
 const ATTACK_TACTIC_NAMES={
   "reconnaissance":"Reconnaissance","resource-development":"Resource Development","initial-access":"Initial Access",
@@ -3978,7 +3996,7 @@ function buildFulltext(rec){
 }
 const Engine={
   resolveField, compileSigmaRule, compileYaraRules, runHeuristics, buildFulltext, base64OffsetVariants, compileCondition,
-  parseAttack, techniqueFromTag, tacticFromTag,
+  parseAttack, techniqueFromTag, tacticFromTag, parseProcessArtifacts,
   attack:{ tactics:ATTACK_TACTIC_NAMES, tacticOrder:ATTACK_TACTIC_ORDER, techniques:ATTACK_TECHNIQUES },
   extractEntities, makeEntityScorer, buildAttackChains,
   parseSigmaDocs(yamlText, yamlLoadAll){
@@ -6220,12 +6238,18 @@ function buildEvidence(){
     ips:new Map(), users:new Set(), hosts:new Set(), hashes:new Set(), domains:new Set(), sessions:[] };
   const isSys=p=>/sysmon/i.test(p||"");
   const LSASS_DUMP=/procdump(64)?(\.exe)?[^\n]*\blsass|comsvcs(\.dll)?[^\n]*minidump|minidump[^\n]*lsass|lsass[^\n]*minidump|rundll32[^\n]*comsvcs|nanodump|dumpert|handlekatz|createdump[^\n]*lsass|sqldumper[^\n]*lsass|sekurlsa|invoke-mimikatz|out-minidump|lsass\.dmp|-ma\s+lsass|\blsass\.exe\b[^\n]*(dump|dmp)/i;
+  const addProcArtifacts=(i,cmd,by,ts)=>{ if(!cmd)return; const pa=DetEngine.parseProcessArtifacts(cmd);
+    for(const a of pa.accounts) E.accountsCreated.push({i,user:a.user,by,ts,via:"cmdline"});
+    for(const g of pa.groups)   E.groupAdds.push({i,member:g.member,group:g.group,by,ts,via:"cmdline"});
+    for(const t of pa.tasks)    E.tasks.push({i,name:t.name,act:"created (cmdline)",cmd:t.cmd,ts,via:"cmdline"});
+    for(const sv of pa.services)E.services.push({i,name:sv.name,path:sv.path,ts,via:"cmdline"}); };
   const sessById=new Map(); const SESS_TYPES=new Set(["2","3","7","9","10","11"]);
   for(let i=0;i<rows.length;i++){ const r=rows[i], d=r.data||{}, id=String(r.eventId);
     const U=k=>d[k]!=null?String(d[k]):"";
     if(r.computer)E.hosts.add(r.computer);
     switch(id){
       case "4720": { const u=U("TargetUserName"); E.accountsCreated.push({i,user:u,by:U("SubjectUserName"),ts:r.ts}); if(u)E.users.add(u); break; }
+      case "4741": { const u=U("TargetUserName"); E.accountsCreated.push({i,user:u,by:U("SubjectUserName"),ts:r.ts,kind:"computer"}); break; }
       case "4722": case "4725": case "4726": case "4738":
         E.acctState.push({i,user:U("TargetUserName"),act:{"4722":"enabled","4725":"disabled","4726":"deleted","4738":"changed"}[id],ts:r.ts}); break;
       case "4723": case "4724": E.pwResets.push({i,user:U("TargetUserName"),act:id==="4724"?"reset by admin":"changed",by:U("SubjectUserName"),ts:r.ts}); break;
@@ -6245,15 +6269,21 @@ function buildEvidence(){
       case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0}; e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName")); E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
       case "4648": E.explicitCreds.push({i,subj:U("SubjectUserName"),target:U("TargetUserName"),server:U("TargetServerName")||U("TargetInfo"),ip:U("IpAddress"),ts:r.ts}); break;
       case "4688": { const cmd=U("CommandLine")||U("NewProcessName"); if(cmd){ E.procs.push({i,cmd,parent:U("ParentProcessName"),user:U("SubjectUserName"),ts:r.ts});
-        if(LSASS_DUMP.test(cmd)) E.lsassAccess.push({i,src:U("NewProcessName")||cmd.slice(0,90),ga:"process dump",user:U("SubjectUserName"),ts:r.ts,via:"process"}); } break; }
+        if(LSASS_DUMP.test(cmd)) E.lsassAccess.push({i,src:U("NewProcessName")||cmd.slice(0,90),ga:"process dump",user:U("SubjectUserName"),ts:r.ts,via:"process"});
+        addProcArtifacts(i,cmd,U("SubjectUserName"),r.ts); } break; }
       case "1": if(isSys(r.provider)){ const cmd=U("CommandLine")||U("Image"); if(cmd){ E.procs.push({i,cmd,parent:U("ParentImage"),user:U("User"),ts:r.ts});
-        if(LSASS_DUMP.test(cmd)) E.lsassAccess.push({i,src:U("Image")||cmd.slice(0,90),ga:"process dump",user:U("User"),ts:r.ts,via:"process"}); }
+        if(LSASS_DUMP.test(cmd)) E.lsassAccess.push({i,src:U("Image")||cmd.slice(0,90),ga:"process dump",user:U("User"),ts:r.ts,via:"process"});
+        addProcArtifacts(i,cmd,U("User"),r.ts); }
         const h=U("Hashes"); if(h)h.split(",").forEach(x=>{x=x.trim();if(x)E.hashes.add(x);}); } break;
       case "4104": { const sb=U("ScriptBlockText"); if(sb&&sb.length>3)E.psBlocks.push({i,text:sb,ts:r.ts}); break; }
       case "7045": E.services.push({i,name:U("ServiceName"),path:U("ImagePath"),start:U("StartType"),ts:r.ts}); break;
       case "4697": E.services.push({i,name:U("ServiceName"),path:U("ServiceFileName"),ts:r.ts}); break;
-      case "4698": case "4702": case "4699": case "4700": case "4701":
-        E.tasks.push({i,name:U("TaskName"),act:{"4698":"created","4699":"deleted","4700":"enabled","4701":"disabled","4702":"updated"}[id],ts:r.ts}); break;
+      case "4698": case "4702": case "4699": case "4700": case "4701": {
+        const xml=U("TaskContent")||U("TaskContentNew")||U("NewTaskContent")||"";
+        const c=(/<Command>([^<]+)<\/Command>/i.exec(xml)||[])[1]||"", ar=(/<Arguments>([^<]+)<\/Arguments>/i.exec(xml)||[])[1]||"";
+        E.tasks.push({i,name:U("TaskName"),act:{"4698":"created","4699":"deleted","4700":"enabled","4701":"disabled","4702":"updated"}[id],cmd:(c+" "+ar).trim(),ts:r.ts}); break; }
+      case "106": case "140": case "141": if(/task\s*scheduler/i.test(r.provider))
+        E.tasks.push({i,name:U("TaskName")||U("Path")||U("Name"),act:{"106":"registered","140":"updated","141":"deleted"}[id],ts:r.ts}); break;
       case "3": if(isSys(r.provider)){ const ip=U("DestinationIp"),port=U("DestinationPort"); const key=ip+":"+port;
         const e=E.netConns.get(key)||{i,ip,port,host:U("DestinationHostname"),image:U("Image"),count:0}; e.count++; e.i=i; E.netConns.set(key,e);
         if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); } break;
@@ -6347,10 +6377,11 @@ function renderEvidence(){
      statCard(E.psBlocks.length.toLocaleString(),"powershell blocks","")+'</div>';
   h+='<div class="evcols">';
   // accounts
-  h+=evPanel("Accounts created",E.accountsCreated.length,["Time","User","By"],
-     E.accountsCreated.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.user},{t:x.by}],x.user,"4720")));
-  h+=evPanel("Privileged group changes",E.groupAdds.length,["Time","Member","→ Group","By"],
-     E.groupAdds.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.member},{t:x.group},{t:x.by}],x.member)));
+  const viaTag=x=>x.via?'<span class="ev-tag warn" title="recovered from command line">'+esc(x.via)+'</span>':'';
+  h+=evPanel("Accounts created (4720 / 4741 / net user / New-LocalUser)",E.accountsCreated.length,["Time","User","By","Source"],
+     E.accountsCreated.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{html:esc(x.user)+(x.kind==="computer"?' <span class="ev-tag">computer</span>':'')},{t:x.by},{html:viaTag(x)||'<span class="ev-tag">event</span>'}],x.user,"4720")));
+  h+=evPanel("Privileged group changes (4728/4732/4756 / net localgroup / Add-*GroupMember)",E.groupAdds.length,["Time","Member","→ Group","By","Source"],
+     E.groupAdds.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.member},{t:x.group},{t:x.by},{html:viaTag(x)||'<span class="ev-tag">event</span>'}],x.member)));
   h+=evPanel("Password resets / changes",E.pwResets.length,["Time","User","Action","By"],
      E.pwResets.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.user},{t:x.act},{t:x.by}],x.user)));
   h+=evPanel("Account enable / disable / delete",E.acctState.length,["Time","User","Action"],
@@ -6386,10 +6417,10 @@ function renderEvidence(){
        return evRow([{t:x.ts,cls:"ev-trunc"},{html:(susp.test(x.text)?'<span class="ev-tag warn">!</span>':'')+esc(x.text.replace(/\s+/g," ").slice(0,160))+
          (dec?'<div class="ev-dec"><span class="ev-tag bad">decoded</span> '+esc(dec.slice(0,400))+'</div>':''),cls:dec?"":"ev-trunc",title:x.text.slice(0,800)}],""); }));
   // persistence
-  h+=evPanel("Services installed (7045 / 4697)",E.services.length,["Time","Service","Image path"],
-     E.services.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.name},{t:x.path,cls:"ev-trunc",title:x.path}],x.name)));
-  h+=evPanel("Scheduled tasks",E.tasks.length,["Time","Task","Action"],
-     E.tasks.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.name,cls:"ev-trunc",title:x.name},{t:x.act}],x.name)));
+  h+=evPanel("Services installed (7045 / 4697 / sc create / New-Service)",E.services.length,["Time","Service","Image path","Source"],
+     E.services.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.name},{t:x.path,cls:"ev-trunc",title:x.path},{html:viaTag(x)||'<span class="ev-tag">event</span>'}],x.name)));
+  h+=evPanel("Scheduled tasks (4698-4702 / TaskScheduler / schtasks)",E.tasks.length,["Time","Task","Action","Command"],
+     E.tasks.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.name,cls:"ev-trunc",title:x.name},{html:esc(x.act||"")+' '+viaTag(x)},{html:(susp.test(x.cmd||'')?'<span class="ev-tag warn">!</span>':'')+esc((x.cmd||'').slice(0,120)),cls:"ev-trunc",title:x.cmd||""}],x.name)));
   h+=evPanel("Registry Run-key persistence (Sysmon 13)",E.runKeys.length,["Time","Key","Value"],
      E.runKeys.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.key,cls:"ev-trunc",title:x.key},{t:x.val,cls:"ev-trunc",title:x.val}],x.key.split("\\").pop())));
   // network

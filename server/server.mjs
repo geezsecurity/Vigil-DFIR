@@ -600,6 +600,12 @@ app.get("/api/evidence", async (req,res)=>{
     const isSys=p=>/sysmon/i.test(p||"");
     // process-based LSASS credential dumping (procdump/comsvcs/rundll32 MiniDump, nanodump, dumpert, mimikatz, etc.)
     const LSASS_DUMP=/procdump(64)?(\.exe)?[^\n]*\blsass|comsvcs(\.dll)?[^\n]*minidump|minidump[^\n]*lsass|lsass[^\n]*minidump|rundll32[^\n]*comsvcs|nanodump|dumpert|handlekatz|createdump[^\n]*lsass|sqldumper[^\n]*lsass|sekurlsa|invoke-mimikatz|out-minidump|lsass\.dmp|-ma\s+lsass|\blsass\.exe\b[^\n]*(dump|dmp)/i;
+    // recover account/group/task/service artifacts from a process command line (audit-independent)
+    const addProcArtifacts=(i,cmd,by,ts)=>{ if(!cmd)return; const pa=Engine.parseProcessArtifacts(cmd);
+      for(const a of pa.accounts) push(E.accountsCreated,{i,user:a.user,by,ts,via:"cmdline"});
+      for(const g of pa.groups)   push(E.groupAdds,{i,member:g.member,group:g.group,by,ts,via:"cmdline"});
+      for(const t of pa.tasks)    push(E.tasks,{i,name:t.name,act:"created (cmdline)",cmd:t.cmd,ts,via:"cmdline"});
+      for(const sv of pa.services)push(E.services,{i,name:sv.name,path:sv.path,ts,via:"cmdline"}); };
     const sessById=new Map();                 // TargetLogonId -> session (paired 4624 logon / 4634-4647 logoff)
     const SESS_TYPES=new Set(["2","3","7","9","10","11"]);   // interactive/network/unlock/newcred/remote/cached
     const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
@@ -612,6 +618,7 @@ app.get("/api/evidence", async (req,res)=>{
       if(computer)E.hosts.add(computer);
       switch(id){
         case "4720": { const u=U("TargetUserName"); push(E.accountsCreated,{i,user:u,by:U("SubjectUserName"),ts}); if(u)E.users.add(u); break; }
+        case "4741": { const u=U("TargetUserName"); push(E.accountsCreated,{i,user:u,by:U("SubjectUserName"),ts,kind:"computer"}); break; }   // computer account created
         case "4722": case "4725": case "4726": case "4738":
           push(E.acctState,{i,user:U("TargetUserName"),act:{"4722":"enabled","4725":"disabled","4726":"deleted","4738":"changed"}[id],ts}); break;
         case "4723": case "4724": push(E.pwResets,{i,user:U("TargetUserName"),act:id==="4724"?"reset by admin":"changed",by:U("SubjectUserName"),ts}); break;
@@ -631,15 +638,21 @@ app.get("/api/evidence", async (req,res)=>{
         case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0}; e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName")); E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
         case "4648": push(E.explicitCreds,{i,subj:U("SubjectUserName"),target:U("TargetUserName"),server:U("TargetServerName")||U("TargetInfo"),ip:U("IpAddress"),ts}); break;
         case "4688": { const cmd=U("CommandLine")||U("NewProcessName"); if(cmd){ push(E.procs,{i,cmd,parent:U("ParentProcessName"),user:U("SubjectUserName"),ts});
-          if(LSASS_DUMP.test(cmd)) push(E.lsassAccess,{i,src:U("NewProcessName")||cmd.slice(0,90),ga:"process dump",user:U("SubjectUserName"),ts,via:"process"}); } break; }
+          if(LSASS_DUMP.test(cmd)) push(E.lsassAccess,{i,src:U("NewProcessName")||cmd.slice(0,90),ga:"process dump",user:U("SubjectUserName"),ts,via:"process"});
+          addProcArtifacts(i,cmd,U("SubjectUserName"),ts); } break; }
         case "1": if(isSys(provider)){ const cmd=U("CommandLine")||U("Image"); if(cmd){ push(E.procs,{i,cmd,parent:U("ParentImage"),user:U("User"),ts});
-          if(LSASS_DUMP.test(cmd)) push(E.lsassAccess,{i,src:U("Image")||cmd.slice(0,90),ga:"process dump",user:U("User"),ts,via:"process"}); }
+          if(LSASS_DUMP.test(cmd)) push(E.lsassAccess,{i,src:U("Image")||cmd.slice(0,90),ga:"process dump",user:U("User"),ts,via:"process"});
+          addProcArtifacts(i,cmd,U("User"),ts); }
           const h=U("Hashes"); if(h)h.split(",").forEach(x=>{x=x.trim();if(x)E.hashes.add(x);}); } break;
         case "4104": { const sb=U("ScriptBlockText"); if(sb&&sb.length>3)push(E.psBlocks,{i,text:sb,ts}); break; }
         case "7045": push(E.services,{i,name:U("ServiceName"),path:U("ImagePath"),start:U("StartType"),ts}); break;
         case "4697": push(E.services,{i,name:U("ServiceName"),path:U("ServiceFileName"),ts}); break;
-        case "4698": case "4702": case "4699": case "4700": case "4701":
-          push(E.tasks,{i,name:U("TaskName"),act:{"4698":"created","4699":"deleted","4700":"enabled","4701":"disabled","4702":"updated"}[id],ts}); break;
+        case "4698": case "4702": case "4699": case "4700": case "4701": {
+          const xml=U("TaskContent")||U("TaskContentNew")||U("NewTaskContent")||"";
+          const c=(/<Command>([^<]+)<\/Command>/i.exec(xml)||[])[1]||"", ar=(/<Arguments>([^<]+)<\/Arguments>/i.exec(xml)||[])[1]||"";
+          push(E.tasks,{i,name:U("TaskName"),act:{"4698":"created","4699":"deleted","4700":"enabled","4701":"disabled","4702":"updated"}[id],cmd:(c+" "+ar).trim(),ts}); break; }
+        case "106": case "140": case "141": if(/task\s*scheduler/i.test(provider))
+          push(E.tasks,{i,name:U("TaskName")||U("Path")||U("Name"),act:{"106":"registered","140":"updated","141":"deleted"}[id],ts}); break;
         case "3": if(isSys(provider)){ const ip=U("DestinationIp"),port=U("DestinationPort"); const key=ip+":"+port;
           const e=E.netConns.get(key)||{i,ip,port,host:U("DestinationHostname"),image:U("Image"),count:0}; e.count++; e.i=i; E.netConns.set(key,e);
           if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); } break;
