@@ -5753,7 +5753,7 @@ function renderTimeline(){
   if(tlData && tlCase===window.__caseId){ paintTimeline(); return; }
   w.innerHTML='<div class="dash-note">Building the super-timeline across the full log…</div>';
   api("/api/timeline").then(r=>r.json()).then(j=>{ tlData=j; tlCase=window.__caseId;
-    tlFilters={kinds:new Set(),sevMin:-1,q:"",fromIdx:null,toIdx:null,sortAsc:false};
+    tlFilters={kinds:new Set(),sevMin:-1,q:"",fromIdx:null,toIdx:null,sortAsc:true};   // chronological by default
     if(document.body.getAttribute("data-mode")==="timeline") paintTimeline(); })
     .catch(e=>{ w.innerHTML='<div class="dash-note">Could not build timeline: '+esc(e.message||e)+'</div>'; });
 }
@@ -5769,7 +5769,7 @@ function tlFeedFiltered(){ const j=tlData, win=tlWindow();
     if(tlFilters.q&&((e.title||"")+" "+(e.host||"")+" "+e.eid).toLowerCase().indexOf(tlFilters.q)===-1)return false;
     return true; }); }
 function paintFeed(){
-  let feed=tlFeedFiltered(); if(tlFilters.sortAsc) feed=feed.slice().reverse();   // oldest-first to trace the first attack
+  let feed=tlFeedFiltered(); if(!tlFilters.sortAsc) feed=feed.slice().reverse();   // server order is chronological; reverse for newest-first
   const hd=$("tlFeedHd"), fc=$("tlFeed"); if(!fc)return;
   if(hd)hd.textContent=feed.length.toLocaleString()+" events";
   const SHOW=2000; let h="";
@@ -5804,7 +5804,7 @@ function paintTimeline(){
     h+='<button class="tl-chip'+(on?" on":"")+'" data-kind="'+k+'"><span class="tl-dot" style="background:'+TL_KIND[k].c+'"></span>'+esc(TL_KIND[k].label)+'</button>'; }
   h+='<span class="tl-flabel" style="margin-left:12px">Severity</span>';
   for(const [lbl,v] of [["all",-1],["med+",2],["high+",3],["crit",4]]) h+='<button class="tl-chip'+(tlFilters.sevMin===v?" on":"")+'" data-sev="'+v+'">'+lbl+'</button>';
-  h+='<button class="tl-chip" data-tlsort title="toggle chronological order">'+(tlFilters.sortAsc?"↑ oldest first":"↓ newest first")+'</button>';
+  h+='<button class="tl-chip'+(tlFilters.sortAsc?" on":"")+'" data-tlsort title="toggle order">'+(tlFilters.sortAsc?"⏱ chronological (oldest → newest)":"↓ newest first")+'</button>';
   h+='<input class="tl-search" id="tlq" placeholder="filter…" value="'+esc(tlFilters.q)+'"></div>';
   h+='<div class="tl-feedhd" id="tlFeedHd"></div><div class="tl-feed" id="tlFeed"></div>';
   w.innerHTML=h;
@@ -5829,46 +5829,110 @@ $("tlWrap").addEventListener("click",e=>{
 /* ===================== ONE-CLICK IR REPORT ===================== */
 function repEsc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function repCard(n,l){ return '<span class="card"><span class="n">'+n+'</span><br><span class="l">'+repEsc(l)+'</span></span>'; }
-function buildReportHTML(S, dash, ev, meta){
+// Shared report model — computed once, rendered to HTML/PDF and DOCX identically
+function reportData(S, dash, ev, meta){
   const sm=S.summary||{}, bySev=S.bySev||{}, A=S.attack||{};
-  const caseId=window.__caseId||"local", now=new Date().toISOString();
-  const span=((meta&&meta.tsMin)?meta.tsMin.slice(0,19).replace("T"," "):"?")+"  →  "+((meta&&meta.tsMax)?meta.tsMax.slice(0,19).replace("T"," "):"?");
+  const caseId=window.__caseId||"local";
+  const t0=(meta&&meta.tsMin)||null, t1=(meta&&meta.tsMax)||null;
+  const span=(t0?t0.slice(0,19).replace("T"," "):"?")+"  to  "+(t1?t1.slice(0,19).replace("T"," "):"?")+" (UTC)";
   const totalEvents=(dash&&dash.total)||(meta&&meta.count)||sm.scanned||0;
-  const hosts=(dash&&dash.computers&&dash.computers.length)||(caseSources?caseSources.length:0)||0;
-  const css="body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,sans-serif;max-width:920px;margin:24px auto;padding:0 22px;color:#161b26;line-height:1.5}h1{font-size:25px;margin-bottom:2px}h2{font-size:16px;border-bottom:2px solid #e4e9f0;padding-bottom:5px;margin-top:30px}table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}th,td{text-align:left;padding:5px 9px;border-bottom:1px solid #eef1f5;vertical-align:top}th{color:#5b6472;font-weight:600}.b{font-weight:700}.muted{color:#8a94a6;font-size:12px}.card{display:inline-block;border:1px solid #e4e9f0;border-radius:9px;padding:9px 15px;margin:4px 8px 4px 0}.card .n{font-size:21px;font-weight:700}.card .l{font-size:10.5px;color:#5b6472;text-transform:uppercase;letter-spacing:.4px}.chain{border:1px solid #e4e9f0;border-radius:9px;padding:10px 14px;margin:8px 0}.chain .nm{font-weight:600}.crit{color:#c81e1e}.high{color:#e5484d}.med{color:#b7791f}code{background:#f2f4f7;padding:1px 5px;border-radius:3px;font-size:12px}";
-  let h='<!doctype html><html><head><meta charset="utf-8"><title>IR Report — '+repEsc(caseId)+'</title><style>'+css+'</style></head><body>';
-  h+='<h1>Incident Response — EVTX Triage Report</h1>';
-  h+='<p class="muted">Generated '+repEsc(now)+' · case <code>'+repEsc(caseId)+'</code></p>';
-  h+='<h2>Executive summary</h2><div>'+
-    repCard(totalEvents.toLocaleString(),"events")+repCard((sm.withDetections||0).toLocaleString(),"events w/ detections")+
-    repCard((sm.total||0).toLocaleString(),"total hits")+repCard(((bySev.critical||0)+(bySev.high||0)).toLocaleString(),"critical + high")+
-    repCard(hosts.toLocaleString(),"hosts")+repCard((A.techniqueCount||0).toLocaleString(),"ATT&CK techniques")+'</div>';
-  h+='<p><span class="muted">Time span:</span> <span class="b">'+repEsc(span)+'</span></p>';
-  h+='<p>Severity: <span class="crit b">critical '+(bySev.critical||0)+'</span> · <span class="high b">high '+(bySev.high||0)+
-     '</span> · <span class="med">medium '+(bySev.medium||0)+'</span> · low/info '+((bySev.low||0)+(bySev.info||0))+'</p>';
-  if(A.tactics&&A.tactics.length){ h+='<h2>MITRE ATT&amp;CK coverage</h2><p class="muted">'+A.tactics.map(t=>repEsc(t.name)+' ('+t.techniques+')').join(' · ')+'</p>'+
-    '<table><tr><th>Technique</th><th>Name</th><th>Events</th></tr>';
-    for(const t of (A.techniques||[]).slice(0,20)) h+='<tr><td><code>'+repEsc(t.id)+'</code></td><td>'+repEsc(t.name)+'</td><td>'+t.count+'</td></tr>'; h+='</table>'; }
-  if(S.chains&&S.chains.length){ h+='<h2>Attack chains ('+S.chains.length+')</h2>';
-    for(const c of S.chains.slice(0,10)) h+='<div class="chain"><div class="nm">'+repEsc(c.name)+'</div>'+
-      '<div class="muted">'+repEsc(c.host)+(c.users&&c.users.length?' · '+repEsc(c.users.slice(0,3).join(", ")):'')+' · '+c.count+' detections · '+repEsc(fmtTime(c.startTms))+' → '+repEsc(fmtTime(c.endTms))+'</div>'+
-      '<div class="muted">'+c.steps.slice(0,10).map(s=>repEsc(s.title)+(s.technique?' ['+s.technique+']':'')).join(' → ')+'</div></div>'; }
-  if(S.entities&&S.entities.length){ h+='<h2>Riskiest entities</h2><table><tr><th>Type</th><th>Entity</th><th>Risk</th><th>Detections</th><th>Techniques</th></tr>';
-    for(const e of S.entities.slice(0,15)) h+='<tr><td>'+e.type+'</td><td class="b">'+repEsc(e.name)+'</td><td>'+e.score+'</td><td>'+e.hits+'</td><td>'+e.techniques.length+'</td></tr>'; h+='</table>'; }
-  if(S.byRule&&S.byRule.length){ h+='<h2>Detections by rule</h2><table><tr><th>Level</th><th>Rule</th><th>Source</th><th>Events</th></tr>';
-    for(const g of S.byRule.slice(0,30)) h+='<tr><td>'+repEsc(g.level)+'</td><td>'+repEsc(g.title)+'</td><td>'+repEsc(g.source)+'</td><td>'+g.count+'</td></tr>'; h+='</table>'; }
-  if(ev){ const cnt=a=>a?a.length:0; h+='<h2>Key forensic artifacts</h2><div>'+
-      repCard(cnt(ev.logCleared),"log clears")+repCard(cnt(ev.accountsCreated),"accounts created")+repCard(cnt(ev.groupAdds),"priv-group adds")+
-      repCard(cnt(ev.services),"services")+repCard((ev.extLogons&&ev.extLogons.size)||0,"external/RDP logons")+repCard(cnt(ev.lsassAccess),"LSASS access")+
-      repCard(cnt(ev.sessions),"logon sessions")+repCard(cnt(ev.defender),"Defender events")+'</div>';
-    const ips=ev.ips?[...ev.ips.entries()].sort((a,b)=>b[1]-a[1]):[], hashes=ev.hashes?[...ev.hashes]:[], domains=ev.domains?[...ev.domains]:[];
-    if(ips.length||hashes.length||domains.length){ h+='<h2>Indicators of compromise</h2>';
-      if(ips.length) h+='<p class="b">External IPs ('+ips.length+')</p><p><code>'+ips.slice(0,50).map(([ip,c])=>repEsc(ip)+'×'+c).join('</code> <code>')+'</code></p>';
-      if(domains.length) h+='<p class="b">Domains ('+domains.length+')</p><p><code>'+domains.slice(0,50).map(repEsc).join('</code> <code>')+'</code></p>';
-      if(hashes.length) h+='<p class="b">File hashes ('+hashes.length+')</p><p class="muted" style="word-break:break-all">'+hashes.slice(0,40).map(repEsc).join('<br>')+'</p>'; }
+  const hosts=(dash&&dash.computers)?dash.computers.length:(caseSources?caseSources.filter(s=>s.cat!=="firewall"&&s.cat!=="vpn").length:0);
+  const chains=S.chains||[], entities=S.entities||[], byRule=S.byRule||[];
+  const crit=bySev.critical||0, high=bySev.high||0, med=bySev.medium||0, low=(bySev.low||0)+(bySev.info||0);
+  const ips=ev&&ev.ips?[...ev.ips.entries()].sort((a,b)=>b[1]-a[1]):[];
+  const hashes=ev&&ev.hashes?[...ev.hashes]:[]; const domains=ev&&ev.domains?[...ev.domains]:[];
+  const sources=(dash&&dash.providers)?dash.providers.length+" providers":((caseSources&&caseSources.length)?caseSources.length+" source log(s)":"—");
+  const posture = crit? "CRITICAL" : high? "HIGH" : med? "ELEVATED" : (sm.withDetections?"GUARDED":"LOW");
+  const topChain=chains[0], topEnt=entities.find(e=>e.type!=="host")||entities[0];
+  let exec="During the analysis window ("+span+"), "+totalEvents.toLocaleString()+" event"+(totalEvents===1?"":"s")+" from "+hosts+" host"+(hosts===1?"":"s")+
+    " were processed. The detection engine (built-in heuristics, Sigma, and YARA) produced "+(sm.total||0).toLocaleString()+
+    " detection"+((sm.total||0)===1?"":"s")+" on "+(sm.withDetections||0).toLocaleString()+" event"+((sm.withDetections||0)===1?"":"s")+
+    ", including "+crit+" critical and "+high+" high-severity finding"+((crit+high)===1?"":"s")+", mapped to "+(A.techniqueCount||0)+
+    " MITRE ATT&CK technique"+((A.techniqueCount||0)===1?"":"s")+" across "+(A.tacticCount||0)+" tactic"+((A.tacticCount||0)===1?"":"s")+".";
+  if(topChain) exec+=" The most significant correlated activity was \""+topChain.name+"\" on "+topChain.host+((topChain.users&&topChain.users.length)?" (associated user "+topChain.users[0]+")":"")+", spanning "+fmtTime(topChain.startTms)+" to "+fmtTime(topChain.endTms)+".";
+  if(topEnt) exec+=" The highest-risk "+topEnt.type+" identified was \""+topEnt.name+"\" (risk score "+topEnt.score.toLocaleString()+", "+topEnt.hits.toLocaleString()+" detections).";
+  exec+=" Overall assessed posture for this case is "+posture+". Analysts should prioritise validation and containment of the critical and high-severity findings detailed below.";
+  const cnt=a=>a?a.length:0; const rec=[];
+  rec.push("Validate the critical/high-severity detections (Section 6) against the underlying events and classify each as true or false positive before acting.");
+  if(ev){
+    if(cnt(ev.logCleared)) rec.push("Event logs were cleared ("+cnt(ev.logCleared)+" occurrence"+(cnt(ev.logCleared)===1?"":"s")+") — treat as anti-forensic activity: immediately preserve all remaining logs and acquire forensic images before further changes.");
+    if(cnt(ev.lsassAccess)) rec.push("LSASS memory access consistent with credential theft was observed — assume credentials on affected hosts are compromised; reset affected account passwords (and the krbtgt account twice if a Domain Controller is involved) and invalidate active sessions/Kerberos tickets.");
+    if(ev.extLogons&&ev.extLogons.size) rec.push("External / RDP logons were detected — review remote-access exposure, restrict RDP to VPN or jump hosts, and enforce multi-factor authentication.");
+    if(cnt(ev.accountsCreated)||cnt(ev.groupAdds)) rec.push("Account creation and/or privileged-group changes were observed — audit and remove any unauthorised accounts and group memberships, and review delegation/admin rights.");
+    if(cnt(ev.services)) rec.push("New services were installed — verify each against a known-good baseline and remove any that are unauthorised (a common persistence mechanism).");
   }
-  h+='<h2>Notes</h2><p class="muted">Auto-generated triage summary from EVTX Triage. Findings are heuristic and rule-based (Sigma/YARA/built-in) and require analyst validation — this is a starting point, not a substitute for full forensic analysis.</p>';
-  return h+'</body></html>';
+  rec.push("Contain affected hosts (network isolation), preserve volatile data, and eradicate identified persistence mechanisms before restoring systems from a known-good state; then monitor closely for recurrence.");
+  rec.push("This report is an automated triage aid — corroborate all findings with full forensic analysis before reaching conclusions or taking irreversible action.");
+  return { caseId, generated:new Date().toISOString().slice(0,19).replace("T"," ")+" UTC", span, totalEvents, hosts, sources, posture,
+    sm, bySev:{crit,high,med,low}, A, chains, entities, byRule, ev, ips, hashes, domains, exec, rec, cnt };
+}
+function buildReportHTML(S, dash, ev, meta){
+  const d=reportData(S,dash,ev,meta), A=d.A;
+  const svpill=l=>'<span class="pill '+repEsc(String(l).toLowerCase())+'">'+repEsc(l)+'</span>';
+  const card=(n,l)=>'<div class="card"><div class="n">'+repEsc(n)+'</div><div class="l">'+repEsc(l)+'</div></div>';
+  let sn=0; const sec=t=>'<h2><span class="num">'+(++sn)+'.</span>'+repEsc(t)+'</h2>';
+  const css=".rp{--ink:#1f2933;--muted:#69727d;--line:#e3e8ef;--band:#122c4f;--accent:#1f5fbf;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--ink);max-width:840px;margin:0 auto;padding:34px 46px 70px;font-size:12.5px;line-height:1.55}"+
+    ".rp .cover{border-top:6px solid var(--band);padding-top:16px}.rp .kick{letter-spacing:3px;font-size:11px;color:var(--accent);font-weight:700;text-transform:uppercase}"+
+    ".rp h1{font-size:26px;margin:6px 0 3px;color:var(--band)}.rp .classif{display:inline-block;background:#fdecea;color:#a8261c;border:1px solid #f2b7b1;border-radius:4px;padding:2px 9px;font-size:10px;font-weight:700;letter-spacing:1.5px}"+
+    ".rp h2{font-size:15px;color:var(--band);border-bottom:2px solid var(--band);padding-bottom:4px;margin:28px 0 10px;page-break-after:avoid}.rp h2 .num{color:var(--accent);margin-right:7px}"+
+    ".rp p{margin:8px 0}.rp .lead{font-size:13px}.rp .muted{color:var(--muted)}"+
+    ".rp table{border-collapse:collapse;width:100%;font-size:11.5px;margin:8px 0}.rp th,.rp td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}.rp th{background:#f5f8fc;color:var(--muted);font-weight:600}.rp tr{page-break-inside:avoid}"+
+    ".rp .meta td.k{background:#f5f8fc;color:var(--muted);width:180px;font-weight:600}"+
+    ".rp .cards{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.rp .card{border:1px solid var(--line);border-radius:8px;padding:8px 15px;min-width:120px}.rp .card .n{font-size:20px;font-weight:700;color:var(--band)}.rp .card .l{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}"+
+    ".rp .pill{display:inline-block;border-radius:3px;padding:0 6px;font-size:10px;font-weight:700}.rp .critical{background:#fdecea;color:#a8261c}.rp .high{background:#fde7df;color:#b4460f}.rp .medium{background:#fdf6e0;color:#8a6d1a}.rp .low,.rp .info,.rp .informational{background:#eef4ff;color:#274b9f}"+
+    ".rp .chain{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:9px 13px;margin:8px 0;page-break-inside:avoid}.rp .chain .nm{font-weight:700;color:var(--band)}.rp .chain .fl{color:var(--muted);font-size:11px;margin-top:2px}"+
+    ".rp ul.rec{margin:8px 0;padding-left:18px}.rp ul.rec li{margin:6px 0}.rp code{background:#f2f4f7;padding:1px 4px;border-radius:3px;font-size:11px;word-break:break-all}"+
+    ".rp .foot{margin-top:34px;border-top:1px solid var(--line);padding-top:8px;color:var(--muted);font-size:10px}"+
+    "@media print{@page{margin:15mm 13mm}.rp{padding:0;max-width:none}}";
+  let h='<!doctype html><html><head><meta charset="utf-8"><title>Incident Response Report — '+repEsc(d.caseId)+'</title><style>'+css+'</style></head><body><div class="rp">';
+  // cover
+  h+='<div class="cover"><div class="kick">Incident Response · Digital Forensics</div>'+
+     '<h1>Windows Event Log Triage Report</h1>'+
+     '<span class="classif">CONFIDENTIAL</span></div>';
+  h+='<table class="meta"><tr><td class="k">Case reference</td><td><code>'+repEsc(d.caseId)+'</code></td></tr>'+
+     '<tr><td class="k">Report generated</td><td>'+repEsc(d.generated)+'</td></tr>'+
+     '<tr><td class="k">Analysis window</td><td>'+repEsc(d.span)+'</td></tr>'+
+     '<tr><td class="k">Scope</td><td>'+d.totalEvents.toLocaleString()+' events · '+d.hosts+' host(s) · '+repEsc(d.sources)+'</td></tr>'+
+     '<tr><td class="k">Assessed posture</td><td>'+svpill(d.posture)+'</td></tr>'+
+     '<tr><td class="k">Prepared by</td><td>EVTX Triage (automated analysis)</td></tr></table>';
+  // 1. exec summary
+  h+=sec("Executive Summary")+'<p class="lead">'+repEsc(d.exec)+'</p>';
+  h+='<div class="cards">'+card(d.totalEvents.toLocaleString(),"events analysed")+card((d.sm.withDetections||0).toLocaleString(),"flagged events")+
+     card((d.sm.total||0).toLocaleString(),"total detections")+card((d.bySev.crit+d.bySev.high).toLocaleString(),"critical + high")+
+     card(String(A.techniqueCount||0),"ATT&CK techniques")+card(String(d.chains.length),"attack chains")+'</div>';
+  // 2. incident overview
+  h+=sec("Incident Overview")+'<p>Detections by severity:</p>'+
+     '<table><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low / Info</th></tr>'+
+     '<tr><td>'+svpill("critical")+' '+d.bySev.crit+'</td><td>'+svpill("high")+' '+d.bySev.high+'</td><td>'+svpill("medium")+' '+d.bySev.med+'</td><td>'+svpill("low")+' '+d.bySev.low+'</td></tr></table>';
+  // 3. ATT&CK
+  if(A.tactics&&A.tactics.length){ h+=sec("MITRE ATT&CK Coverage")+'<p class="muted">Tactics observed: '+A.tactics.map(t=>repEsc(t.name)+' ('+t.techniques+')').join(' · ')+'</p>'+
+    '<table><tr><th>Technique</th><th>Name</th><th>Events</th></tr>';
+    for(const t of (A.techniques||[]).slice(0,25)) h+='<tr><td><code>'+repEsc(t.id)+'</code></td><td>'+repEsc(t.name)+'</td><td>'+t.count+'</td></tr>'; h+='</table>'; }
+  // 4. attack narrative
+  if(d.chains.length){ h+=sec("Attack Narrative")+'<p class="muted">Related detections correlated per host into chronological chains that progress across ATT&CK tactics.</p>';
+    for(const c of d.chains.slice(0,10)) h+='<div class="chain"><div class="nm">'+repEsc(c.name)+'</div>'+
+      '<div class="fl">'+repEsc(c.host)+(c.users&&c.users.length?' · user(s): '+repEsc(c.users.slice(0,3).join(", ")):'')+' · '+c.count.toLocaleString()+' detections · '+repEsc(fmtTime(c.startTms))+' → '+repEsc(fmtTime(c.endTms))+'</div>'+
+      '<div class="fl">Steps: '+c.steps.slice(0,12).map(s=>repEsc(s.title)+(s.technique?' ['+s.technique+']':'')).join(' → ')+'</div></div>'; }
+  // 5. affected entities
+  if(d.entities.length){ h+=sec("Affected Entities")+'<table><tr><th>Type</th><th>Entity</th><th>Risk score</th><th>Detections</th><th>Techniques</th></tr>';
+    for(const e of d.entities.slice(0,15)) h+='<tr><td>'+repEsc(e.type)+'</td><td><b>'+repEsc(e.name)+'</b></td><td>'+e.score.toLocaleString()+'</td><td>'+e.hits.toLocaleString()+'</td><td>'+e.techniques.length+'</td></tr>'; h+='</table>'; }
+  // 6. detection summary
+  if(d.byRule.length){ h+=sec("Detection Summary")+'<table><tr><th>Severity</th><th>Detection</th><th>Source</th><th>Events</th></tr>';
+    for(const g of d.byRule.slice(0,30)) h+='<tr><td>'+svpill(g.level)+'</td><td>'+repEsc(g.title)+'</td><td>'+repEsc(g.source)+'</td><td>'+g.count.toLocaleString()+'</td></tr>'; h+='</table>'; }
+  // 7. forensic evidence
+  if(d.ev){ const c=d.cnt; h+=sec("Forensic Evidence")+'<div class="cards">'+
+      card(String(c(d.ev.logCleared)),"log clears")+card(String(c(d.ev.accountsCreated)),"accounts created")+card(String(c(d.ev.groupAdds)),"priv-group adds")+
+      card(String(c(d.ev.services)),"services installed")+card(String((d.ev.extLogons&&d.ev.extLogons.size)||0),"external/RDP logons")+card(String(c(d.ev.lsassAccess)),"LSASS access")+
+      card(String(c(d.ev.sessions)),"logon sessions")+card(String(c(d.ev.defender)),"Defender events")+'</div>'; }
+  // 8. IOCs
+  if(d.ips.length||d.hashes.length||d.domains.length){ h+=sec("Indicators of Compromise");
+    if(d.ips.length) h+='<h3>External IP addresses ('+d.ips.length+')</h3><p><code>'+d.ips.slice(0,60).map(([ip,c])=>repEsc(ip)+' ×'+c).join('</code> <code>')+'</code></p>';
+    if(d.domains.length) h+='<h3>Domains ('+d.domains.length+')</h3><p><code>'+d.domains.slice(0,60).map(repEsc).join('</code> <code>')+'</code></p>';
+    if(d.hashes.length) h+='<h3>File hashes ('+d.hashes.length+')</h3><p class="muted" style="word-break:break-all">'+d.hashes.slice(0,50).map(repEsc).join('<br>')+'</p>'; }
+  // 9. recommendations
+  h+=sec("Recommendations")+'<ul class="rec">'+d.rec.map(r=>'<li>'+repEsc(r)+'</li>').join('')+'</ul>';
+  h+='<div class="foot">Generated by EVTX Triage · automated triage aid · findings are heuristic and rule-based and require analyst validation. CONFIDENTIAL — handle per your organisation\'s data-classification policy.</div>';
+  return h+'</div></body></html>';
 }
 /* ---- DOCX export: store-only ZIP + WordprocessingML (no libraries) ---- */
 function crc32(u8){ let c=~0>>>0; for(let i=0;i<u8.length;i++){ c^=u8[i]; for(let k=0;k<8;k++) c=(c>>>1)^(0xEDB88320&-(c&1)); } return (~c)>>>0; }
@@ -5896,31 +5960,38 @@ function wtable(head,rows){
   x+='<w:tr>'+head.map(h=>cell(h,true)).join('')+'</w:tr>';
   for(const r of rows) x+='<w:tr>'+r.map(c=>cell(c,false)).join('')+'</w:tr>';
   return x+'</w:tbl><w:p/>'; }
+function wps(text,style){ return '<w:p><w:pPr><w:pStyle w:val="'+style+'"/></w:pPr><w:r><w:t xml:space="preserve">'+repEsc(text)+'</w:t></w:r></w:p>'; }
 function buildReportDocx(S, dash, ev, meta){
-  const sm=S.summary||{}, bySev=S.bySev||{}, A=S.attack||{};
-  const caseId=window.__caseId||"local";
-  const span=((meta&&meta.tsMin)?meta.tsMin.slice(0,19).replace("T"," "):"?")+"  →  "+((meta&&meta.tsMax)?meta.tsMax.slice(0,19).replace("T"," "):"?");
-  const totalEvents=(dash&&dash.total)||(meta&&meta.count)||sm.scanned||0;
-  const hosts=(dash&&dash.computers&&dash.computers.length)||(caseSources?caseSources.length:0)||0;
-  let b=wp("Incident Response — EVTX Triage Report",{b:true,sz:40})+wp("Generated "+new Date().toISOString()+" · case "+caseId,{gray:true,sz:18});
-  b+=wp("Executive summary",{b:true,sz:28})+wtable(["Metric","Value"],[["Events",totalEvents.toLocaleString()],["Events with detections",(sm.withDetections||0).toLocaleString()],["Total hits",(sm.total||0).toLocaleString()],["Critical + high",((bySev.critical||0)+(bySev.high||0)).toLocaleString()],["Hosts",String(hosts)],["ATT&CK techniques",String(A.techniqueCount||0)],["Time span",span],["Severity","critical "+(bySev.critical||0)+" · high "+(bySev.high||0)+" · medium "+(bySev.medium||0)+" · low/info "+((bySev.low||0)+(bySev.info||0))]]);
-  if(A.tactics&&A.tactics.length){ b+=wp("MITRE ATT&CK coverage",{b:true,sz:28})+wp(A.tactics.map(t=>t.name+" ("+t.techniques+")").join(" · "),{gray:true,sz:18})+wtable(["Technique","Name","Events"],(A.techniques||[]).slice(0,20).map(t=>[t.id,t.name,String(t.count)])); }
-  if(S.chains&&S.chains.length){ b+=wp("Attack chains ("+S.chains.length+")",{b:true,sz:28});
-    for(const c of S.chains.slice(0,10)) b+=wp(c.name,{b:true})+wp(c.host+(c.users&&c.users.length?" · "+c.users.slice(0,3).join(", "):"")+" · "+c.count+" detections · "+fmtTime(c.startTms)+" → "+fmtTime(c.endTms),{gray:true,sz:18})+wp(c.steps.slice(0,10).map(s=>s.title+(s.technique?" ["+s.technique+"]":"")).join("  →  "),{sz:18}); }
-  if(S.entities&&S.entities.length){ b+=wp("Riskiest entities",{b:true,sz:28})+wtable(["Type","Entity","Risk","Detections","Tech"],S.entities.slice(0,15).map(e=>[e.type,e.name,String(e.score),String(e.hits),String(e.techniques.length)])); }
-  if(S.byRule&&S.byRule.length){ b+=wp("Detections by rule",{b:true,sz:28})+wtable(["Level","Rule","Source","Events"],S.byRule.slice(0,30).map(g=>[g.level,g.title,g.source,String(g.count)])); }
-  if(ev){ const cnt=a=>a?a.length:0; b+=wp("Key forensic artifacts",{b:true,sz:28})+wtable(["Artifact","Count"],[["Log clears",cnt(ev.logCleared)],["Accounts created",cnt(ev.accountsCreated)],["Priv-group adds",cnt(ev.groupAdds)],["Services",cnt(ev.services)],["External/RDP logons",(ev.extLogons&&ev.extLogons.size)||0],["LSASS access",cnt(ev.lsassAccess)],["Logon sessions",cnt(ev.sessions)],["Defender events",cnt(ev.defender)]].map(([k,v])=>[k,String(v)]));
-    const ips=ev.ips?[...ev.ips.entries()].sort((a,b)=>b[1]-a[1]):[], hashes=ev.hashes?[...ev.hashes]:[], domains=ev.domains?[...ev.domains]:[];
-    if(ips.length||hashes.length||domains.length){ b+=wp("Indicators of compromise",{b:true,sz:28});
-      if(ips.length) b+=wp("External IPs ("+ips.length+")",{b:true})+wp(ips.slice(0,50).map(([ip,c])=>ip+"×"+c).join("   "),{sz:16});
-      if(domains.length) b+=wp("Domains ("+domains.length+")",{b:true})+wp(domains.slice(0,50).join("   "),{sz:16});
-      if(hashes.length) b+=wp("File hashes ("+hashes.length+")",{b:true})+wp(hashes.slice(0,40).join("\n"),{sz:14}); } }
-  b+=wp("Notes",{b:true,sz:28})+wp("Auto-generated triage summary from EVTX Triage. Findings are heuristic and rule-based and require analyst validation.",{gray:true,sz:18});
+  const d=reportData(S,dash,ev,meta), A=d.A; const c=d.cnt;
+  let sn=0; const H1=t=>wps((++sn)+".  "+t,"Heading1");
+  let b=wps("Windows Event Log Triage Report","Title")+wps("Incident Response · Digital Forensics — CONFIDENTIAL","Subtitle");
+  b+=wtable(["Field","Value"],[["Case reference",d.caseId],["Report generated",d.generated],["Analysis window",d.span],["Scope",d.totalEvents.toLocaleString()+" events · "+d.hosts+" host(s) · "+d.sources],["Assessed posture",d.posture],["Prepared by","EVTX Triage (automated analysis)"]]);
+  b+=H1("Executive Summary")+wp(d.exec,{})+
+     wtable(["Metric","Value"],[["Events analysed",d.totalEvents.toLocaleString()],["Flagged events",(d.sm.withDetections||0).toLocaleString()],["Total detections",(d.sm.total||0).toLocaleString()],["Critical + high",(d.bySev.crit+d.bySev.high).toLocaleString()],["ATT&CK techniques",String(A.techniqueCount||0)],["Attack chains",String(d.chains.length)]]);
+  b+=H1("Incident Overview")+wtable(["Critical","High","Medium","Low / Info"],[[String(d.bySev.crit),String(d.bySev.high),String(d.bySev.med),String(d.bySev.low)]]);
+  if(A.tactics&&A.tactics.length){ b+=H1("MITRE ATT&CK Coverage")+wp("Tactics observed: "+A.tactics.map(t=>t.name+" ("+t.techniques+")").join(" · "),{gray:true,sz:18})+wtable(["Technique","Name","Events"],(A.techniques||[]).slice(0,25).map(t=>[t.id,t.name,String(t.count)])); }
+  if(d.chains.length){ b+=H1("Attack Narrative");
+    for(const ch of d.chains.slice(0,10)) b+=wp(ch.name,{b:true})+wp(ch.host+(ch.users&&ch.users.length?" · user(s): "+ch.users.slice(0,3).join(", "):"")+" · "+ch.count.toLocaleString()+" detections · "+fmtTime(ch.startTms)+" → "+fmtTime(ch.endTms),{gray:true,sz:18})+wp("Steps: "+ch.steps.slice(0,12).map(s=>s.title+(s.technique?" ["+s.technique+"]":"")).join("  →  "),{sz:18}); }
+  if(d.entities.length){ b+=H1("Affected Entities")+wtable(["Type","Entity","Risk","Detections","Tech"],d.entities.slice(0,15).map(e=>[e.type,e.name,e.score.toLocaleString(),e.hits.toLocaleString(),String(e.techniques.length)])); }
+  if(d.byRule.length){ b+=H1("Detection Summary")+wtable(["Severity","Detection","Source","Events"],d.byRule.slice(0,30).map(g=>[g.level,g.title,g.source,g.count.toLocaleString()])); }
+  if(d.ev){ b+=H1("Forensic Evidence")+wtable(["Artifact","Count"],[["Log clears",c(d.ev.logCleared)],["Accounts created",c(d.ev.accountsCreated)],["Priv-group adds",c(d.ev.groupAdds)],["Services installed",c(d.ev.services)],["External/RDP logons",(d.ev.extLogons&&d.ev.extLogons.size)||0],["LSASS access",c(d.ev.lsassAccess)],["Logon sessions",c(d.ev.sessions)],["Defender events",c(d.ev.defender)]].map(([k,v])=>[k,String(v)])); }
+  if(d.ips.length||d.hashes.length||d.domains.length){ b+=H1("Indicators of Compromise");
+    if(d.ips.length) b+=wp("External IP addresses ("+d.ips.length+")",{b:true})+wp(d.ips.slice(0,60).map(([ip,n])=>ip+" ×"+n).join("   "),{sz:16});
+    if(d.domains.length) b+=wp("Domains ("+d.domains.length+")",{b:true})+wp(d.domains.slice(0,60).join("   "),{sz:16});
+    if(d.hashes.length) b+=wp("File hashes ("+d.hashes.length+")",{b:true})+wp(d.hashes.slice(0,50).join("\n"),{sz:14}); }
+  b+=H1("Recommendations"); for(const r of d.rec) b+=wp("•  "+r,{});
+  b+=wp("Generated by EVTX Triage — automated triage aid; findings are heuristic and rule-based and require analyst validation. CONFIDENTIAL — handle per your organisation's data-classification policy.",{gray:true,sz:16});
   const doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+b+'<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/></w:sectPr></w:body></w:document>';
-  const ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
+  const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:cs="Segoe UI"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr></w:rPrDefault></w:docDefaults>'+
+    '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:spacing w:after="80" w:line="264" w:lineRule="auto"/></w:pPr></w:style>'+
+    '<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="40"/></w:pPr><w:rPr><w:b/><w:color w:val="122C4F"/><w:sz w:val="46"/><w:szCs w:val="46"/></w:rPr></w:style>'+
+    '<w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="160"/></w:pPr><w:rPr><w:color w:val="1F5FBF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>'+
+    '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="320" w:after="100"/><w:pBdr><w:bottom w:val="single" w:sz="12" w:space="2" w:color="122C4F"/></w:pBdr></w:pPr><w:rPr><w:b/><w:color w:val="122C4F"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:style></w:styles>';
+  const ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>';
   const rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
+  const drels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
   const enc=new TextEncoder();
-  return zipStore([{name:"[Content_Types].xml",data:enc.encode(ct)},{name:"_rels/.rels",data:enc.encode(rels)},{name:"word/document.xml",data:enc.encode(doc)}]);
+  return zipStore([{name:"[Content_Types].xml",data:enc.encode(ct)},{name:"_rels/.rels",data:enc.encode(rels)},{name:"word/_rels/document.xml.rels",data:enc.encode(drels)},{name:"word/document.xml",data:enc.encode(doc)},{name:"word/styles.xml",data:enc.encode(styles)}]);
 }
 function dlBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
 function reportBtns(){ return '<div style="display:flex;gap:8px;justify-content:flex-end;margin:-2px 0 10px">'+

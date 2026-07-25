@@ -762,10 +762,12 @@ app.get("/api/timeline", async (req,res)=>{
         if(events.length<COLLECT) events.push({ idx:i, tms:Number.isNaN(tms)?null:tms, ts, kind, level, eid, host:getComputer(ev), title:String(title||"").slice(0,180) });
       }
     }
-    // keep the highest-signal events (severity, then rare non-detection artifacts, then recency)
+    // 1) select the highest-signal events (severity, then rare non-detection artifacts, then recency)
     events.sort((a,c)=> (sevNumS(c.level)-sevNumS(a.level)) || ((c.kind!=="detection")-(a.kind!=="detection")) || ((c.tms||0)-(a.tms||0)) );
     const truncated=events.length>CAP;
-    const feed=events.slice(0,CAP); feed.sort((a,c)=>(c.tms||0)-(a.tms||0));   // display newest-first
+    // 2) present them as a clean chronological flow: strictly by time, then log order as a stable tiebreaker
+    const feed=events.slice(0,CAP);
+    feed.sort((a,c)=> ((a.tms==null?Infinity:a.tms)-(c.tms==null?Infinity:c.tms)) || (a.idx-c.idx));
     res.json({ ok:true, tMin:meta.tsMin, tMax:meta.tsMax, notableTotal, detTotal, truncated,
       buckets: buckets.map((x,k)=>({ t: haveSpan?Math.round(t0+(k+0.5)*span/NB):null, n:x.n, d:x.d, lvl:x.lvl })),
       events: feed });
