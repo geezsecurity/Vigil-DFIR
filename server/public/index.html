@@ -5769,7 +5769,9 @@ function tlFeedFiltered(){ const j=tlData, win=tlWindow();
     if(tlFilters.q&&((e.title||"")+" "+(e.host||"")+" "+e.eid).toLowerCase().indexOf(tlFilters.q)===-1)return false;
     return true; }); }
 function paintFeed(){
-  let feed=tlFeedFiltered(); if(!tlFilters.sortAsc) feed=feed.slice().reverse();   // server order is chronological; reverse for newest-first
+  // always sort on the client so the flow is chronological regardless of server order or cached data
+  let feed=tlFeedFiltered().slice().sort((a,c)=> ((a.tms==null?Infinity:a.tms)-(c.tms==null?Infinity:c.tms)) || ((a.idx||0)-(c.idx||0)));
+  if(!tlFilters.sortAsc) feed.reverse();   // toggle -> newest first
   const hd=$("tlFeedHd"), fc=$("tlFeed"); if(!fc)return;
   if(hd)hd.textContent=feed.length.toLocaleString()+" events";
   const SHOW=2000; let h="";
