@@ -1,0 +1,24 @@
+# EVTX Triage — one-command deployment:
+#   docker compose up -d      → http://localhost:8742
+#   docker compose down       → stop (cases persist in the evtx-data volume)
+#
+# To keep cases on the host instead of a named volume, replace the volume line with:
+#   - ./data:/data
+services:
+  evtx-triage:
+    build: .
+    image: evtx-triage:latest
+    container_name: evtx-triage
+    ports:
+      - "8742:8742"
+    volumes:
+      - evtx-data:/data
+    environment:
+      # events sent to the browser grid before fetch-on-scroll kicks in (raise for huge cases)
+      EVTX_BROWSE_CAP: "1000000"
+      # cap events scanned by server-side detection (0/unset = all)
+      # EVTX_DETECT_CAP: "0"
+    restart: unless-stopped
+
+volumes:
+  evtx-data:

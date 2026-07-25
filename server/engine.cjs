@@ -345,11 +345,11 @@ function parseYaraRule(name, tags, body){
   const condBlock = body.slice(condSec.index+condSec[0].length).trim();
   const strings={};
   const sre=/(\$[A-Za-z0-9_*]+)\s*=\s*/g; const defs=[]; let sm;
-  while((sm=sre.exec(strBlock))!==null) defs.push({id:sm[1], at:sre.lastIndex});
+  while((sm=sre.exec(strBlock))!==null) defs.push({id:sm[1], start:sm.index, at:sre.lastIndex});
   for (let i=0;i<defs.length;i++){
-    const end = i+1<defs.length ? defs[i+1].at - defs[i+1].id.length - 1 : strBlock.length;
-    let seg = strBlock.slice(defs[i].at, end).trim();
-    seg = seg.replace(/\$[A-Za-z0-9_*]+\s*=\s*$/,"").trim();
+    // value runs from just after this "$id =" up to the start of the next definition
+    const end = i+1<defs.length ? defs[i+1].start : strBlock.length;
+    const seg = strBlock.slice(defs[i].at, end).trim();
     strings[defs[i].id] = parseYaraString(seg);
   }
   const cond = compileYaraCondition(condBlock, Object.keys(strings));
@@ -428,6 +428,206 @@ function compileYaraCondition(cond, ids){
   return orE();
 }
 
+/* ----------------- MITRE ATT&CK -------------------------------------------
+   Sigma rules already carry attack.* tags; heuristics get tagged below. These
+   helpers turn tags into technique/tactic facts the UI aggregates + exports as a
+   Navigator layer. Names are a curated subset (unknown ids fall back to the id). */
+const ATTACK_TACTIC_NAMES={
+  "reconnaissance":"Reconnaissance","resource-development":"Resource Development","initial-access":"Initial Access",
+  "execution":"Execution","persistence":"Persistence","privilege-escalation":"Privilege Escalation",
+  "defense-evasion":"Defense Evasion","credential-access":"Credential Access","discovery":"Discovery",
+  "lateral-movement":"Lateral Movement","collection":"Collection","command-and-control":"Command and Control",
+  "exfiltration":"Exfiltration","impact":"Impact"
+};
+const ATTACK_TACTIC_ORDER=Object.keys(ATTACK_TACTIC_NAMES);
+// technique id -> { name, tactic }  (curated: heuristics + techniques common to the shipped Sigma set)
+const ATTACK_TECHNIQUES={
+  "T1003":{name:"OS Credential Dumping",tactic:"credential-access"},
+  "T1003.001":{name:"LSASS Memory",tactic:"credential-access"},
+  "T1003.002":{name:"Security Account Manager",tactic:"credential-access"},
+  "T1003.003":{name:"NTDS",tactic:"credential-access"},
+  "T1003.006":{name:"DCSync",tactic:"credential-access"},
+  "T1021.001":{name:"Remote Desktop Protocol",tactic:"lateral-movement"},
+  "T1021.002":{name:"SMB/Windows Admin Shares",tactic:"lateral-movement"},
+  "T1027":{name:"Obfuscated Files or Information",tactic:"defense-evasion"},
+  "T1036":{name:"Masquerading",tactic:"defense-evasion"},
+  "T1036.003":{name:"Rename System Utilities",tactic:"defense-evasion"},
+  "T1047":{name:"Windows Management Instrumentation",tactic:"execution"},
+  "T1053.005":{name:"Scheduled Task",tactic:"execution"},
+  "T1055":{name:"Process Injection",tactic:"defense-evasion"},
+  "T1059":{name:"Command and Scripting Interpreter",tactic:"execution"},
+  "T1059.001":{name:"PowerShell",tactic:"execution"},
+  "T1059.003":{name:"Windows Command Shell",tactic:"execution"},
+  "T1068":{name:"Exploitation for Privilege Escalation",tactic:"privilege-escalation"},
+  "T1070":{name:"Indicator Removal",tactic:"defense-evasion"},
+  "T1070.001":{name:"Clear Windows Event Logs",tactic:"defense-evasion"},
+  "T1078":{name:"Valid Accounts",tactic:"persistence"},
+  "T1090":{name:"Proxy",tactic:"command-and-control"},
+  "T1098":{name:"Account Manipulation",tactic:"persistence"},
+  "T1105":{name:"Ingress Tool Transfer",tactic:"command-and-control"},
+  "T1112":{name:"Modify Registry",tactic:"defense-evasion"},
+  "T1134":{name:"Access Token Manipulation",tactic:"privilege-escalation"},
+  "T1136.001":{name:"Create Account: Local Account",tactic:"persistence"},
+  "T1190":{name:"Exploit Public-Facing Application",tactic:"initial-access"},
+  "T1197":{name:"BITS Jobs",tactic:"defense-evasion"},
+  "T1210":{name:"Exploitation of Remote Services",tactic:"lateral-movement"},
+  "T1218":{name:"System Binary Proxy Execution",tactic:"defense-evasion"},
+  "T1218.005":{name:"Mshta",tactic:"defense-evasion"},
+  "T1218.011":{name:"Rundll32",tactic:"defense-evasion"},
+  "T1219":{name:"Remote Access Software",tactic:"command-and-control"},
+  "T1482":{name:"Domain Trust Discovery",tactic:"discovery"},
+  "T1543.003":{name:"Windows Service",tactic:"persistence"},
+  "T1547.001":{name:"Registry Run Keys / Startup Folder",tactic:"persistence"},
+  "T1548":{name:"Abuse Elevation Control Mechanism",tactic:"privilege-escalation"},
+  "T1548.002":{name:"Bypass User Account Control",tactic:"privilege-escalation"},
+  "T1550":{name:"Use Alternate Authentication Material",tactic:"lateral-movement"},
+  "T1552":{name:"Unsecured Credentials",tactic:"credential-access"},
+  "T1557":{name:"Adversary-in-the-Middle",tactic:"credential-access"},
+  "T1558":{name:"Steal or Forge Kerberos Tickets",tactic:"credential-access"},
+  "T1558.003":{name:"Kerberoasting",tactic:"credential-access"},
+  "T1562":{name:"Impair Defenses",tactic:"defense-evasion"},
+  "T1562.001":{name:"Disable or Modify Tools",tactic:"defense-evasion"},
+  "T1562.002":{name:"Disable Windows Event Logging",tactic:"defense-evasion"},
+  "T1569.002":{name:"Service Execution",tactic:"execution"},
+  "T1570":{name:"Lateral Tool Transfer",tactic:"lateral-movement"},
+  "T1110":{name:"Brute Force",tactic:"credential-access"},
+  "T1110.003":{name:"Password Spraying",tactic:"credential-access"},
+  "T1136":{name:"Create Account",tactic:"persistence"},
+  "T1185":{name:"Browser Session Hijacking",tactic:"collection"},
+  "T1204":{name:"User Execution",tactic:"execution"},
+  "T1505.003":{name:"Web Shell",tactic:"persistence"},
+  "T1518.001":{name:"Security Software Discovery",tactic:"discovery"},
+  "T1564.003":{name:"Hidden Window",tactic:"defense-evasion"},
+  "T1574":{name:"Hijack Execution Flow",tactic:"persistence"},
+  "T1574.002":{name:"DLL Side-Loading",tactic:"persistence"},
+  "T1620":{name:"Reflective Code Loading",tactic:"defense-evasion"}
+};
+function techniqueFromTag(tag){ const m=/^attack\.(t\d{4}(?:\.\d{3})?)$/i.exec(String(tag||"")); return m?m[1].toUpperCase():null; }
+function tacticFromTag(tag){ const m=/^attack\.([a-z][a-z0-9_-]+)$/i.exec(String(tag||"")); if(!m)return null;
+  const slug=m[1].toLowerCase().replace(/_/g,"-"); return ATTACK_TACTIC_NAMES[slug]?slug:null; }
+// parse a hit's tags -> { techniques:[{id,name,tactic}], tactics:[slug] }
+function parseAttack(tags){
+  const techniques=[], tSet=new Set(), tacSet=new Set(), explicit=[];
+  for(const tag of (tags||[])){
+    const tech=techniqueFromTag(tag);
+    if(tech){ if(!tSet.has(tech)){ tSet.add(tech); const ref=ATTACK_TECHNIQUES[tech]||ATTACK_TECHNIQUES[tech.split(".")[0]];
+      const tactic=ref?ref.tactic:null; techniques.push({id:tech,name:ref?ref.name:tech,tactic}); if(tactic)tacSet.add(tactic); } continue; }
+    const tac=tacticFromTag(tag); if(tac){ tacSet.add(tac); explicit.push(tac); }
+  }
+  // techniques not in the curated map inherit the rule's own tactic tag (Sigma rules carry both)
+  const fallback = explicit.length?explicit[0]:null;
+  if(fallback) for(const t of techniques) if(!t.tactic) t.tactic=fallback;
+  return { techniques, tactics:[...tacSet] };
+}
+
+/* ----------------- ENTITY RISK SCORING ------------------------------------
+   Score each user / host / IP by the severity + diversity of detections tied to
+   it. Higher = look here first. Fed per (hit, record); result() ranks them.       */
+const SEV_RANK={critical:4,high:3,medium:2,low:1,informational:0,info:0};
+function sevRank(l){ const n=SEV_RANK[String(l||"").toLowerCase()]; return n==null?2:n; }
+const SEV_WEIGHT={critical:100,high:40,medium:12,low:4,informational:1,info:1};
+const NOISE_USERS=/^(?:-|SYSTEM|LOCAL SERVICE|NETWORK SERVICE|ANONYMOUS LOGON|LOCAL SYSTEM)$/i;
+// pull candidate entities out of one event's data (+ its computer)
+function extractEntities(data, computer){
+  data=data||{}; const users=new Set(), hosts=new Set(), ips=new Set();
+  if(computer) hosts.add(String(computer));
+  const U=k=>{ const v=data[k]; return (v==null||typeof v==="object")?"":String(v); };
+  for(const k of ["TargetUserName","SubjectUserName","User","AccountName","SamAccountName"]){
+    const v=U(k); if(v && !NOISE_USERS.test(v)) users.add(v); }
+  for(const k of ["IpAddress","SourceIp","SourceAddress","DestinationIp","ClientIP","Address","SourceNetworkAddress"]){
+    const v=U(k); if(v && v!=="-" && v!=="::1" && /^\d+\.\d+\.\d+\.\d+$/.test(v)) ips.add(v); }
+  for(const k of ["Computer","WorkstationName","Workstation","ComputerName"]){ const v=U(k); if(v && v!=="-") hosts.add(v); }
+  return { users:[...users], hosts:[...hosts], ips:[...ips] };
+}
+// accumulator: feed (hit, rec) via feed(), then result(topN).
+// Dedup: a rule's contribution to an entity grows as weight*(1+log2 count), so 4,700
+// repeated Defender hits can't drown out a single critical from a different rule.
+function makeEntityScorer(){
+  const map=new Map();   // "type|name" -> aggregate
+  const bump=(type,name,hit,tms)=>{ if(!name)return; const key=type+"|"+name; let g=map.get(key);
+    if(!g){ g={type,name,level:"info",hits:0,ruleAgg:new Map(),techniques:new Set(),firstTms:null,lastTms:null}; map.set(key,g); }
+    const rk=hit.ruleId||hit.title||"?"; let ra=g.ruleAgg.get(rk);
+    if(!ra){ ra={count:0,level:hit.level}; g.ruleAgg.set(rk,ra); }
+    ra.count++; if(sevRank(hit.level)>sevRank(ra.level)) ra.level=hit.level;
+    g.hits++; if(sevRank(hit.level)>sevRank(g.level)) g.level=hit.level;
+    for(const t of parseAttack(hit.tags).techniques) g.techniques.add(t.id);
+    if(tms!=null && !Number.isNaN(tms)){ if(g.firstTms==null||tms<g.firstTms)g.firstTms=tms; if(g.lastTms==null||tms>g.lastTms)g.lastTms=tms; }
+  };
+  return {
+    feed(hit, rec){ const e=extractEntities(rec&&rec.data, rec&&rec.computer); const tms=rec&&rec.tms;
+      for(const u of e.users) bump("user",u,hit,tms);
+      for(const h of e.hosts) bump("host",h,hit,tms);
+      for(const ip of e.ips) bump("ip",ip,hit,tms); },
+    result(topN){
+      const arr=[...map.values()].map(g=>{
+        let base=0; for(const ra of g.ruleAgg.values()) base += (SEV_WEIGHT[String(ra.level).toLowerCase()]||4)*(1+Math.log2(ra.count));
+        // diversity multiplier: distinct ATT&CK techniques + distinct rules broaden the risk
+        const div = 1 + 0.12*Math.max(0,g.techniques.size-1) + 0.05*Math.max(0,g.ruleAgg.size-1);
+        return { type:g.type, name:g.name, score:Math.round(base*div), level:g.level, hits:g.hits,
+          rules:g.ruleAgg.size, techniques:[...g.techniques], firstTms:g.firstTms, lastTms:g.lastTms }; });
+      arr.sort((a,b)=> b.score-a.score || sevRank(b.level)-sevRank(a.level) || b.hits-a.hits);
+      return topN?arr.slice(0,topN):arr;
+    }
+  };
+}
+
+/* ----------------- ATTACK-CHAIN CORRELATION -------------------------------
+   Group detections per host into time-bounded bursts, then promote a burst to an
+   "attack chain" when it spans multiple ATT&CK tactics (progression) or is a
+   sustained high-severity cluster. Pure + testable: feed detection items, get
+   ranked named chains. items: {idx,tms,host,user,level,title,source,ruleId,tags} */
+function buildAttackChains(items, opts){
+  opts=opts||{};
+  const GAP = opts.gapMs || 30*60*1000;         // >30 min quiet gap ends a burst
+  const MAX_SPAN = opts.maxSpanMs || 24*60*60*1000;  // cap a chain to a 24h window (else it's a host summary)
+  const MIN_TACTICS = opts.minTactics || 2;     // multi-tactic = progression
+  const MAX_CHAINS = opts.maxChains || 40;
+  const byHost=new Map();
+  for(const it of (items||[])){ const host=it.host||it.user||"(unknown host)";
+    let a=byHost.get(host); if(!a){ a=[]; byHost.set(host,a); } a.push(it); }
+  const chains=[];
+  for(const [host,arr] of byHost){
+    arr.sort((a,b)=>(a.tms||0)-(b.tms||0));
+    let session=[], prev=null;
+    const flush=()=>{ if(session.length) consider(host,session); session=[]; };
+    for(const it of arr){ const t=it.tms||0;
+      if(session.length && ((t-prev)>GAP || (t-session[0].tms)>MAX_SPAN)) flush();
+      session.push(it); prev=t; }
+    flush();
+  }
+  chains.sort((a,b)=> b.score-a.score || (b.endTms||0)-(a.endTms||0));
+  return chains.slice(0, MAX_CHAINS);
+
+  function consider(host, session){
+    const tacSet=new Set(), techSet=new Set(), users=new Set(); let maxLvl="info";
+    // collapse repeated same-technique detections into one ordered step (the story, not the noise)
+    const stepMap=new Map();
+    for(const it of session){ const pa=parseAttack(it.tags);
+      for(const tac of pa.tactics) tacSet.add(tac);
+      for(const t of pa.techniques) techSet.add(t.id);
+      if(it.user) users.add(it.user);
+      if(sevRank(it.level)>sevRank(maxLvl)) maxLvl=it.level;
+      const tech=(pa.techniques[0]&&pa.techniques[0].id)||null;
+      const key=tech||it.ruleId||it.title||("_"+it.idx);
+      let st=stepMap.get(key);
+      if(!st){ st={ idx:it.idx, tms:it.tms, title:it.title||it.ruleId, level:it.level, source:it.source,
+        tactic:(pa.techniques[0]&&pa.techniques[0].tactic)||pa.tactics[0]||null, technique:tech, count:0 }; stepMap.set(key,st); }
+      st.count++; if(sevRank(it.level)>sevRank(st.level))st.level=it.level;
+      if((it.tms||0)<(st.tms||Infinity))st.tms=it.tms;    // keep earliest occurrence time
+    }
+    const nTac=tacSet.size, hiBurst=(sevRank(maxLvl)>=3 && session.length>=3);
+    if(nTac<MIN_TACTICS && !hiBurst) return;                 // not a progression, not a sustained burst
+    const steps=[...stepMap.values()].sort((a,b)=>(a.tms||0)-(b.tms||0));
+    const orderedTac=ATTACK_TACTIC_ORDER.filter(s=>tacSet.has(s));
+    const startTms=session[0].tms, endTms=session[session.length-1].tms;
+    const score = nTac*100 + (SEV_WEIGHT[String(maxLvl).toLowerCase()]||1)*3 + Math.min(session.length,50);
+    const names=orderedTac.map(s=>ATTACK_TACTIC_NAMES[s]||s);
+    chains.push({ host, users:[...users], startTms, endTms, durationMs:(endTms-startTms)||0,
+      count:session.length, steps, tactics:orderedTac, techniques:[...techSet], level:maxLvl, score,
+      name: names.length?names.join(" → "):("Activity burst on "+host) });
+  }
+}
+
 /* ----------------- HEURISTICS ---------------------------------------------- */
 function isPrivateIp(ip){
   if(!ip||ip==="-"||ip==="::1")return true;
@@ -440,9 +640,28 @@ const ENCODED_PS=/(?:-enc(?:odedcommand)?\b|frombase64string|-e[ncodmand]*\s+[A-
 const SUSP_PATH=/\\(?:temp|tmp|programdata|public|windows\\temp)\\|\\appdata\\|\.tmp\b/i;
 const LOLBINish=/\b(?:powershell|pwsh|cmd\.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|wmic|installutil|msbuild)\b/i;
 
+// ruleId -> ATT&CK tags (attack.* format, same as Sigma) so heuristics feed the ATT&CK matrix
+const HEUR_ATTACK={
+  "H-LOGCLEAR":["attack.defense-evasion","attack.t1070.001"],
+  "H-BRUTE":["attack.credential-access","attack.t1110"],
+  "H-SPRAY":["attack.credential-access","attack.t1110.003"],
+  "H-ENCPS":["attack.execution","attack.t1059.001","attack.defense-evasion","attack.t1027"],
+  "H-NEWSVC":["attack.persistence","attack.t1543.003"],
+  "H-EXTRDP":["attack.lateral-movement","attack.t1021.001"],
+  "H-NEWUSER":["attack.persistence","attack.t1136.001"],
+  "H-ADMINADD":["attack.persistence","attack.t1098"],
+  "H-AVHIT":[],
+  "H-AVOFF":["attack.defense-evasion","attack.t1562.001"],
+  "H-KERBEROAST":["attack.credential-access","attack.t1558.003"],
+  "H-DCSYNC":["attack.credential-access","attack.t1003.006"],
+  "H-LSASSDUMP":["attack.credential-access","attack.t1003.001"],
+  "H-PSEXEC":["attack.lateral-movement","attack.t1021.002","attack.execution","attack.t1569.002"],
+  "H-PTH":["attack.lateral-movement","attack.t1550"],
+  "H-SCHTASK":["attack.execution","attack.t1053.005"]
+};
 function runHeuristics(rows){
   const hits=[];
-  const add=(idx,ruleId,title,level,why)=>hits.push({idx,ruleId,title,level,why,source:"heuristic"});
+  const add=(idx,ruleId,title,level,why)=>hits.push({idx,ruleId,title,level,why,source:"heuristic",tags:HEUR_ATTACK[ruleId]||[]});
   const byEid=new Map();
   for (let i=0;i<rows.length;i++){ const e=Number(rows[i].eventId); if(!byEid.has(e))byEid.set(e,[]); byEid.get(e).push(i); }
 
@@ -488,6 +707,38 @@ function runHeuristics(rows){
   for (const i of tgs){ const enc=String((rows[i].data||{}).TicketEncryptionType||(rows[i].data||{}).EncryptionType||""); if(/0x17|rc4/i.test(enc))rc4.push(i); }
   if (rc4.length>=10) for (const i of rc4) add(i,"H-KERBEROAST","Possible Kerberoasting (RC4 service tickets)","medium",rc4.length+" RC4 (0x17) TGS requests (4769)");
 
+  // --- DCSync: AD replication rights exercised by a non-machine account (4662) ---
+  const REPL_GUID=/1131f6a[abcd]-9c07-11d1-f79f-00c04fc2dcd2|9923a32a-3607-11d2-b9be-0000f87a36b2/i;
+  for (const i of (byEid.get(4662)||[])){ const d=rows[i].data||{};
+    const props=String(d.Properties||d.AccessMaskString||d.ObjectType||""); const subj=String(d.SubjectUserName||"");
+    if (REPL_GUID.test(props) && subj && !/\$$/.test(subj))
+      add(i,"H-DCSYNC","Directory replication rights used (possible DCSync)","critical","'"+subj+"' exercised AD replication (4662) — DCSync credential theft"); }
+
+  // --- LSASS memory access with dump-grade rights (Sysmon 10) ---
+  for (const i of (byEid.get(10)||[])){ const d=rows[i].data||{}; const tgt=String(d.TargetImage||"");
+    if (/\\lsass\.exe$/i.test(tgt)){ const ga=String(d.GrantedAccess||"").toLowerCase();
+      if (/0x1010|0x1410|0x1438|0x143a|0x1fffff|0x1f1fff|0x1f3fff/.test(ga))
+        add(i,"H-LSASSDUMP","LSASS memory access (possible credential dumping)","high","'"+String(d.SourceImage||"?")+"' opened lsass with "+(d.GrantedAccess||"?")); } }
+
+  // --- PsExec-style remote service execution ---
+  for (const e of [7045,4697]) for (const i of (byEid.get(e)||[])){ const d=rows[i].data||{};
+    const blob=String(d.ServiceName||d.param1||"")+" "+String(d.ImagePath||d.ServiceFileName||"");
+    if (/psexe|paexec|csexec|remcom|xcmd/i.test(blob))
+      add(i,"H-PSEXEC","PsExec-style remote service execution","high","Service '"+String(d.ServiceName||d.param1||"?")+"' — remote exec tool"); }
+  for (const i of (byEid.get(5145)||[])){ const d=rows[i].data||{}; const rel=String(d.RelativeTargetName||d.ShareName||"");
+    if (/psexesvc|paexec|remcom/i.test(rel)) add(i,"H-PSEXEC","PsExec named-pipe / share access","high","Access to '"+rel+"' — PsExec lateral movement"); }
+
+  // --- Overpass-the-hash / NewCredentials logon (4624 type 9) ---
+  for (const i of (byEid.get(4624)||[])){ const d=rows[i].data||{};
+    if (String(d.LogonType)==="9" && /seclogo/i.test(String(d.LogonProcessName||"")))
+      add(i,"H-PTH","NewCredentials logon (overpass-the-hash / runas /netonly)","medium","Type-9 logon by '"+String(d.TargetUserName||"?")+"' — alternate credentials used"); }
+
+  // --- Scheduled task registered with a suspicious action (4698) ---
+  const SCHT_SUSP=/powershell|pwsh|cmd\.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|\\temp\\|\\appdata\\|programdata|-enc|downloadstring|frombase64|https?:\/\//i;
+  for (const i of (byEid.get(4698)||[])){ const d=rows[i].data||{};
+    const xml=String(d.TaskContent||d.TaskContentNew||d.NewTaskContent||""), nm=String(d.TaskName||"");
+    if (SCHT_SUSP.test(xml)||SCHT_SUSP.test(nm)) add(i,"H-SCHTASK","Scheduled task with suspicious action","high","Task '"+(nm||"?")+"' runs a suspicious command (4698)"); }
+
   return hits;
 }
 
@@ -501,6 +752,9 @@ function buildFulltext(rec){
 }
 const Engine={
   resolveField, compileSigmaRule, compileYaraRules, runHeuristics, buildFulltext, base64OffsetVariants, compileCondition,
+  parseAttack, techniqueFromTag, tacticFromTag,
+  attack:{ tactics:ATTACK_TACTIC_NAMES, tacticOrder:ATTACK_TACTIC_ORDER, techniques:ATTACK_TECHNIQUES },
+  extractEntities, makeEntityScorer, buildAttackChains,
   parseSigmaDocs(yamlText, yamlLoadAll){
     const docs=yamlLoadAll(yamlText)||[]; const rules=[], skipped=[], errors=[];
     for (const doc of docs){

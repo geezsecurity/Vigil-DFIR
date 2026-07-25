@@ -222,6 +222,40 @@ async function readBodies(ids){
   return out;
 }
 
+/* ---------- in-memory case index -------------------------------------------------
+   Parse the whole log ONCE into a compact per-event record so /api/search (and other
+   analytics) filter in RAM instead of re-streaming the 258MB file every call. Strings
+   are interned (provider/computer/source repeat heavily). Rebuilt when events.jsonl
+   changes; keyed by mtime+size like the byte-offset index.                            */
+let _caseIdx=null;   // { mtimeMs, size, recs:[{i,prov,eid,comp,src,tms,cat,ft}], dict:{prov,comp,src} }
+const FT_CAP=1200;   // cap fulltext per event so RAM stays bounded on very large cases
+async function buildCaseIndex(){
+  const provA=[], provM=new Map(), compA=[], compM=new Map(), srcA=[], srcM=new Map();
+  const intern=(v,arr,map)=>{ v=v||""; let id=map.get(v); if(id===undefined){ id=arr.length; arr.push(v); map.set(v,id);} return id; };
+  const recs=[];
+  const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
+  let i=-1;
+  for await(const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+    const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+    const prov=getProvider(ev), eidv=String(getEventId(sys)||""), comp=getComputer(ev), srcv=ev._src||ev._source||"";
+    const ts=getTime(ev), tms=ts?Date.parse(ts):NaN, cat=ev._cat||"";
+    const data=getData(ev);
+    let ft=prov+" "+eidv+" "+comp+" "+srcv;
+    for(const k in data){ const v=data[k]; ft+=" "+(v==null?"":(typeof v==="object"?JSON.stringify(v):v)); if(ft.length>FT_CAP)break; }
+    recs.push({ i, prov:intern(prov,provA,provM), eid:eidv, comp:intern(comp,compA,compM), src:intern(srcv,srcA,srcM),
+      tms:Number.isNaN(tms)?null:tms, ts, cat, ft:ft.slice(0,FT_CAP).toLowerCase() });
+  }
+  return { recs, dict:{ prov:provA, comp:compA, src:srcA } };
+}
+async function getCaseIndex(){
+  if(!fs.existsSync(EVENTS)) return null;
+  const st=fs.statSync(EVENTS);
+  if(_caseIdx && _caseIdx.mtimeMs===st.mtimeMs && _caseIdx.size===st.size) return _caseIdx;
+  const built=await buildCaseIndex();
+  _caseIdx={ mtimeMs:st.mtimeMs, size:st.size, ...built };
+  return _caseIdx;
+}
+
 /* =====================  ROUTES  ===================== */
 app.get("/api/meta", (req,res)=> res.json({ ok:true, meta:readMeta(), rules:ruleCounts(),
   hasDetections: fs.existsSync(DETS), browseCap: BROWSE_CAP }));
@@ -341,7 +375,7 @@ app.post("/api/detect", async (req,res)=>{
     const sig=loadSigmaRules(), yar=loadYaraRules();
     const byIdx=new Map();
     const add=(i,h)=>{ let a=byIdx.get(i); if(!a){a=[];byIdx.set(i,a);} if(!a.some(x=>x.ruleId===h.ruleId&&x.source===h.source))a.push(h); };
-    for(const h of Engine.runHeuristics(rows)) add(h.idx,{ruleId:h.ruleId,title:h.title,level:h.level,source:"heuristic",why:h.why});
+    for(const h of Engine.runHeuristics(rows)) add(h.idx,{ruleId:h.ruleId,title:h.title,level:h.level,source:"heuristic",why:h.why,tags:h.tags});
     if(sig.rules.length||yar.rules.length){ const index=Engine.buildIndex(sig.rules);
       const m=Engine.runRules(rows,sig.rules,yar.rules,{index}); for(const [i,hits] of m)for(const h of hits)add(i,h); }
     // build self-contained timeline + aggregations so the UI renders the full picture (not just the loaded grid window)
@@ -349,20 +383,44 @@ app.post("/api/detect", async (req,res)=>{
     const sevn=l=>{const n=SEV[String(l||"").toLowerCase()];return n==null?2:n;};
     const obj={}; let total=0; const timeline=[]; const byRule=new Map(); const byComp=new Map();
     const bySev={critical:0,high:0,medium:0,low:0,info:0}; const bySrc={sigma:0,yara:0,heuristic:0};
+    const byTech=new Map(), byTac=new Map();   // ATT&CK technique/tactic coverage
+    const scorer=Engine.makeEntityScorer();    // entity risk scoring
+    const chainItems=[];                        // one item per detected event -> attack-chain correlation
     for(const [i,a] of byIdx){ obj[i]=a; total+=a.length; const r=rows[i];
       byComp.set(r.computer||"(none)",(byComp.get(r.computer||"(none)")||0)+1);
-      for(const h of a){ const key=h.source+"|"+(h.ruleId||h.title);
+      let evLvl="info", evTags=[], evTitle=(a[0]&&(a[0].title||a[0].ruleId))||"";
+      for(const h of a){ const key=h.source+"|"+(h.ruleId||h.title); scorer.feed(h, r);
+        if(sevn(h.level)>sevn(evLvl)){ evLvl=h.level; evTitle=h.title||h.ruleId; }
+        if(h.tags&&h.tags.length) evTags=evTags.concat(h.tags);
         let g=byRule.get(key); if(!g){g={ruleId:h.ruleId||h.title,title:h.title||h.ruleId,source:h.source,level:h.level,count:0};byRule.set(key,g);}
         g.count++; if(sevn(h.level)>sevn(g.level))g.level=h.level;
         bySev[String(h.level).toLowerCase()]=(bySev[String(h.level).toLowerCase()]||0)+1; bySrc[h.source]=(bySrc[h.source]||0)+1;
         if(timeline.length<TIMELINE_CAP) timeline.push({idx:i,ts:r.ts,tms:r.tms,computer:r.computer,channel:r.channel||r.provider,eid:r.eventId,level:h.level,title:h.title||h.ruleId,source:h.source});
-      } }
+        // ATT&CK: tally per technique (events, max severity, contributing rules) and per tactic
+        const pa=Engine.parseAttack(h.tags);
+        for(const t of pa.techniques){ let g2=byTech.get(t.id);
+          if(!g2){ g2={id:t.id,name:t.name,tactic:t.tactic,count:0,level:"info",rules:new Set()}; byTech.set(t.id,g2); }
+          g2.count++; if(sevn(h.level)>sevn(g2.level))g2.level=h.level; g2.rules.add(h.ruleId||h.title); }
+        for(const slug of new Set(pa.tactics)){ let g3=byTac.get(slug); if(!g3){ g3={tactic:slug,count:0,techniques:new Set()}; byTac.set(slug,g3);} g3.count++; }
+      }
+      chainItems.push({ idx:i, tms:r.tms, host:r.computer||"", user:(Engine.extractEntities(r.data,r.computer).users[0]||""),
+        level:evLvl, title:evTitle, source:(a[0]&&a[0].source)||"", ruleId:(a[0]&&a[0].ruleId)||"", tags:evTags });
+    }
     timeline.sort((a,b)=>(b.tms||0)-(a.tms||0));
+    for(const t of byTech.values()){ if(t.tactic){ const g=byTac.get(t.tactic); if(g)g.techniques.add(t.id); } }
+    const TAC_NAMES=Engine.attack.tactics, TAC_ORDER=Engine.attack.tacticOrder;
+    const attack={
+      techniques:[...byTech.values()].sort((a,b)=>sevn(b.level)-sevn(a.level)||b.count-a.count)
+        .map(t=>({id:t.id,name:t.name,tactic:t.tactic,count:t.count,level:t.level,rules:[...t.rules]})),
+      tactics:TAC_ORDER.filter(s=>byTac.has(s)).map(s=>({slug:s,name:TAC_NAMES[s],count:byTac.get(s).count,techniques:byTac.get(s).techniques.size})),
+      techniqueCount:byTech.size, tacticCount:byTac.size };
+    const entities=scorer.result(60);
+    const chains=Engine.buildAttackChains(chainItems);
     const out={ hits:obj,
-      timeline,
+      timeline, entities, chains,
       byRule:[...byRule.values()].sort((a,b)=>sevn(b.level)-sevn(a.level)||b.count-a.count),
       byComputer:[...byComp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([c,n])=>({computer:c,count:n})),
-      bySev, bySrc,
+      bySev, bySrc, attack,
       summary:{ events:rows.length, scanned:rows.length, fullCount:meta.count||rows.length, truncated:!!truncated,
         withDetections:byIdx.size, total, sigma:sig.rules.length, yara:yar.rules.length, skipped:sig.skipped } };
     fs.writeFileSync(DETS, JSON.stringify(out));
@@ -379,12 +437,13 @@ app.get("/api/detections", (req,res)=>{
 app.get("/api/dashboard", (req,res)=>{
   if(!fs.existsSync(EVENTS)) return res.json({ ok:true, total:0 });
   const provs=new Map(), comps=new Map(), users=new Map(), eids=new Map(), hours=new Map();
-  let total=0, fail=0, susp=0, tMin=null, tMax=null;
+  let total=0, fail=0, susp=0, tMin=null, tMax=null, fwCount=0, vpnCount=0;
   const bump=(m,k)=>{ if(k!=null&&k!=="") m.set(k,(m.get(k)||0)+1); };
   const SUSP=new Set(["4625","4720","4728","4732","4756","4724","1102","104","7045","4698","4697","1116","1117"]);
   const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
   rl.on("line", l=>{ if(!l) return; let ev; try{ ev=JSON.parse(l); }catch{ return; }
-    if(ev._cat==="firewall"||ev._cat==="vpn") return;            // those have their own sections
+    if(ev._cat==="firewall"){ fwCount++; return; }               // those have their own sections
+    if(ev._cat==="vpn"){ vpnCount++; return; }
     total++;
     const sys=(ev.Event&&ev.Event.System)||ev.System||{};
     const prov=getProvider(ev), eid=String(getEventId(sys)||""), comp=getComputer(ev), ts=getTime(ev), data=getData(ev);
@@ -398,7 +457,7 @@ app.get("/api/dashboard", (req,res)=>{
   });
   rl.on("close", ()=>{
     const top=(m,n)=>[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,n);
-    res.json({ ok:true, total, fail, susp, tsMin:tMin, tsMax:tMax,
+    res.json({ ok:true, total, fail, susp, tsMin:tMin, tsMax:tMax, fwCount, vpnCount,
       providers: top(provs,15), computers: top(comps,12), users: top(users,12),
       eids: top(eids,30), hours: [...hours.entries()].sort() });
   });
@@ -441,42 +500,39 @@ app.post("/api/search", async (req,res)=>{
     const eid=(b.eid!=null&&b.eid!=="")?String(b.eid):"";
     const src=b.src||null, provider=b.provider||null;   // provider = include-only
     const excluded=new Set(Array.isArray(b.excluded)?b.excluded:[]);
-    const detOnly=!!b.det, ruleId=b.ruleId||"", flaggedOnly=!!b.flagged;
+    const detOnly=!!b.det, ruleId=b.ruleId||"", flaggedOnly=!!b.flagged, technique=b.technique||"";
     const tr=(b.timeRange&&isFinite(b.timeRange.from)&&isFinite(b.timeRange.to))?b.timeRange:null;
     const sortKey=(b.sort&&b.sort.key)||"ts", sortDir=(b.sort&&b.sort.dir===-1)?-1:1;
 
     let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{ hits={}; }
     let flags=null; if(flaggedOnly){ try{ flags=new Set(JSON.parse(fs.readFileSync(FLAGS,"utf8"))); }catch{ flags=new Set(); } }
 
+    const idx=await getCaseIndex();
+    const D=idx.dict; const provId=D.prov, compId=D.comp, srcId=D.src;
+    // resolve include/exclude filters to interned ids once (avoids per-row string compares)
+    const provWant = provider!=null ? provId.indexOf(provider) : -2;   // -2 = no include filter
+    const provExcl = excluded.size ? new Set([...excluded].map(p=>provId.indexOf(p)).filter(x=>x>=0)) : null;
+    const srcWant  = src!=null ? srcId.indexOf(src) : -2;
     const matched=[];
-    const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
-    let i=-1;
-    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
-      if(ev._cat==="firewall"||ev._cat==="vpn") continue;
-      const sys=(ev.Event&&ev.Event.System)||ev.System||{};
-      const prov=getProvider(ev);
-      if(provider){ if(prov!==provider) continue; } else if(excluded.has(prov)) continue;
-      const eidv=String(getEventId(sys)||"");
-      if(eid && eidv!==eid) continue;
-      const srcv=ev._src||ev._source||"";
-      if(src && srcv!==src) continue;
+    for(const r of idx.recs){ const i=r.i;
+      if(r.cat==="firewall"||r.cat==="vpn") continue;
+      if(provWant!==-2){ if(r.prov!==provWant) continue; } else if(provExcl && provExcl.has(r.prov)) continue;
+      if(eid && r.eid!==eid) continue;
+      if(srcWant!==-2 && r.src!==srcWant) continue;
       if(flaggedOnly && !flags.has(i)) continue;
       const hit=hits[i];
       if(detOnly && !(hit&&hit.length)) continue;
       if(ruleId && !(hit&&hit.some(h=>h.ruleId===ruleId))) continue;
-      const ts=getTime(ev); const tms=ts?Date.parse(ts):NaN;
-      if(tr){ if(!(tms>=tr.from&&tms<tr.to)) continue; }
-      if(q){ const comp=getComputer(ev), data=getData(ev);
-        let s=prov+" "+eidv+" "+comp+" "+srcv;
-        for(const k in data){ const v=data[k]; s+=" "+(v==null?"":(typeof v==="object"?JSON.stringify(v):v)); }
-        if(s.toLowerCase().indexOf(q)===-1) continue; }
+      if(technique && !(hit&&hit.some(h=>(h.tags||[]).some(tg=>Engine.techniqueFromTag(tg)===technique)))) continue;
+      if(tr){ if(!(r.tms>=tr.from&&r.tms<tr.to)) continue; }
+      if(q && r.ft.indexOf(q)===-1) continue;
       let lvl=-1; if(hit&&hit.length){ for(const h of hit){ const n=sevNumS(h.level); if(n>lvl)lvl=n; } }
       let sv; switch(sortKey){
-        case "eventId": sv=Number(eidv); if(Number.isNaN(sv))sv=eidv; break;
-        case "provider": sv=prov; break;
-        case "computer": sv=getComputer(ev); break;
+        case "eventId": sv=Number(r.eid); if(Number.isNaN(sv))sv=r.eid; break;
+        case "provider": sv=provId[r.prov]; break;
+        case "computer": sv=compId[r.comp]; break;
         case "det": sv=lvl; break;
-        default: sv=ts||""; }
+        default: sv=r.ts||""; }
       matched.push({ i, sv, lvl });
     }
     matched.sort((a,c)=>{ let x=a.sv,y=c.sv; const nx=+x,ny=+y;
@@ -529,9 +585,11 @@ app.get("/api/evidence", async (req,res)=>{
       netConns:new Map(), dns:new Map(), shareAccess:[], logCleared:[], defender:[],
       kerberos:[], kerbRoast:0, ntlm:[], auditChanges:[], wmiPersist:[], rdpSessions:[], bits:[],
       lsassAccess:[], remoteThread:[], rawAccess:[], procTamper:[], appBlocks:[], timeChange:[],
-      ips:new Map(), users:new Set(), hosts:new Set(), hashes:new Set(), domains:new Set() };
+      ips:new Map(), users:new Set(), hosts:new Set(), hashes:new Set(), domains:new Set(), sessions:[] };
     const push=(a,x)=>{ if(a.length<AR)a.push(x); };
     const isSys=p=>/sysmon/i.test(p||"");
+    const sessById=new Map();                 // TargetLogonId -> session (paired 4624 logon / 4634-4647 logoff)
+    const SESS_TYPES=new Set(["2","3","7","9","10","11"]);   // interactive/network/unlock/newcred/remote/cached
     const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
     let i=-1;
     for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
@@ -551,7 +609,13 @@ app.get("/api/evidence", async (req,res)=>{
         case "4624": { const ip=U("IpAddress"), lt=U("LogonType"), u=U("TargetUserName");
           if(u)E.users.add(u);
           if(lt==="10"||isExtIp(ip)){ const key=u+"|"+ip+"|"+lt; const e=E.extLogons.get(key)||{i,user:u,ip,lt,count:0}; e.count++; e.i=i; E.extLogons.set(key,e); }
-          if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
+          if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1);
+          const lid=U("TargetLogonId")||U("LogonId");
+          if(lid && SESS_TYPES.has(lt) && u && !/\$$/.test(u) && sessById.size<AR && !sessById.has(lid))
+            sessById.set(lid,{i,user:u,lt,ip,ws:U("WorkstationName"),onTms:(ts?Date.parse(ts):NaN),onTs:ts,offTms:null});
+          break; }
+        case "4634": case "4647": { const lid=U("TargetLogonId")||U("LogonId"); const s=lid&&sessById.get(lid);
+          if(s && s.offTms==null){ s.offTms=(ts?Date.parse(ts):NaN); } break; }
         case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0}; e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName")); E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
         case "4648": push(E.explicitCreds,{i,subj:U("SubjectUserName"),target:U("TargetUserName"),server:U("TargetServerName")||U("TargetInfo"),ip:U("IpAddress"),ts}); break;
         case "4688": { const cmd=U("CommandLine")||U("NewProcessName"); if(cmd)push(E.procs,{i,cmd,parent:U("ParentProcessName"),user:U("SubjectUserName"),ts}); break; }
@@ -593,7 +657,118 @@ app.get("/api/evidence", async (req,res)=>{
           push(E.timeChange,{i,by:u,prev:U("PreviousTime"),nw:U("NewTime"),ts}); break; }
       }
     }
+    // finalize logon sessions (newest first), compute duration
+    E.sessions=[...sessById.values()].map(s=>({ i:s.i, user:s.user, lt:s.lt, ip:s.ip, ws:s.ws, onTs:s.onTs,
+      onTms:s.onTms, offTms:s.offTms, durationMs:(s.offTms&&s.onTms&&s.offTms>=s.onTms)?(s.offTms-s.onTms):null }))
+      .sort((a,b)=>(b.onTms||0)-(a.onTms||0)).slice(0,5000);
     res.type("application/json").send(JSON.stringify({ ok:true, evidence:E }, mapSetReplacer));
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
+// Entity dossier: everything about one user / host / IP across the whole log + its detections
+app.get("/api/entity", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, profile:null });
+    const type=String(req.query.type||"").toLowerCase();
+    const name=String(req.query.name||"");
+    if(!name || !["user","host","ip"].includes(type)) return res.status(400).json({ error:"type (user|host|ip) + name required" });
+    const nameLc=name.toLowerCase();
+    let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{ hits={}; }
+    const SEVW={critical:100,high:40,medium:12,low:4,informational:1,info:1};
+    const sevn=l=>{const r={critical:4,high:3,medium:2,low:1,informational:0,info:0}[String(l||"").toLowerCase()];return r==null?2:r;};
+    const eids=new Map(), provs=new Map(), coUsers=new Map(), coHosts=new Map(), coIps=new Map(), logonTypes=new Map();
+    const bySev={critical:0,high:0,medium:0,low:0,info:0}; const techSet=new Set(); const ruleAgg=new Map();
+    let count=0, tMin=null, tMax=null, detCount=0, logonOk=0, logonFail=0;
+    const detSamples=[]; const recent=[]; const RECENT=40;
+    const bump=(m,k)=>{ if(k!=null&&k!=="") m.set(k,(m.get(k)||0)+1); };
+    const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
+    let i=-1;
+    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+      const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+      const data=getData(ev)||{}, comp=getComputer(ev), prov=getProvider(ev), ts=getTime(ev), eid=String(getEventId(sys)||"");
+      const ents=Engine.extractEntities(data, comp);
+      const pool = type==="user"?ents.users : type==="host"?ents.hosts : ents.ips;
+      if(!pool.some(x=>String(x).toLowerCase()===nameLc)) continue;
+      count++;
+      if(ts){ if(tMin===null||ts<tMin)tMin=ts; if(tMax===null||ts>tMax)tMax=ts; }
+      bump(eids,eid); bump(provs,prov);
+      for(const u of ents.users) if(!(type==="user"&&u.toLowerCase()===nameLc)) bump(coUsers,u);
+      for(const hh of ents.hosts) if(!(type==="host"&&hh.toLowerCase()===nameLc)) bump(coHosts,hh);
+      for(const ip of ents.ips) if(!(type==="ip"&&ip.toLowerCase()===nameLc)) bump(coIps,ip);
+      if(eid==="4624"){ logonOk++; bump(logonTypes,String(data.LogonType||"?")); } else if(eid==="4625"){ logonFail++; }
+      const hit=hits[i];
+      if(hit&&hit.length){ detCount++;
+        for(const h of hit){ const lv=String(h.level).toLowerCase(); bySev[lv]=(bySev[lv]||0)+1;
+          const rk=h.ruleId||h.title; let ra=ruleAgg.get(rk);
+          if(!ra){ ra={ruleId:rk,title:h.title||rk,level:h.level,source:h.source,count:0}; ruleAgg.set(rk,ra); }
+          ra.count++; if(sevn(h.level)>sevn(ra.level))ra.level=h.level;
+          for(const t of Engine.parseAttack(h.tags).techniques) techSet.add(t.id);
+          if(detSamples.length<60) detSamples.push({idx:i,ts,level:h.level,title:h.title||rk,source:h.source}); } }
+      recent.push({idx:i,ts,eid,prov:String(prov).slice(0,40),comp}); if(recent.length>RECENT)recent.shift();
+    }
+    let risk=0; for(const ra of ruleAgg.values()) risk += (SEVW[String(ra.level).toLowerCase()]||4)*(1+Math.log2(ra.count));
+    let level="info"; for(const k in bySev){ if(bySev[k]&&sevn(k)>sevn(level))level=k; }
+    const top=(m,n)=>[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,n).map(([k,v])=>({name:k,count:v}));
+    res.json({ ok:true, profile:{ type, name, count, tMin, tMax, detCount, risk:Math.round(risk), level,
+      bySev, techniques:[...techSet],
+      rules:[...ruleAgg.values()].sort((a,b)=>sevn(b.level)-sevn(a.level)||b.count-a.count).slice(0,30),
+      eids: top(eids,15), providers: top(provs,10),
+      coUsers: top(coUsers,14), coHosts: top(coHosts,14), coIps: top(coIps,14),
+      logonOk, logonFail, logonTypes: top(logonTypes,8),
+      detSamples, recent: recent.slice().reverse() } });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
+// Super-timeline: merged chronological stream of notable events (detections + high-value EIDs
+// + firewall/VPN) plus a full-log activity histogram with detection density.
+const TL_NOTABLE=new Map([["1102","anti-forensics"],["104","anti-forensics"],["4720","account"],["4726","account"],
+  ["4728","priv-group"],["4732","priv-group"],["4756","priv-group"],["7045","persistence"],["4697","persistence"],
+  ["4698","persistence"],["1149","rdp"]]);
+const TL_KIND_LVL={"anti-forensics":"high","priv-group":"high","persistence":"medium","account":"medium","rdp":"low","logon":"low","lateral":"medium","firewall":"info","vpn":"info"};
+function tlTitle(eid, data){ const U=k=>data&&data[k]!=null&&typeof data[k]!=="object"?String(data[k]):"";
+  switch(eid){ case "1102": case "104": return "Event log cleared"+(U("SubjectUserName")?" by "+U("SubjectUserName"):"");
+    case "4720": return "Account created: "+U("TargetUserName"); case "4726": return "Account deleted: "+U("TargetUserName");
+    case "4728": case "4732": case "4756": return "Added to privileged group: "+(U("MemberName")||U("MemberSid"));
+    case "7045": case "4697": return "Service installed: "+U("ServiceName");
+    case "4698": return "Scheduled task created: "+U("TaskName");
+    case "1149": return "RDP authentication: "+(U("Param1")||U("User")||U("SourceNetworkAddress"));
+    default: return "EID "+eid; } }
+app.get("/api/timeline", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, events:[], buckets:[] });
+    const meta=readMeta()||{};
+    let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{ hits={}; }
+    const t0=meta.tsMin?Date.parse(meta.tsMin):null, t1=meta.tsMax?Date.parse(meta.tsMax):null;
+    const NB=200, haveSpan=(t0!=null&&t1!=null&&t1>t0), span=haveSpan?(t1-t0):1;
+    const buckets=Array.from({length:NB},()=>({n:0,d:0,lvl:-1}));
+    const events=[]; const CAP=12000, COLLECT=80000; let notableTotal=0, detTotal=0;
+    const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
+    let i=-1;
+    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+      const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+      const ts=getTime(ev), tms=ts?Date.parse(ts):NaN, cat=ev._cat||"", eid=String(getEventId(sys)||"");
+      let b=-1; if(haveSpan && !Number.isNaN(tms)){ b=Math.floor((tms-t0)/span*NB); if(b>=NB)b=NB-1; if(b<0)b=0; buckets[b].n++; }
+      const hit=hits[i];
+      let kind=null, level=null, title=null;
+      if(hit&&hit.length){ kind="detection"; let mx=-1; for(const h of hit){ const n=sevNumS(h.level); if(n>mx){ mx=n; level=h.level; title=h.title||h.ruleId; } } detTotal++; }
+      else if(cat==="firewall"||cat==="vpn"){ const data=getData(ev); kind=cat; level="info"; title=(data&&data.Message)||svSummary(data); }
+      else if(TL_NOTABLE.has(eid)){ kind=TL_NOTABLE.get(eid); level=TL_KIND_LVL[kind]||"low"; title=tlTitle(eid,getData(ev)); }
+      else if(eid==="4624"){ const d=getData(ev); const lt=String(d.LogonType||""); const u=d.TargetUserName!=null?String(d.TargetUserName):"";
+        if(lt==="10" && u && !/\$$/.test(u)){ kind="logon"; level="low"; title="Remote (RDP) logon: "+u+((d.IpAddress&&d.IpAddress!=="-")?" from "+d.IpAddress:""); } }
+      else if(eid==="4648"){ const d=getData(ev); const u=d.SubjectUserName!=null?String(d.SubjectUserName):"";
+        if(u && !/\$$/.test(u)){ kind="lateral"; level="medium"; title="Explicit credentials: "+u+" → "+(d.TargetUserName||"?")+((d.TargetServerName&&d.TargetServerName!=="localhost")?" @ "+d.TargetServerName:""); } }
+      if(kind){ notableTotal++;
+        if(b>=0){ buckets[b].d++; const n=sevNumS(level); if(n>buckets[b].lvl)buckets[b].lvl=n; }
+        if(events.length<COLLECT) events.push({ idx:i, tms:Number.isNaN(tms)?null:tms, ts, kind, level, eid, host:getComputer(ev), title:String(title||"").slice(0,180) });
+      }
+    }
+    // keep the highest-signal events (severity, then rare non-detection artifacts, then recency)
+    events.sort((a,c)=> (sevNumS(c.level)-sevNumS(a.level)) || ((c.kind!=="detection")-(a.kind!=="detection")) || ((c.tms||0)-(a.tms||0)) );
+    const truncated=events.length>CAP;
+    const feed=events.slice(0,CAP); feed.sort((a,c)=>(c.tms||0)-(a.tms||0));   // display newest-first
+    res.json({ ok:true, tMin:meta.tsMin, tMax:meta.tsMax, notableTotal, detTotal, truncated,
+      buckets: buckets.map((x,k)=>({ t: haveSpan?Math.round(t0+(k+0.5)*span/NB):null, n:x.n, d:x.d, lvl:x.lvl })),
+      events: feed });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 

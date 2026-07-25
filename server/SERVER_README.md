@@ -31,6 +31,25 @@ npm start
 Open `http://<server-ip>:8742/` in your browser. The page detects the backend
 automatically and switches to server mode (title shows "EVTX Triage (server)").
 
+### Run with Docker (one command)
+```bash
+cd server
+docker compose up -d --build      # builds the image and starts it
+# -> http://localhost:8742
+docker compose logs -f            # follow logs
+docker compose down               # stop (cases persist in the evtx-data volume)
+```
+Cases, rules and detections live in the **`evtx-data`** named volume, so they survive
+restarts and rebuilds. To keep them in a host folder instead, edit `docker-compose.yml`
+and change the volume line to `- ./data:/data`. Configuration is via the same env vars
+below (set them under `environment:` in the compose file). The image is pure-JS (Alpine
+base, no native build) and includes a `/api/meta` healthcheck.
+
+Run tests before building an image:
+```bash
+npm test          # engine regression harness (fast, no dependencies)
+```
+
 ### Configuration (optional)
 | Env var             | Default        | Meaning                                            |
 |---------------------|----------------|----------------------------------------------------|

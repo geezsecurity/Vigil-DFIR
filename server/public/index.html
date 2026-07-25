@@ -209,6 +209,8 @@
   .tab:hover{color:var(--fg-strong)}
   .tab.active{color:var(--fg-strong);background:var(--panel-2);border-color:var(--line-2)}
   .tab.active::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--grad-accent)}
+  /* keyboard-only focus rings (accessibility polish; invisible on mouse click) */
+  .tab:focus-visible,.btn:focus-visible,button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:6px}
   #eventsWrap{flex:1;display:flex;flex-direction:column;min-height:0}
   #dashWrap{display:none;flex:1;overflow:auto;padding:18px 22px}
   body[data-mode="dash"] #dashWrap{display:block}
@@ -225,6 +227,8 @@
   .stat-card:hover{border-color:var(--line-2);transform:translateY(-1px)}
   .stat-card .v{font-family:var(--mono);font-size:26px;color:var(--accent);line-height:1.1;font-weight:600}
   .stat-card .v.warn{color:var(--amber)} .stat-card .v.bad{color:var(--red)}
+  .stat-card .v.ts{font-size:19px;line-height:1.15}
+  .stat-card .v.ts .ts-t{display:block;font-size:12.5px;color:var(--txt-dim);margin-top:3px;letter-spacing:.3px}
   .stat-card .k{font-size:11px;color:var(--txt-dim);margin-top:4px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.6px}
   .grid2{display:grid;grid-template-columns:1.45fr 1fr;gap:14px;align-items:start}
   @media(max-width:920px){.grid2{grid-template-columns:1fr}}
@@ -320,10 +324,104 @@
   .mdet-src{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt-dim)}
   .mdet-src.sigma{color:#9ecbff} .mdet-src.yara{color:#c792ea} .mdet-src.heuristic{color:var(--accent)}
   .mdet-why{flex-basis:100%;color:var(--txt-dim);font-family:var(--mono);font-size:10.5px;margin-left:16px}
+  .mdet-att{font-family:var(--mono);font-size:9.5px;color:#ffd479;background:rgba(255,180,80,.12);border:1px solid rgba(255,180,80,.3);border-radius:4px;padding:0 4px;margin-left:3px;white-space:nowrap}
   .sevbar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:14px 0;background:var(--panel-2);border:1px solid var(--line)}
   .sevbar span{display:block;height:100%}
   .detgrid{display:grid;grid-template-columns:1.7fr 1fr;gap:14px;margin-top:14px}
   @media(max-width:900px){.detgrid{grid-template-columns:1fr}}
+  /* MITRE ATT&CK coverage matrix */
+  .atk-matrix{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px}
+  .atk-col{flex:0 0 auto;min-width:148px;max-width:172px}
+  .atk-tac{font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:var(--txt-dim);
+    border-bottom:1px solid var(--line-2);padding:0 2px 5px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .atk-tac .atk-tn{color:var(--txt-dim);opacity:.7}
+  .atk-tech{position:relative;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
+    padding:5px 26px 5px 8px;margin-bottom:5px;cursor:pointer;transition:background .12s,border-color .12s}
+  .atk-tech:hover{background:var(--panel);border-color:var(--accent)}
+  .atk-tech .atk-id{font-family:var(--mono);font-size:11px;color:var(--txt)}
+  .atk-tech .atk-nm{font-size:10.5px;color:var(--txt-dim);line-height:1.25;margin-top:1px}
+  .atk-tech .atk-c{position:absolute;top:5px;right:7px;font-family:var(--mono);font-size:10px;color:var(--txt-dim)}
+  /* Riskiest entities */
+  table.ent tr{cursor:pointer}
+  .ent-ic{font-size:12px}
+  .ent-nm{font-weight:600}
+  .ent-ty{font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt-dim);margin-left:4px}
+  .ent-wrap{display:flex;align-items:center;gap:8px;min-width:150px}
+  .ent-bar{flex:1;height:8px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);overflow:hidden}
+  .ent-bar span{display:block;height:100%}
+  .ent-sc{font-family:var(--mono);font-size:11px;color:var(--txt);min-width:44px;text-align:right}
+  /* Entity profile drawer */
+  .ent-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60;display:none;justify-content:flex-end}
+  .ent-card{width:min(760px,94vw);height:100%;background:var(--bg);border-left:1px solid var(--line-2);
+    box-shadow:-12px 0 40px rgba(0,0,0,.4);display:flex;flex-direction:column;animation:entIn .18s ease}
+  @keyframes entIn{from{transform:translateX(30px);opacity:.4}to{transform:none;opacity:1}}
+  .ent-hd{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .ent-hd b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ent-hd .ent-tt{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt-dim);
+    border:1px solid var(--line-2);border-radius:4px;padding:1px 7px}
+  .ent-hd .ent-close{margin-left:auto;cursor:pointer;color:var(--txt-dim);font-size:16px;padding:2px 8px;border-radius:6px}
+  .ent-hd .ent-close:hover{background:var(--panel);color:var(--txt)}
+  .ent-bd{padding:16px 18px;overflow:auto;flex:1}
+  .atk-chips{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}
+  .atk-chip{font-family:var(--mono);font-size:10px;color:#ffd479;background:rgba(255,180,80,.12);
+    border:1px solid rgba(255,180,80,.3);border-radius:4px;padding:1px 6px}
+  .rel-h{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt-dim);margin:8px 0 5px;padding:0 4px}
+  .rel-wrap{display:flex;flex-wrap:wrap;gap:5px;padding:0 4px 6px}
+  .rel-chip{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;color:var(--txt);
+    font-size:11px;padding:3px 8px;cursor:pointer}
+  .rel-chip:hover{border-color:var(--accent);background:var(--panel)}
+  .rel-chip b{color:var(--txt-dim);font-weight:600;margin-left:3px}
+  /* Super-timeline */
+  .tl-hist{display:flex;align-items:flex-end;gap:1px;height:130px;padding:6px 2px;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:8px;margin:6px 0}
+  .tlb{flex:1;min-width:0;border-radius:1px 1px 0 0;cursor:pointer;opacity:.85;transition:opacity .1s}
+  .tlb:hover{opacity:1;outline:1px solid var(--accent)}
+  .tlb.sel{opacity:1;outline:1px solid #fff}
+  .tl-ax{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:10.5px;color:var(--txt-dim);margin-bottom:10px}
+  .tl-win{color:var(--txt)}
+  .tl-clear,.tl-win .chain-focus{margin-left:6px}
+  .tl-clear{background:transparent;border:1px solid var(--line-2);color:var(--txt-dim);border-radius:5px;cursor:pointer;padding:1px 6px}
+  .tl-filters{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 12px}
+  .tl-flabel{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt-dim)}
+  .tl-chip{display:inline-flex;align-items:center;gap:5px;background:var(--panel-2);border:1px solid var(--line);
+    color:var(--txt-dim);border-radius:6px;font-size:11px;padding:3px 9px;cursor:pointer}
+  .tl-chip.on{color:var(--txt);border-color:var(--line-2);background:var(--panel)}
+  .tl-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .tl-search{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;color:var(--txt);
+    font-size:12px;padding:3px 9px;margin-left:auto;min-width:160px}
+  .tl-feedhd{font-family:var(--mono);font-size:11px;color:var(--txt-dim);margin:4px 2px}
+  .tl-feed{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .tl-row{display:flex;align-items:center;gap:10px;padding:5px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px}
+  .tl-row:last-child{border-bottom:none}
+  .tl-row:hover{background:var(--panel)}
+  .tl-row .tl-t{color:var(--txt-dim);font-size:11px;min-width:150px;flex:0 0 auto}
+  .tl-row .tl-kind{font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;border:1px solid;border-radius:4px;padding:0 5px;flex:0 0 auto;min-width:80px;text-align:center}
+  .tl-row .tl-host{color:var(--txt-dim);font-size:11px;flex:0 0 auto;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tl-row .tl-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Attack chains */
+  details.chain{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--panel-2);overflow:hidden}
+  details.chain[open]{border-color:var(--line-2)}
+  details.chain>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 12px}
+  details.chain>summary::-webkit-details-marker{display:none}
+  details.chain>summary:hover{background:var(--panel)}
+  .chain-name{font-weight:600;color:var(--txt)}
+  .chain-host{font-family:var(--mono);font-size:11px;color:var(--txt-dim)}
+  .chain-meta{margin-left:auto;font-size:11px;color:var(--txt-dim);white-space:nowrap}
+  .chain-focus{background:transparent;border:1px solid var(--line-2);color:var(--accent);border-radius:6px;
+    font-size:11px;padding:2px 8px;cursor:pointer;white-space:nowrap}
+  .chain-focus:hover{border-color:var(--accent);background:rgba(120,180,255,.08)}
+  .chain-body{padding:4px 12px 12px;border-top:1px solid var(--line)}
+  .chain-flow{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:8px 0 10px}
+  .chain-flow .cf{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt);
+    background:var(--panel);border:1px solid var(--line-2);border-radius:4px;padding:2px 7px}
+  .chain-flow .cf-a{color:var(--txt-dim)}
+  .chain-step{display:flex;align-items:center;gap:9px;padding:4px 6px;border-radius:5px;cursor:pointer}
+  .chain-step:hover{background:var(--panel)}
+  .chain-step .cs-t{font-size:11px;color:var(--txt-dim);min-width:150px}
+  .chain-step .cs-title{flex:1;font-size:12px;color:var(--txt)}
+  .chain-step .cs-n{font-family:var(--mono);font-size:10px;color:var(--txt-dim)}
+  .chain-step .cs-tech{font-family:var(--mono);font-size:9.5px;color:#ffd479;background:rgba(255,180,80,.12);
+    border:1px solid rgba(255,180,80,.3);border-radius:4px;padding:0 5px}
   .dtscroll{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px}
   .dtscroll.tall{max-height:460px}
   table.dt.tl td.mono{font-family:var(--mono);font-size:11px}
@@ -336,7 +434,8 @@
   body[data-mode="ev"] #evWrap{display:block}
   body[data-mode="ev"] #eventsWrap{display:none}
   body[data-mode="ev"] aside{display:none}
-  #fwWrap,#vpnWrap{display:none;flex:1;overflow:auto;padding:18px 22px}
+  #fwWrap,#vpnWrap,#tlWrap{display:none;flex:1;overflow:auto;padding:18px 22px}
+  body[data-mode="timeline"] #tlWrap{display:block} body[data-mode="timeline"] #eventsWrap{display:none} body[data-mode="timeline"] aside{display:none}
   body[data-mode="fw"] #fwWrap{display:block} body[data-mode="fw"] #eventsWrap{display:none} body[data-mode="fw"] aside{display:none}
   body[data-mode="vpn"] #vpnWrap{display:block} body[data-mode="vpn"] #eventsWrap{display:none} body[data-mode="vpn"] aside{display:none}
   .cat-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -354,6 +453,8 @@
   .ev-tag{display:inline-block;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;
        padding:0 5px;border-radius:3px;border:1px solid var(--line-2);color:var(--txt-dim);margin-right:5px}
   .ev-tag.bad{color:var(--red);border-color:#3a1d1f} .ev-tag.warn{color:var(--amber);border-color:#3a3320}
+  table.dt td.ev-trunc .ev-dec{white-space:normal;color:#8ee6a0;background:rgba(80,200,120,.08);border:1px solid rgba(80,200,120,.25);
+       border-radius:5px;padding:3px 6px;margin-top:4px;font-size:10.5px;max-height:80px;overflow:auto}
 </style>
 </head>
 <body>
@@ -447,6 +548,7 @@
       <button class="tab" data-tab="dash">▦ Dashboard</button>
       <button class="tab active" data-tab="events">▤ Events</button>
       <button class="tab" data-tab="det">⚑ Detections</button>
+      <button class="tab" data-tab="timeline">🕒 Timeline</button>
       <button class="tab" data-tab="ev">🔎 Evidence</button>
       <button class="tab" data-tab="fw">🔥 Firewall</button>
       <button class="tab" data-tab="vpn">🔒 VPN</button>
@@ -496,6 +598,7 @@
     </div>
     <div id="dashWrap"></div>
     <div id="detWrap"></div>
+    <div id="tlWrap"></div>
     <div id="evWrap"></div>
     <div id="fwWrap"></div>
     <div id="vpnWrap"></div>
@@ -3552,11 +3655,11 @@ function parseYaraRule(name, tags, body){
   const condBlock = body.slice(condSec.index+condSec[0].length).trim();
   const strings={};
   const sre=/(\$[A-Za-z0-9_*]+)\s*=\s*/g; const defs=[]; let sm;
-  while((sm=sre.exec(strBlock))!==null) defs.push({id:sm[1], at:sre.lastIndex});
+  while((sm=sre.exec(strBlock))!==null) defs.push({id:sm[1], start:sm.index, at:sre.lastIndex});
   for (let i=0;i<defs.length;i++){
-    const end = i+1<defs.length ? defs[i+1].at - defs[i+1].id.length - 1 : strBlock.length;
-    let seg = strBlock.slice(defs[i].at, end).trim();
-    seg = seg.replace(/\$[A-Za-z0-9_*]+\s*=\s*$/,"").trim();
+    // value runs from just after this "$id =" up to the start of the next definition
+    const end = i+1<defs.length ? defs[i+1].start : strBlock.length;
+    const seg = strBlock.slice(defs[i].at, end).trim();
     strings[defs[i].id] = parseYaraString(seg);
   }
   const cond = compileYaraCondition(condBlock, Object.keys(strings));
@@ -3635,6 +3738,129 @@ function compileYaraCondition(cond, ids){
   return orE();
 }
 
+/* ----------------- MITRE ATT&CK (inlined copy — keep in sync with engine.cjs) --- */
+const ATTACK_TACTIC_NAMES={
+  "reconnaissance":"Reconnaissance","resource-development":"Resource Development","initial-access":"Initial Access",
+  "execution":"Execution","persistence":"Persistence","privilege-escalation":"Privilege Escalation",
+  "defense-evasion":"Defense Evasion","credential-access":"Credential Access","discovery":"Discovery",
+  "lateral-movement":"Lateral Movement","collection":"Collection","command-and-control":"Command and Control",
+  "exfiltration":"Exfiltration","impact":"Impact"
+};
+const ATTACK_TACTIC_ORDER=Object.keys(ATTACK_TACTIC_NAMES);
+const ATTACK_TECHNIQUES={
+  "T1003":{name:"OS Credential Dumping",tactic:"credential-access"},"T1003.001":{name:"LSASS Memory",tactic:"credential-access"},
+  "T1003.002":{name:"Security Account Manager",tactic:"credential-access"},"T1003.003":{name:"NTDS",tactic:"credential-access"},
+  "T1003.006":{name:"DCSync",tactic:"credential-access"},"T1021.001":{name:"Remote Desktop Protocol",tactic:"lateral-movement"},
+  "T1021.002":{name:"SMB/Windows Admin Shares",tactic:"lateral-movement"},"T1027":{name:"Obfuscated Files or Information",tactic:"defense-evasion"},
+  "T1036":{name:"Masquerading",tactic:"defense-evasion"},"T1036.003":{name:"Rename System Utilities",tactic:"defense-evasion"},
+  "T1047":{name:"Windows Management Instrumentation",tactic:"execution"},"T1053.005":{name:"Scheduled Task",tactic:"execution"},
+  "T1055":{name:"Process Injection",tactic:"defense-evasion"},"T1059":{name:"Command and Scripting Interpreter",tactic:"execution"},
+  "T1059.001":{name:"PowerShell",tactic:"execution"},"T1059.003":{name:"Windows Command Shell",tactic:"execution"},
+  "T1068":{name:"Exploitation for Privilege Escalation",tactic:"privilege-escalation"},"T1070":{name:"Indicator Removal",tactic:"defense-evasion"},
+  "T1070.001":{name:"Clear Windows Event Logs",tactic:"defense-evasion"},"T1078":{name:"Valid Accounts",tactic:"persistence"},
+  "T1090":{name:"Proxy",tactic:"command-and-control"},"T1098":{name:"Account Manipulation",tactic:"persistence"},
+  "T1105":{name:"Ingress Tool Transfer",tactic:"command-and-control"},"T1112":{name:"Modify Registry",tactic:"defense-evasion"},
+  "T1134":{name:"Access Token Manipulation",tactic:"privilege-escalation"},"T1136.001":{name:"Create Account: Local Account",tactic:"persistence"},
+  "T1190":{name:"Exploit Public-Facing Application",tactic:"initial-access"},"T1197":{name:"BITS Jobs",tactic:"defense-evasion"},
+  "T1210":{name:"Exploitation of Remote Services",tactic:"lateral-movement"},"T1218":{name:"System Binary Proxy Execution",tactic:"defense-evasion"},
+  "T1218.005":{name:"Mshta",tactic:"defense-evasion"},"T1218.011":{name:"Rundll32",tactic:"defense-evasion"},
+  "T1219":{name:"Remote Access Software",tactic:"command-and-control"},"T1482":{name:"Domain Trust Discovery",tactic:"discovery"},
+  "T1543.003":{name:"Windows Service",tactic:"persistence"},"T1547.001":{name:"Registry Run Keys / Startup Folder",tactic:"persistence"},
+  "T1548":{name:"Abuse Elevation Control Mechanism",tactic:"privilege-escalation"},"T1548.002":{name:"Bypass User Account Control",tactic:"privilege-escalation"},
+  "T1550":{name:"Use Alternate Authentication Material",tactic:"lateral-movement"},"T1552":{name:"Unsecured Credentials",tactic:"credential-access"},
+  "T1557":{name:"Adversary-in-the-Middle",tactic:"credential-access"},"T1558":{name:"Steal or Forge Kerberos Tickets",tactic:"credential-access"},
+  "T1558.003":{name:"Kerberoasting",tactic:"credential-access"},"T1562":{name:"Impair Defenses",tactic:"defense-evasion"},
+  "T1562.001":{name:"Disable or Modify Tools",tactic:"defense-evasion"},"T1562.002":{name:"Disable Windows Event Logging",tactic:"defense-evasion"},
+  "T1569.002":{name:"Service Execution",tactic:"execution"},"T1570":{name:"Lateral Tool Transfer",tactic:"lateral-movement"},
+  "T1110":{name:"Brute Force",tactic:"credential-access"},"T1110.003":{name:"Password Spraying",tactic:"credential-access"},
+  "T1136":{name:"Create Account",tactic:"persistence"},"T1185":{name:"Browser Session Hijacking",tactic:"collection"},
+  "T1204":{name:"User Execution",tactic:"execution"},"T1505.003":{name:"Web Shell",tactic:"persistence"},
+  "T1518.001":{name:"Security Software Discovery",tactic:"discovery"},"T1564.003":{name:"Hidden Window",tactic:"defense-evasion"},
+  "T1574":{name:"Hijack Execution Flow",tactic:"persistence"},"T1574.002":{name:"DLL Side-Loading",tactic:"persistence"},
+  "T1620":{name:"Reflective Code Loading",tactic:"defense-evasion"}
+};
+function techniqueFromTag(tag){ const m=/^attack\.(t\d{4}(?:\.\d{3})?)$/i.exec(String(tag||"")); return m?m[1].toUpperCase():null; }
+function tacticFromTag(tag){ const m=/^attack\.([a-z][a-z0-9_-]+)$/i.exec(String(tag||"")); if(!m)return null;
+  const slug=m[1].toLowerCase().replace(/_/g,"-"); return ATTACK_TACTIC_NAMES[slug]?slug:null; }
+function parseAttack(tags){
+  const techniques=[], tSet=new Set(), tacSet=new Set(), explicit=[];
+  for(const tag of (tags||[])){
+    const tech=techniqueFromTag(tag);
+    if(tech){ if(!tSet.has(tech)){ tSet.add(tech); const ref=ATTACK_TECHNIQUES[tech]||ATTACK_TECHNIQUES[tech.split(".")[0]];
+      const tactic=ref?ref.tactic:null; techniques.push({id:tech,name:ref?ref.name:tech,tactic}); if(tactic)tacSet.add(tactic); } continue; }
+    const tac=tacticFromTag(tag); if(tac){ tacSet.add(tac); explicit.push(tac); }
+  }
+  const fallback = explicit.length?explicit[0]:null;
+  if(fallback) for(const t of techniques) if(!t.tactic) t.tactic=fallback;
+  return { techniques, tactics:[...tacSet] };
+}
+
+/* ----------------- ENTITY RISK SCORING (inlined — keep in sync with engine.cjs) - */
+const SEV_RANK={critical:4,high:3,medium:2,low:1,informational:0,info:0};
+function sevRank(l){ const n=SEV_RANK[String(l||"").toLowerCase()]; return n==null?2:n; }
+const SEV_WEIGHT={critical:100,high:40,medium:12,low:4,informational:1,info:1};
+const NOISE_USERS=/^(?:-|SYSTEM|LOCAL SERVICE|NETWORK SERVICE|ANONYMOUS LOGON|LOCAL SYSTEM)$/i;
+function extractEntities(data, computer){
+  data=data||{}; const users=new Set(), hosts=new Set(), ips=new Set();
+  if(computer) hosts.add(String(computer));
+  const U=k=>{ const v=data[k]; return (v==null||typeof v==="object")?"":String(v); };
+  for(const k of ["TargetUserName","SubjectUserName","User","AccountName","SamAccountName"]){ const v=U(k); if(v && !NOISE_USERS.test(v)) users.add(v); }
+  for(const k of ["IpAddress","SourceIp","SourceAddress","DestinationIp","ClientIP","Address","SourceNetworkAddress"]){ const v=U(k); if(v && v!=="-" && v!=="::1" && /^\d+\.\d+\.\d+\.\d+$/.test(v)) ips.add(v); }
+  for(const k of ["Computer","WorkstationName","Workstation","ComputerName"]){ const v=U(k); if(v && v!=="-") hosts.add(v); }
+  return { users:[...users], hosts:[...hosts], ips:[...ips] };
+}
+function makeEntityScorer(){
+  const map=new Map();
+  const bump=(type,name,hit,tms)=>{ if(!name)return; const key=type+"|"+name; let g=map.get(key);
+    if(!g){ g={type,name,level:"info",hits:0,ruleAgg:new Map(),techniques:new Set(),firstTms:null,lastTms:null}; map.set(key,g); }
+    const rk=hit.ruleId||hit.title||"?"; let ra=g.ruleAgg.get(rk); if(!ra){ ra={count:0,level:hit.level}; g.ruleAgg.set(rk,ra); }
+    ra.count++; if(sevRank(hit.level)>sevRank(ra.level)) ra.level=hit.level;
+    g.hits++; if(sevRank(hit.level)>sevRank(g.level)) g.level=hit.level;
+    for(const t of parseAttack(hit.tags).techniques) g.techniques.add(t.id);
+    if(tms!=null && !Number.isNaN(tms)){ if(g.firstTms==null||tms<g.firstTms)g.firstTms=tms; if(g.lastTms==null||tms>g.lastTms)g.lastTms=tms; } };
+  return {
+    feed(hit, rec){ const e=extractEntities(rec&&rec.data, rec&&rec.computer); const tms=rec&&rec.tms;
+      for(const u of e.users) bump("user",u,hit,tms); for(const h of e.hosts) bump("host",h,hit,tms); for(const ip of e.ips) bump("ip",ip,hit,tms); },
+    result(topN){ const arr=[...map.values()].map(g=>{
+        let base=0; for(const ra of g.ruleAgg.values()) base += (SEV_WEIGHT[String(ra.level).toLowerCase()]||4)*(1+Math.log2(ra.count));
+        const div=1+0.12*Math.max(0,g.techniques.size-1)+0.05*Math.max(0,g.ruleAgg.size-1);
+        return { type:g.type, name:g.name, score:Math.round(base*div), level:g.level, hits:g.hits, rules:g.ruleAgg.size, techniques:[...g.techniques], firstTms:g.firstTms, lastTms:g.lastTms }; });
+      arr.sort((a,b)=> b.score-a.score || sevRank(b.level)-sevRank(a.level) || b.hits-a.hits); return topN?arr.slice(0,topN):arr; }
+  };
+}
+/* ATTACK-CHAIN CORRELATION (inlined — keep in sync with engine.cjs) */
+function buildAttackChains(items, opts){
+  opts=opts||{}; const GAP=opts.gapMs||30*60*1000, MAX_SPAN=opts.maxSpanMs||24*60*60*1000, MIN_TACTICS=opts.minTactics||2, MAX_CHAINS=opts.maxChains||40;
+  const byHost=new Map();
+  for(const it of (items||[])){ const host=it.host||it.user||"(unknown host)"; let a=byHost.get(host); if(!a){a=[];byHost.set(host,a);} a.push(it); }
+  const chains=[];
+  function consider(host,session){
+    const tacSet=new Set(),techSet=new Set(),users=new Set(); let maxLvl="info"; const stepMap=new Map();
+    for(const it of session){ const pa=parseAttack(it.tags);
+      for(const tac of pa.tactics)tacSet.add(tac); for(const t of pa.techniques)techSet.add(t.id);
+      if(it.user)users.add(it.user); if(sevRank(it.level)>sevRank(maxLvl))maxLvl=it.level;
+      const tech=(pa.techniques[0]&&pa.techniques[0].id)||null; const key=tech||it.ruleId||it.title||("_"+it.idx);
+      let st=stepMap.get(key); if(!st){ st={idx:it.idx,tms:it.tms,title:it.title||it.ruleId,level:it.level,source:it.source,
+        tactic:(pa.techniques[0]&&pa.techniques[0].tactic)||pa.tactics[0]||null,technique:tech,count:0}; stepMap.set(key,st); }
+      st.count++; if(sevRank(it.level)>sevRank(st.level))st.level=it.level; if((it.tms||0)<(st.tms||Infinity))st.tms=it.tms; }
+    const nTac=tacSet.size, hiBurst=(sevRank(maxLvl)>=3&&session.length>=3);
+    if(nTac<MIN_TACTICS&&!hiBurst)return;
+    const steps=[...stepMap.values()].sort((a,b)=>(a.tms||0)-(b.tms||0));
+    const orderedTac=ATTACK_TACTIC_ORDER.filter(s=>tacSet.has(s));
+    const startTms=session[0].tms,endTms=session[session.length-1].tms;
+    const score=nTac*100+(SEV_WEIGHT[String(maxLvl).toLowerCase()]||1)*3+Math.min(session.length,50);
+    const names=orderedTac.map(s=>ATTACK_TACTIC_NAMES[s]||s);
+    chains.push({host,users:[...users],startTms,endTms,durationMs:(endTms-startTms)||0,count:session.length,steps,
+      tactics:orderedTac,techniques:[...techSet],level:maxLvl,score,
+      name:names.length?names.join(" → "):("Activity burst on "+host)}); }
+  for(const [host,arr] of byHost){ arr.sort((a,b)=>(a.tms||0)-(b.tms||0));
+    let session=[],prev=null;
+    for(const it of arr){ const t=it.tms||0; if(session.length&&((t-prev)>GAP||(t-session[0].tms)>MAX_SPAN)){ consider(host,session); session=[]; } session.push(it); prev=t; }
+    if(session.length)consider(host,session); }
+  chains.sort((a,b)=>b.score-a.score||(b.endTms||0)-(a.endTms||0));
+  return chains.slice(0,MAX_CHAINS);
+}
+
 /* ----------------- HEURISTICS ---------------------------------------------- */
 function isPrivateIp(ip){
   if(!ip||ip==="-"||ip==="::1")return true;
@@ -3647,9 +3873,27 @@ const ENCODED_PS=/(?:-enc(?:odedcommand)?\b|frombase64string|-e[ncodmand]*\s+[A-
 const SUSP_PATH=/\\(?:temp|tmp|programdata|public|windows\\temp)\\|\\appdata\\|\.tmp\b/i;
 const LOLBINish=/\b(?:powershell|pwsh|cmd\.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|wmic|installutil|msbuild)\b/i;
 
+const HEUR_ATTACK={
+  "H-LOGCLEAR":["attack.defense-evasion","attack.t1070.001"],
+  "H-BRUTE":["attack.credential-access","attack.t1110"],
+  "H-SPRAY":["attack.credential-access","attack.t1110.003"],
+  "H-ENCPS":["attack.execution","attack.t1059.001","attack.defense-evasion","attack.t1027"],
+  "H-NEWSVC":["attack.persistence","attack.t1543.003"],
+  "H-EXTRDP":["attack.lateral-movement","attack.t1021.001"],
+  "H-NEWUSER":["attack.persistence","attack.t1136.001"],
+  "H-ADMINADD":["attack.persistence","attack.t1098"],
+  "H-AVHIT":[],
+  "H-AVOFF":["attack.defense-evasion","attack.t1562.001"],
+  "H-KERBEROAST":["attack.credential-access","attack.t1558.003"],
+  "H-DCSYNC":["attack.credential-access","attack.t1003.006"],
+  "H-LSASSDUMP":["attack.credential-access","attack.t1003.001"],
+  "H-PSEXEC":["attack.lateral-movement","attack.t1021.002","attack.execution","attack.t1569.002"],
+  "H-PTH":["attack.lateral-movement","attack.t1550"],
+  "H-SCHTASK":["attack.execution","attack.t1053.005"]
+};
 function runHeuristics(rows){
   const hits=[];
-  const add=(idx,ruleId,title,level,why)=>hits.push({idx,ruleId,title,level,why,source:"heuristic"});
+  const add=(idx,ruleId,title,level,why)=>hits.push({idx,ruleId,title,level,why,source:"heuristic",tags:HEUR_ATTACK[ruleId]||[]});
   const byEid=new Map();
   for (let i=0;i<rows.length;i++){ const e=Number(rows[i].eventId); if(!byEid.has(e))byEid.set(e,[]); byEid.get(e).push(i); }
 
@@ -3695,6 +3939,29 @@ function runHeuristics(rows){
   for (const i of tgs){ const enc=String((rows[i].data||{}).TicketEncryptionType||(rows[i].data||{}).EncryptionType||""); if(/0x17|rc4/i.test(enc))rc4.push(i); }
   if (rc4.length>=10) for (const i of rc4) add(i,"H-KERBEROAST","Possible Kerberoasting (RC4 service tickets)","medium",rc4.length+" RC4 (0x17) TGS requests (4769)");
 
+  const REPL_GUID=/1131f6a[abcd]-9c07-11d1-f79f-00c04fc2dcd2|9923a32a-3607-11d2-b9be-0000f87a36b2/i;
+  for (const i of (byEid.get(4662)||[])){ const d=rows[i].data||{};
+    const props=String(d.Properties||d.AccessMaskString||d.ObjectType||""); const subj=String(d.SubjectUserName||"");
+    if (REPL_GUID.test(props) && subj && !/\$$/.test(subj))
+      add(i,"H-DCSYNC","Directory replication rights used (possible DCSync)","critical","'"+subj+"' exercised AD replication (4662) — DCSync credential theft"); }
+  for (const i of (byEid.get(10)||[])){ const d=rows[i].data||{}; const tgt=String(d.TargetImage||"");
+    if (/\\lsass\.exe$/i.test(tgt)){ const ga=String(d.GrantedAccess||"").toLowerCase();
+      if (/0x1010|0x1410|0x1438|0x143a|0x1fffff|0x1f1fff|0x1f3fff/.test(ga))
+        add(i,"H-LSASSDUMP","LSASS memory access (possible credential dumping)","high","'"+String(d.SourceImage||"?")+"' opened lsass with "+(d.GrantedAccess||"?")); } }
+  for (const e of [7045,4697]) for (const i of (byEid.get(e)||[])){ const d=rows[i].data||{};
+    const blob=String(d.ServiceName||d.param1||"")+" "+String(d.ImagePath||d.ServiceFileName||"");
+    if (/psexe|paexec|csexec|remcom|xcmd/i.test(blob))
+      add(i,"H-PSEXEC","PsExec-style remote service execution","high","Service '"+String(d.ServiceName||d.param1||"?")+"' — remote exec tool"); }
+  for (const i of (byEid.get(5145)||[])){ const d=rows[i].data||{}; const rel=String(d.RelativeTargetName||d.ShareName||"");
+    if (/psexesvc|paexec|remcom/i.test(rel)) add(i,"H-PSEXEC","PsExec named-pipe / share access","high","Access to '"+rel+"' — PsExec lateral movement"); }
+  for (const i of (byEid.get(4624)||[])){ const d=rows[i].data||{};
+    if (String(d.LogonType)==="9" && /seclogo/i.test(String(d.LogonProcessName||"")))
+      add(i,"H-PTH","NewCredentials logon (overpass-the-hash / runas /netonly)","medium","Type-9 logon by '"+String(d.TargetUserName||"?")+"' — alternate credentials used"); }
+  const SCHT_SUSP=/powershell|pwsh|cmd\.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|\\temp\\|\\appdata\\|programdata|-enc|downloadstring|frombase64|https?:\/\//i;
+  for (const i of (byEid.get(4698)||[])){ const d=rows[i].data||{};
+    const xml=String(d.TaskContent||d.TaskContentNew||d.NewTaskContent||""), nm=String(d.TaskName||"");
+    if (SCHT_SUSP.test(xml)||SCHT_SUSP.test(nm)) add(i,"H-SCHTASK","Scheduled task with suspicious action","high","Task '"+(nm||"?")+"' runs a suspicious command (4698)"); }
+
   return hits;
 }
 
@@ -3708,6 +3975,9 @@ function buildFulltext(rec){
 }
 const Engine={
   resolveField, compileSigmaRule, compileYaraRules, runHeuristics, buildFulltext, base64OffsetVariants, compileCondition,
+  parseAttack, techniqueFromTag, tacticFromTag,
+  attack:{ tactics:ATTACK_TACTIC_NAMES, tacticOrder:ATTACK_TACTIC_ORDER, techniques:ATTACK_TECHNIQUES },
+  extractEntities, makeEntityScorer, buildAttackChains,
   parseSigmaDocs(yamlText, yamlLoadAll){
     const docs=yamlLoadAll(yamlText)||[]; const rules=[], skipped=[], errors=[];
     for (const doc of docs){
@@ -3828,11 +4098,22 @@ let timeRange=null, DASH=null, dashDirty=true;
 /* ---------- detections state ---------- */
 let detections=new Map();            // global row index -> [hit,...]
 let sigmaRules=[], yaraRules=[];
-let showDetOnly=false, ruleFilter="";
+let showDetOnly=false, ruleFilter="", techniqueFilter="";
 let detRunToken=0;
 let EVID=null, evDirty=true;
 /* ---------- server mode ---------- */
 let SERVER=false;            // true when served by the Node backend (parsing+detection run server-side)
+/* ---------- fetch-on-scroll (server, large cases) ----------
+   The browser holds only the visible event bodies; the ordered global ids and per-id
+   detection level come from /api/search, bodies stream in from /api/bodies on scroll. */
+let SCROLL=false;                 // true = fetch-on-scroll grid (filtered[] holds GLOBAL ids, not rows[] indices)
+let sLevels=[];                   // detection max-severity per filtered id (parallel to filtered)
+let bodyCache=new Map();          // global id -> parsed row object (LRU-trimmed)
+let bodyPending=new Set();        // ids currently in flight via /api/bodies
+let searchToken=0, searchTimer=null, renderRAF=false;
+const BODY_CACHE_MAX=6000;        // cap on cached bodies
+function getRow(fi){ return SCROLL ? bodyCache.get(fi) : rows[fi]; }   // fi = filtered[i]
+function gridEventTotal(){ return SCROLL ? ((window.__meta&&window.__meta.count)||0) : rows.length; }
 async function api(path,opt){ const r=await fetch(path,opt); if(!r.ok)throw new Error("HTTP "+r.status+" "+path); return r; }
 const SEVNUM={critical:4,high:3,medium:2,low:1,informational:0,info:0};
 function sevNum(l){ const n=SEVNUM[String(l||"").toLowerCase()]; return n==null?2:n; }
@@ -4033,9 +4314,9 @@ function finishLoad(){
 
 /* ---------- columns ---------- */
 function discoverKeys(prov){
-  const freq=new Map(), order=[]; const cap=Math.min(rows.length,20000); let scanned=0;
-  for(let i=0;i<rows.length && scanned<cap;i++){
-    const r=rows[i]; if(prov && r.provider!==prov) continue; scanned++;
+  const freq=new Map(), order=[]; let scanned=0; const cap=20000;
+  const src = SCROLL ? bodyCache.values() : rows;   // scroll mode: derive keys from whatever bodies are cached
+  for(const r of src){ if(scanned>=cap)break; if(!r) continue; if(prov && r.provider!==prov) continue; scanned++;
     for(const k in r.data){ if(!freq.has(k)){freq.set(k,0);order.push(k);} freq.set(k,freq.get(k)+1); }
   }
   order.sort((a,b)=>freq.get(b)-freq.get(a));
@@ -4067,7 +4348,7 @@ function renderHead(){
 function buildProviderList(){
   const list=$("provList");
   const entries=[...providerCounts.entries()].sort((a,b)=>b[1]-a[1]);
-  const max=entries.length?entries[0][1]:1, total=rows.length;
+  const max=entries.length?entries[0][1]:1, total=SCROLL?gridEventTotal():rows.length;
   let html='<div class="prov'+(providerFilter===null?" active":"")+'" data-p="" data-all="1">'+
     '<div class="pbody"><div class="pname">All providers</div></div>'+
     '<span class="pcount">'+total.toLocaleString()+'</span></div>';
@@ -4165,12 +4446,14 @@ function valFor(r,id){
   return "";
 }
 function applyFilter(){
+  if(SCROLL){ scheduleSearch(); return; }   // fetch-on-scroll: filtering happens server-side
   const q=query, e=eidFilter, out=[], tr=timeRange, sf=srcFilter;
   const consider=(r)=> !!r && (!e||String(r.eventId)===e) && (!q||r.search.indexOf(q)!==-1)
     && (!sf || r.src===sf)
     && (!tr || (!isNaN(r.tms)&&r.tms>=tr.from&&r.tms<tr.to))
     && (!showDetOnly || (r._dets&&r._dets.length))
-    && (!ruleFilter || (r._dets&&r._dets.some(h=>h.ruleId===ruleFilter)));
+    && (!ruleFilter || (r._dets&&r._dets.some(h=>h.ruleId===ruleFilter)))
+    && (!techniqueFilter || (r._dets&&r._dets.some(h=>(h.tags||[]).some(tg=>DetEngine.techniqueFromTag(tg)===techniqueFilter))));
   if(showFlaggedOnly){
     for(const gi of flagged){ const i=gi-rowBase; const r=rows[i]; if(r && consider(r)) out.push(i); }  // global flag -> local window row
   } else {
@@ -4189,8 +4472,13 @@ function applyFilter(){
   renderHead(); updateStats(); scroller.scrollTop=0; render();
 }
 function updateStats(){
-  const eids=new Set(); for(let i=0;i<filtered.length&&eids.size<5000;i++){ const r=rows[filtered[i]]; if(r)eids.add(r.eventId); }
   const span=(tsMin&&tsMax)?(tsMin.slice(0,19).replace("T"," ")+" → "+tsMax.slice(0,19).replace("T"," ")):"—";
+  if(SCROLL){
+    $("stats").innerHTML='<b>'+filtered.length.toLocaleString()+'</b><span class="x"> / '+Math.max(0,gridEventTotal()-catCount).toLocaleString()+
+      ' events</span><span class="x">  ·  </span>'+span;
+    return;
+  }
+  const eids=new Set(); for(let i=0;i<filtered.length&&eids.size<5000;i++){ const r=rows[filtered[i]]; if(r)eids.add(r.eventId); }
   $("stats").innerHTML='<b>'+filtered.length.toLocaleString()+'</b><span class="x"> / '+Math.max(0,rows.length-catCount).toLocaleString()+
     ' events</span><span class="x">  ·  </span>'+eids.size+' IDs<span class="x">  ·  </span>'+span;
 }
@@ -4216,30 +4504,81 @@ function render(){
   const st=scroller.scrollTop, vh=scroller.clientHeight;
   let start=Math.floor((st-HEADH)/ROWH)-6; if(start<0)start=0;
   let end=Math.ceil((st+vh-HEADH)/ROWH)+6; if(end>total)end=total;
-  let html="";
+  let html=""; let need=null;
+  const SK='<span style="display:inline-block;height:8px;width:55%;border-radius:3px;background:var(--line-2);opacity:.45"></span>';
   for(let i=start;i<end;i++){
-    const g=filtered[i], r=rows[g], top=HEADH+i*ROWH, fl=flagged.has(g+rowBase);
+    const fi=filtered[i], r=getRow(fi), gid=fi+rowBase, top=HEADH+i*ROWH, fl=flagged.has(gid);
     html+='<div class="r'+(i&1?" odd":"")+(fl?" flagged":"")+'" data-i="'+i+'" style="top:'+top+'px;width:'+W+'px">';
     html+='<div class="c star'+(fl?" on":"")+'" style="width:'+STARW+'px">'+(fl?"★":"☆")+'</div>';
     for(const id of view){
       if(id==="det"){ const dc=getDef("det"); let inner="",ttl="";
-        if(r._detmax!=null&&r._detmax>=0){ const arr=r._dets||[];
-          inner='<span class="ddot" style="background:'+numColor(r._detmax)+'"></span>'+
-                (arr.length>1?'<span class="dcount">'+arr.length+'</span>':'');
-          ttl=arr.map(h=>h.title+" ["+h.source+"/"+h.level+"]").join(" · "); }
+        let dmax=-1, cnt=0;
+        if(r){ if(r._detmax!=null&&r._detmax>=0){ dmax=r._detmax; const arr=r._dets||[]; cnt=arr.length;
+          ttl=arr.map(h=>h.title+" ["+h.source+"/"+h.level+"]").join(" · "); } }
+        else if(SCROLL){ const lv=sLevels[i]; if(lv!=null&&lv>=0)dmax=lv; }
+        if(dmax>=0) inner='<span class="ddot" style="background:'+numColor(dmax)+'"></span>'+(cnt>1?'<span class="dcount">'+cnt+'</span>':'');
         html+='<div class="c det" style="width:'+dc.w+'px" title="'+esc(ttl)+'">'+inner+'</div>'; continue; }
-      const c=getDef(id); const sv=esc(c.get(r));
-      html+='<div class="c '+c.kind+'" style="width:'+c.w+'px" title="'+sv+'">'+hi(sv)+'</div>'; }
+      const c=getDef(id);
+      if(r){ const sv=esc(c.get(r));
+        html+='<div class="c '+c.kind+'" style="width:'+c.w+'px" title="'+sv+'">'+hi(sv)+'</div>'; }
+      else html+='<div class="c '+c.kind+'" style="width:'+c.w+'px">'+SK+'</div>'; }
     html+="</div>";
+    if(!r && SCROLL && !bodyPending.has(fi)){ (need||(need=[])).push(fi); }
   }
   rowsLayer.innerHTML=html;
+  if(need&&need.length) fetchBodies(need);
 }
+function scheduleRender(){ if(renderRAF)return; renderRAF=true; requestAnimationFrame(()=>{ renderRAF=false; render(); }); }
+
+/* ---------- fetch-on-scroll: server search + body fetch ---------- */
+function scheduleSearch(){ clearTimeout(searchTimer); searchTimer=setTimeout(serverSearch,90); }
+async function serverSearch(){
+  const tok=++searchToken;
+  const body={ q:query, eid:eidFilter, src:srcFilter||null, provider:providerFilter||null,
+    excluded:[...excluded], det:showDetOnly, ruleId:ruleFilter||"", technique:techniqueFilter||"", flagged:showFlaggedOnly,
+    timeRange:timeRange||null, sort:{key:sortKey,dir:sortDir} };
+  try{
+    const r=await api("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(tok!==searchToken) return;                 // a newer search superseded this one
+    filtered=j.ids||[]; sLevels=j.levels||[];
+    if(!view.length)view=defaultView();
+    renderHead(); updateStats(); scroller.scrollTop=0; render();
+  }catch(err){ if(tok===searchToken) console.error("search",err); }
+}
+function makeRowFromEv(ev, gid){
+  if(!ev) return {ts:"",tms:NaN,provider:"(unavailable)",eventId:"",computer:"",channel:"",src:"",cat:"",data:{},raw:"",search:"",_dets:null,_detmax:-1};
+  const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+  const provider=getProvider(ev), eventId=getEventId(sys), computer=getComputer(ev), ts=getTime(ev), data=getData(ev);
+  const channel=getChannel(ev), src=ev._src||ev._source||"", cat=ev._cat||"", tms=ts?Date.parse(ts):NaN;
+  let sv=provider+" "+eventId+" "+computer+" "+src; for(const k in data) sv+=" "+fmt(data[k]);
+  const row={ts,tms,provider,eventId,computer,channel,src,cat,data,raw:"",search:sv.toLowerCase(),_dets:null,_detmax:-1};
+  const d=detections.get(gid); if(d&&d.length){ row._dets=d; let mx=-1; for(const h of d){ const s=sevNum(h.level); if(s>mx)mx=s; } row._detmax=mx; }
+  return row;
+}
+async function fetchBodies(ids){
+  const want=ids.filter(fi=>!bodyCache.has(fi)&&!bodyPending.has(fi));
+  if(!want.length) return;
+  for(const fi of want) bodyPending.add(fi);
+  try{
+    const r=await api("/api/bodies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids:want})});
+    const txt=await r.text(); const lines=txt.split("\n");
+    for(let k=0;k<want.length;k++){ const ln=lines[k]; if(ln==null){ bodyCache.set(want[k],makeRowFromEv(null,want[k])); continue; }
+      let ev; try{ ev=JSON.parse(ln); }catch{ ev=null; }
+      bodyCache.set(want[k], makeRowFromEv(ev==="null"?null:ev, want[k])); }
+  }catch(_){ }
+  finally{ for(const fi of want) bodyPending.delete(fi); }
+  trimBodyCache(); scheduleRender();
+}
+function trimBodyCache(){ if(bodyCache.size<=BODY_CACHE_MAX)return; let over=bodyCache.size-BODY_CACHE_MAX;
+  for(const k of bodyCache.keys()){ if(over--<=0)break; bodyCache.delete(k); } }
 
 /* ---------- flag / detail ---------- */
 rowsLayer.addEventListener("click",e=>{
   const row=e.target.closest(".r"); if(!row)return; const i=+row.dataset.i, g=filtered[i];
   if(e.target.closest(".star")){ toggleFlag(g); return; }
-  openDetail(rows[g]);
+  const r=getRow(g);
+  if(r) openDetail(r); else if(SCROLL) openServerEvent(g);   // body not cached yet -> fetch it
 });
 function toggleFlag(g){
   const gi=g+rowBase;
@@ -4295,8 +4634,12 @@ function openDetail(r){
   $("modalTitle").textContent=r.provider+"  ·  ID "+r.eventId+"  ·  "+(r.ts||"");
   const dets=r._dets||[]; let dh="";
   if(dets.length){ dh='<div class="mdet"><div class="mdet-h">⚑ '+dets.length+' detection'+(dets.length>1?"s":"")+'</div>';
-    for(const h of dets){ dh+='<div class="mdet-i"><span class="ddot" style="background:'+numColor(sevNum(h.level))+'"></span>'+
-      '<span class="mdet-src '+esc(h.source)+'">'+esc(h.source)+'·'+esc(h.level)+'</span> <b>'+esc(h.title||h.ruleId)+'</b>'+
+    for(const h of dets){
+      const pa=DetEngine.parseAttack(h.tags);
+      let att=""; for(const t of pa.techniques){ const nm=t.name&&t.name!==t.id?t.name:"";
+        att+=' <span class="mdet-att" title="'+esc(t.id+(nm?" — "+nm:""))+'">'+esc(t.id)+'</span>'; }
+      dh+='<div class="mdet-i"><span class="ddot" style="background:'+numColor(sevNum(h.level))+'"></span>'+
+      '<span class="mdet-src '+esc(h.source)+'">'+esc(h.source)+'·'+esc(h.level)+'</span> <b>'+esc(h.title||h.ruleId)+'</b>'+att+
       (h.why?'<div class="mdet-why">'+esc(h.why)+'</div>':'')+'</div>'; }
     dh+='</div>'; }
   $("modalDet").innerHTML=dh;
@@ -4404,12 +4747,28 @@ function uploadWithProgress(url, formData, label){
 }
 
 /* ---------- export current view ---------- */
-$("exportBtn").onclick=()=>{ if(!filtered.length)return;
-  const parts=[]; for(let i=0;i<filtered.length;i++)parts.push(JSON.stringify(reconstruct(rows[filtered[i]])));
+function downloadJsonl(parts){
   const blob=new Blob([parts.join("\n")],{type:"application/x-ndjson"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
   a.download=(showFlaggedOnly?"evtx-flagged-":"evtx-view-")+filtered.length+".jsonl";
-  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); };
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+$("exportBtn").onclick=async ()=>{ if(!filtered.length)return;
+  if(SCROLL){                                    // fetch-on-scroll: pull matching bodies from the server in chunks
+    const ids=filtered.slice(), CH=5000, parts=[];
+    showProgress(true); $("progress").classList.remove("indet");
+    try{
+      for(let i=0;i<ids.length;i+=CH){
+        const r=await api("/api/bodies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids:ids.slice(i,i+CH)})});
+        const txt=await r.text(); for(const ln of txt.split("\n")){ if(ln&&ln!=="null")parts.push(ln); }
+        setProgressPct((i+CH)/ids.length*100,"exporting… "+Math.min(i+CH,ids.length).toLocaleString()+" / "+ids.length.toLocaleString());
+      }
+      downloadJsonl(parts);
+    }catch(err){ alert("Export failed: "+(err&&err.message||err)); }
+    showProgress(false); return;
+  }
+  const parts=[]; for(let i=0;i<filtered.length;i++)parts.push(JSON.stringify(reconstruct(rows[filtered[i]])));
+  downloadJsonl(parts); };
 
 /* ---------- sample ---------- */
 /* ---------- synthetic demo dataset (all fake: example.com domains, RFC-5737 TEST-NET IPs) ---------- */
@@ -4644,6 +5003,9 @@ function computeDashboard(){
 }
 
 function statCard(v,k,cls){ return '<div class="card stat-card"><div class="v '+cls+'">'+v+'</div><div class="k">'+esc(k)+'</div></div>'; }
+function tsCard(ms,label){ if(ms==null||isNaN(ms)) return statCard("—",label,"");
+  const iso=new Date(ms).toISOString();
+  return '<div class="card stat-card"><div class="v ts">'+iso.slice(0,10)+'<span class="ts-t">'+iso.slice(11,19)+' UTC</span></div><div class="k">'+esc(label)+'</div></div>'; }
 function barPanel(title,map,n,act){
   const arr=[...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0,n); const max=arr.length?arr[0][1]:1;
   if(!arr.length)return '<div class="panel"><h3>'+esc(title)+'</h3><div class="empty-dash">None.</div></div>';
@@ -4718,14 +5080,14 @@ function logonPanel(D){
   return h+'</div>';
 }
 function renderDashboard(){
-  if(serverWindowed){
+  if(serverWindowed||SCROLL){
     if(fullDash && fullDash.ok){ $("dashWrap").innerHTML=renderFullDash(fullDash); return; }
     loadFullDashboard();   // fetch full-log aggregates; will re-render when ready
     if(!fullDash){ $("dashWrap").innerHTML='<div class="dash-note">Computing full-log overview on the server…</div>'; return; }
   }
   const D=DASH;
   if(!D||!D.total){ $("dashWrap").innerHTML='<div class="empty-dash">Load events to see the dashboard.</div>'; return; }
-  let h='<div class="dash-note">Overview of all '+D.total.toLocaleString()+
+  let h=reportBtns()+'<div class="dash-note">Overview of all '+D.total.toLocaleString()+
         ' loaded events · independent of grid filters · click any item to drill into the Events tab</div>';
   h+='<div class="cards">'+
      statCard(D.total.toLocaleString(),"events","")+
@@ -4745,9 +5107,10 @@ function renderDashboard(){
 function setTab(t){
   document.body.setAttribute("data-mode",t);
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.getAttribute("data-tab")===t));
-  if(t==="dash"){ if(dashDirty){ DASH=computeDashboard(); dashDirty=false; } renderDashboard(); }
+  if(t==="dash"){ if(dashDirty && !SCROLL){ DASH=computeDashboard(); dashDirty=false; } renderDashboard(); }
   else if(t==="det"){ renderDetections(); }
-  else if(t==="ev"){ if(evDirty){ EVID=buildEvidence(); evDirty=false; } renderEvidence(); }
+  else if(t==="timeline"){ renderTimeline(); }
+  else if(t==="ev"){ if(SCROLL){ renderEvidenceScroll(); } else { if(evDirty){ EVID=buildEvidence(); evDirty=false; } renderEvidence(); } }
   else if(t==="fw"){ renderCatSection("firewall"); }
   else if(t==="vpn"){ renderCatSection("vpn"); }
   else render();
@@ -4796,8 +5159,8 @@ function addDet(idx,hit){
 }
 
 function runDetections(){
-  if(!rows.length){ setRulesStatus("Load events first."); return; }
   if(SERVER) return runDetectionsServer();
+  if(!rows.length){ setRulesStatus("Load events first."); return; }
   detections=new Map();
   for(const r of rows){ r._dets=null; r._detmax=-1; r._fulltext=undefined; }
   // 1) built-in heuristics (always on, synchronous)
@@ -4829,6 +5192,11 @@ function runDetections(){
 function finishDetections(){
   showProgress(false);
   recomputeDetMeta();
+  if(SCROLL){                                    // re-attach dets to any already-cached bodies
+    for(const [gid,row] of bodyCache){ const d=detections.get(gid);
+      if(d&&d.length){ row._dets=d; let mx=-1; for(const h of d){ const s=sevNum(h.level); if(s>mx)mx=s; } row._detmax=mx; }
+      else { row._dets=null; row._detmax=-1; } }
+  }
   updateDetBtn(); renderHead();
   if(document.body.getAttribute("data-mode")==="events") applyFilter(); else render();
   if(document.body.getAttribute("data-mode")==="det") renderDetections();
@@ -4854,7 +5222,8 @@ function applyServerDetections(obj){
   serverDet=obj||null;
   detections=new Map();
   const hits=obj&&obj.hits||{};
-  for(const k in hits){ const i=(+k)-rowBase; if(i>=0 && rows[i]) detections.set(i, hits[k].slice()); } // global hit -> local grid row
+  if(SCROLL){ for(const k in hits) detections.set(+k, hits[k].slice()); }   // key by global id; bodies attach dets lazily
+  else { for(const k in hits){ const i=(+k)-rowBase; if(i>=0 && rows[i]) detections.set(i, hits[k].slice()); } } // global hit -> local grid row
   finishDetections();
   if(document.body.getAttribute("data-mode")==="det") renderDetections();
 }
@@ -4886,25 +5255,55 @@ async function loadSessionFromServer(meta, offset){
   window.__caseId = (meta && meta.caseId) || window.__caseId || "local";
   const cap=Math.min(window.__browseCap||200000, BROWSER_WINDOW_MAX);
   serverWindowCap=cap;
-  const big = meta && meta.count > cap;
-  serverWindowed = !!big;
-  serverOffset = big ? Math.max(0, Math.min(offset||0, Math.max(0,(meta.count-1)))) : 0;
+  const big = !!(meta && meta.count > cap);
+  serverOffset=0; rowBase=0; serverWindowed=false;
   setCaseSources(meta && meta.sources);     // set before parse so defaultView can add the Source column
-  const url = big ? ("/api/events?offset="+serverOffset+"&limit="+cap) : "/api/events";
-  rowBase = serverOffset;                     // local grid index i  ↔  global index i+rowBase
-  await streamEventsInto(url, cap);          // indices align with server detect within this window
+  if(SERVER && big){
+    // large case -> true fetch-on-scroll (browser holds only visible bodies)
+    await enterScrollMode(meta);
+  } else {
+    SCROLL=false;
+    await streamEventsInto("/api/events", cap);   // small case -> load everything, dense in-memory grid
+  }
   updateWindowBanner(meta);
-  if(serverWindowed) loadFullDashboard();    // full-log overview for the Dashboard tab
 }
-function gotoWindow(offset){ const m=window.__meta; if(!m)return;
+// Set up the grid for fetch-on-scroll: no dense rows[]; ids + levels come from /api/search.
+async function enterScrollMode(meta){
+  SCROLL=true; rows=[]; skipped=0;
+  bodyCache=new Map(); bodyPending=new Set(); sLevels=[];
+  tsMin=(meta&&meta.tsMin)||null; tsMax=(meta&&meta.tsMax)||null;
+  // reset filter/sort state (mirror finishLoad)
+  providerFilter=null; excluded=new Set(); eidFilter=""; query=""; escQ=""; showFlaggedOnly=false;
+  showDetOnly=false; ruleFilter=""; srcFilter=null; sortKey="ts"; sortDir=1;
+  detections=new Map(); flagged=new Set();
+  $("q").value=""; $("eid").value="";
+  allKeys=[];
+  await loadFullDashboard();                 // full-log aggregates: powers Dashboard + provider sidebar + cat counts
+  providerCounts=new Map((fullDash&&fullDash.providers)||[]);
+  updateCatTabCounts();                       // catCount from server fw/vpn counts (set by loadFullDashboard)
+  view=defaultView(); buildProviderList(); buildColPicker();
+  await serverSearch();                       // populate filtered ids + first visible bodies
+  // seed column-key discovery by warming the first slice of bodies
+  const sample=filtered.slice(0,400); if(sample.length){ await fetchBodies(sample); seedKeysFromCache(); buildColPicker(); }
+  showProgress(false); $("empty").style.display="none"; $("exportBtn").disabled=false;
+  $("flagBtn").classList.remove("on"); updateFlaggedBtn();
+  $("detBtn").classList.remove("on"); updateDetBtn(); $("detChip").style.display="none";
+  $("skipnote").textContent="";
+  dashDirty=true; evDirty=true; setTab("dash");
+  $("removeLogBtn").style.display="inline-block"; $("addBtn").style.display="inline-block";
+}
+function seedKeysFromCache(){ const seen=new Set(allKeys);
+  for(const r of bodyCache.values()){ if(!r)continue; for(const k in r.data){ if(!seen.has(k)){ seen.add(k); allKeys.push(k);} } } }
+function gotoWindow(offset){ const m=window.__meta; if(!m)return;   // legacy (Prev/Next removed); kept for safety
   loadSessionFromServer(m, offset).then(()=>{ restoreFlagsFromServer(); if(SERVER&&serverDet) applyServerDetections(serverDet); }); }
 let fullDash=null, fullDashCase=null;
 async function loadFullDashboard(){
-  if(!SERVER || !serverWindowed){ fullDash=null; return; }
-  if(fullDash && fullDashCase===window.__caseId) return;     // cached for this case
-  try{ const r=await api("/api/dashboard"); fullDash=await r.json(); fullDashCase=window.__caseId;
+  if(!SERVER || !(serverWindowed||SCROLL)){ fullDash=null; return; }
+  if(fullDash && fullDashCase===window.__caseId){ applyCatCounts(); return; }   // cached for this case
+  try{ const r=await api("/api/dashboard"); fullDash=await r.json(); fullDashCase=window.__caseId; applyCatCounts();
     if(document.body.getAttribute("data-mode")==="dash") renderDashboard(); }catch(_){ fullDash=null; }
 }
+function applyCatCounts(){ if(fullDash&&fullDash.ok){ window.__catCounts={firewall:fullDash.fwCount||0, vpn:fullDash.vpnCount||0}; updateCatTabCounts(); } }
 function fullTimeline(fd){
   const t0=fd.tsMin?Date.parse(fd.tsMin):0, t1=fd.tsMax?Date.parse(fd.tsMax):0;
   if(!(t1>t0)) return '<div class="panel"><h3>Activity timeline</h3><div class="empty-dash">No parsable timestamps.</div></div>';
@@ -4918,14 +5317,14 @@ function fullTimeline(fd){
     '<div class="tl-ax"><span>'+fmtTime(t0)+'</span><span>'+fmtTime(t1)+'</span></div></div>';
 }
 function renderFullDash(fd){
-  let h='<div class="dash-note">Full-log overview — all <b>'+(fd.total||0).toLocaleString()+'</b> events across the whole case '+
-        '(Firewall/VPN have their own tabs). The Events grid shows one window at a time; use <b>Prev/Next</b> to move through it.</div>';
+  let h=reportBtns()+'<div class="dash-note">Full-log overview — all <b>'+(fd.total||0).toLocaleString()+'</b> events across the whole case '+
+        '(Firewall/VPN have their own tabs). The Events grid streams the whole log in one continuous scroll.</div>';
   h+='<div class="cards">'+
      statCard((fd.total||0).toLocaleString(),"events","")+
      statCard((fd.fail||0).toLocaleString(),"failed logons",fd.fail?"warn":"")+
      statCard((fd.susp||0).toLocaleString(),"notable security events",fd.susp?"bad":"")+
-     statCard(fd.tsMin?fmtTime(Date.parse(fd.tsMin)):"—","first event","")+
-     statCard(fd.tsMax?fmtTime(Date.parse(fd.tsMax)):"—","last event","")+'</div>';
+     tsCard(fd.tsMin?Date.parse(fd.tsMin):null,"first event")+
+     tsCard(fd.tsMax?Date.parse(fd.tsMax):null,"last event")+'</div>';
   h+=fullTimeline(fd);
   h+='<div class="grid2"><div>'+
      barPanel("Top providers", new Map(fd.providers||[]), 12, "prov")+
@@ -4953,7 +5352,10 @@ function computeClientSources(){ const m=new Map();
 function setCaseSources(arr){ caseSources=Array.isArray(arr)?arr:[]; renderCaseBar(); updateCatTabCounts(); }
 let catCount=0;
 function updateCatTabCounts(){
-  const fw=catRows("firewall").length, vpn=catRows("vpn").length; catCount=fw+vpn;
+  let fw, vpn;
+  if(SCROLL){ const c=window.__catCounts||{}; fw=c.firewall||0; vpn=c.vpn||0; }   // full-log counts from /api/dashboard
+  else { fw=catRows("firewall").length; vpn=catRows("vpn").length; }
+  catCount=fw+vpn;
   const ft=document.querySelector('.tab[data-tab="fw"]'); if(ft)ft.textContent="🔥 Firewall"+(fw?" ("+fw.toLocaleString()+")":"");
   const vt=document.querySelector('.tab[data-tab="vpn"]'); if(vt)vt.textContent="🔒 VPN"+(vpn?" ("+vpn.toLocaleString()+")":"");
 }
@@ -4965,6 +5367,7 @@ const CATINFO={ firewall:{label:"Firewall",icon:"🔥",wrap:"fwWrap",addId:"addF
     blurb:"VPN logs (OpenVPN, AnyConnect, WireGuard, GlobalProtect, IPsec…). Added here, shown here — kept out of the main Events grid."} };
 function catRows(cat){ const out=[]; for(let i=0;i<rows.length;i++) if(rows[i].cat===cat) out.push(i); return out; }
 function renderCatSection(cat){
+  if(SCROLL) return renderCatSectionScroll(cat);   // large case: pull the list from the server
   const info=CATINFO[cat]; const w=$(info.wrap); const idxs=catRows(cat);
   let h='<div class="cat-head"><h2>'+info.icon+' '+info.label+' Events</h2>'+
     '<span class="sub">'+idxs.length.toLocaleString()+' event'+(idxs.length===1?'':'s')+'</span>'+
@@ -4986,6 +5389,39 @@ function renderCatSection(cat){
   w.innerHTML=h;
   $("add"+cat+"Btn").onclick=()=>$(info.addId).click();
   w.querySelectorAll("tr[data-idx]").forEach(tr=>tr.onclick=()=>{ const r=rows[+tr.getAttribute("data-idx")]; if(r)openDetail(r); });
+}
+let catCache={};                                   // {firewall|vpn: {caseId, total, rows}}
+async function renderCatSectionScroll(cat){
+  const info=CATINFO[cat]; const w=$(info.wrap);
+  const head='<div class="cat-head"><h2>'+info.icon+' '+info.label+' Events</h2>'+
+    '<span class="sub" id="catSub_'+cat+'"></span>'+
+    '<button class="btn primary" style="margin-left:auto" id="add'+cat+'Btn">+ Add '+info.label+' log</button></div>'+
+    '<div class="dash-note">'+info.blurb+'</div>';
+  let c=catCache[cat];
+  if(!(c&&c.caseId===window.__caseId)){
+    w.innerHTML=head+'<div class="dash-note">Loading '+info.label+' events from the server…</div>';
+    $("add"+cat+"Btn").onclick=()=>$(info.addId).click();
+    try{ const r=await api("/api/cat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cat})});
+      const j=await r.json(); c=catCache[cat]={caseId:window.__caseId,total:j.total||0,rows:j.rows||[]};
+    }catch(err){ w.innerHTML=head+'<div class="dash-note">Could not load '+info.label+' events: '+esc(err.message||err)+'</div>'; return; }
+    if(document.body.getAttribute("data-mode")!==cat) return;   // user navigated away while loading
+  }
+  let h=head; const idxs=c.rows, total=c.total;
+  if(!total){
+    h+='<div class="cat-empty"><span class="big">'+info.icon+'</span>No '+info.label+' logs added yet.<br>'+
+       'Click <b>+ Add '+info.label+' log</b> above to import '+(cat==="vpn"?"a VPN":"a firewall")+' log — its events will appear here.</div>';
+  } else {
+    h+='<div class="dtscroll tall"><table class="dt tl"><thead><tr><th>Time</th><th>Source</th><th>Details</th></tr></thead><tbody>';
+    for(const x of idxs){ h+='<tr data-idx="'+x.i+'"><td class="mono dim">'+esc(x.ts||"")+'</td>'+
+      '<td class="mono">'+esc(shortName(stripExt(x.src||info.label)))+'</td>'+
+      '<td class="mono" style="white-space:normal">'+esc(String(x.msg||"").slice(0,400))+'</td></tr>'; }
+    h+='</tbody></table></div>';
+    if(total>idxs.length) h+='<div class="dash-note">Showing first '+idxs.length.toLocaleString()+' of '+total.toLocaleString()+'.</div>';
+  }
+  w.innerHTML=h;
+  const sub=$("catSub_"+cat); if(sub)sub.textContent=total.toLocaleString()+' event'+(total===1?'':'s');
+  $("add"+cat+"Btn").onclick=()=>$(info.addId).click();
+  w.querySelectorAll("tr[data-idx]").forEach(tr=>tr.onclick=()=>openServerEvent(+tr.getAttribute("data-idx")));
 }
 async function addCatLogs(files, cat){
   const info=CATINFO[cat];
@@ -5054,20 +5490,9 @@ function updateWindowBanner(meta){
   let b=$("winBanner");
   if(!b){ b=document.createElement("div"); b.id="winBanner"; b.className="win-banner";
     const main=document.querySelector("main"); if(main) main.insertBefore(b, main.firstChild); }
-  if(serverWindowed && meta){ b.style.display="block";
-    const total=meta.count||0, from=serverOffset, to=Math.min(total, serverOffset+rows.length);
-    const cap=serverWindowCap||rows.length||1;
-    const hasPrev=from>0, hasNext=to<total;
-    b.innerHTML="Showing events <b>"+(from+1).toLocaleString()+"</b>–<b>"+to.toLocaleString()+"</b> of <b>"+
-      total.toLocaleString()+"</b> (the browser shows one window at a time). "+
-      "Detections, Firewall and VPN run across the <b>full</b> log; Dashboard &amp; Evidence reflect this window. "+
-      '<span class="win-nav">'+
-      '<button class="win-btn" id="winPrev"'+(hasPrev?"":" disabled")+'>‹ Prev '+cap.toLocaleString()+'</button>'+
-      '<button class="win-btn" id="winNext"'+(hasNext?"":" disabled")+'>Next '+cap.toLocaleString()+' ›</button>'+
-      '</span>';
-    const pv=$("winPrev"), nx=$("winNext");
-    if(pv) pv.onclick=()=>gotoWindow(Math.max(0, serverOffset-cap));
-    if(nx) nx.onclick=()=>gotoWindow(serverOffset+cap);
+  if(SCROLL && meta){ b.style.display="block";
+    b.innerHTML="Streaming all <b>"+(meta.count||0).toLocaleString()+"</b> events in one continuous scroll — "+
+      "search, sort, Detections, Evidence, Firewall and VPN all run across the <b>full</b> log.";
   }
   else b.style.display="none";
 }
@@ -5078,7 +5503,9 @@ async function updateRulesCountsFromServer(){
 async function removeCurrentLog(){
   if(SERVER){ try{ await api("/api/reset",{method:"POST"}); }catch(_){} }
   rows=[]; filtered=[]; detections=new Map(); flagged=new Set(); serverDet=null; serverWindowed=false;
-  providerCounts={}; allKeys=[]; tsMin=tsMax=null; skipped=0; EVID=null; evDirty=true; dashDirty=true;
+  SCROLL=false; bodyCache=new Map(); bodyPending=new Set(); sLevels=[];
+  evidCache=null; evidCacheCase=null; catCache={}; window.__catCounts=null;
+  providerCounts=new Map(); allKeys=[]; tsMin=tsMax=null; skipped=0; EVID=null; evDirty=true; dashDirty=true;
   srcFilter=null; setCaseSources([]); catCount=0; updateCatTabCounts();
   fullDash=null; fullDashCase=null; serverWindowed=false; serverOffset=0; rowBase=0;
   $("fwWrap").innerHTML=""; $("vpnWrap").innerHTML="";
@@ -5115,12 +5542,414 @@ async function serverInit(){
 $("detBtn").onclick=()=>{ showDetOnly=!showDetOnly; $("detBtn").classList.toggle("on",showDetOnly);
   if(showDetOnly&&document.body.getAttribute("data-mode")!=="events")setTab("events"); applyFilter(); };
 function setRuleFilter(rid,label){
-  ruleFilter=rid; const c=$("detChip");
-  if(rid){ c.textContent="⚑ "+(label||rid)+"   ✕"; c.style.display="inline-block"; }
+  ruleFilter=rid; if(rid)techniqueFilter=""; renderDetChip(label);
+}
+function setTechFilter(tid){ techniqueFilter=tid; if(tid)ruleFilter=""; renderDetChip(); }
+function renderDetChip(label){
+  const c=$("detChip");
+  if(ruleFilter){ c.textContent="⚑ "+(label||ruleFilter)+"   ✕"; c.style.display="inline-block"; }
+  else if(techniqueFilter){ c.textContent="⚔ "+techniqueFilter+"   ✕"; c.style.display="inline-block"; }
   else c.style.display="none";
 }
-$("detChip").onclick=()=>{ setRuleFilter("",""); applyFilter(); };
+$("detChip").onclick=()=>{ ruleFilter=""; techniqueFilter=""; renderDetChip(); applyFilter(); };
 
+/* ---- MITRE ATT&CK coverage matrix ---- */
+function attackPanel(A){
+  if(!A || !A.techniques || !A.techniques.length) return "";
+  const TAC_NAMES=DetEngine.attack.tactics, ORDER=DetEngine.attack.tacticOrder;
+  const byTac={}; for(const t of A.techniques){ const k=t.tactic||"unmapped"; (byTac[k]||(byTac[k]=[])).push(t); }
+  const cols=ORDER.filter(s=>byTac[s]); if(byTac.unmapped)cols.push("unmapped");
+  let h='<div class="panel"><h3>MITRE ATT&CK coverage '+
+    '<span class="pill">'+A.techniqueCount+' techniques · '+A.tacticCount+' tactics</span>'+
+    '<button class="btn" id="navExport" title="Download an ATT&CK Navigator layer (import at mitre-attack.github.io/attack-navigator)" style="float:right;padding:3px 9px">⬇ Navigator layer</button></h3>';
+  h+='<div class="atk-matrix">';
+  for(const slug of cols){ const arr=byTac[slug].slice().sort((a,b)=>sevNum(b.level)-sevNum(a.level)||b.count-a.count);
+    const name=slug==="unmapped"?"Other":(TAC_NAMES[slug]||slug);
+    h+='<div class="atk-col"><div class="atk-tac">'+esc(name)+' <span class="atk-tn">'+arr.length+'</span></div>';
+    for(const t of arr){ const nm=t.name&&t.name!==t.id?t.name:"";
+      h+='<div class="atk-tech" data-tech="'+esc(t.id)+'" title="'+esc(t.id+(nm?" — "+nm:"")+" · "+t.count+" events · click to filter")+'" style="border-left:3px solid '+numColor(sevNum(t.level))+'">'+
+        '<div class="atk-id">'+esc(t.id)+'</div>'+(nm?'<div class="atk-nm">'+esc(nm)+'</div>':'')+'<span class="atk-c">'+t.count.toLocaleString()+'</span></div>'; }
+    h+='</div>';
+  }
+  h+='</div></div>';
+  return h;
+}
+let clientAttack=null;
+// offline mode: build the same ATT&CK aggregate from the in-browser detections map
+function computeAttackFromDetections(){
+  const byTech=new Map(), byTac=new Map();
+  for(const [,arr] of detections){ for(const h of arr){ const pa=DetEngine.parseAttack(h.tags);
+    for(const t of pa.techniques){ let g=byTech.get(t.id); if(!g){ g={id:t.id,name:t.name,tactic:t.tactic,count:0,level:"info",rules:new Set()}; byTech.set(t.id,g);}
+      g.count++; if(sevNum(h.level)>sevNum(g.level))g.level=h.level; g.rules.add(h.ruleId||h.title); }
+    for(const slug of new Set(pa.tactics)){ let g=byTac.get(slug); if(!g){ g={count:0,techniques:new Set()}; byTac.set(slug,g);} g.count++; } } }
+  for(const t of byTech.values()){ if(t.tactic){ const g=byTac.get(t.tactic); if(g)g.techniques.add(t.id); } }
+  const NAMES=DetEngine.attack.tactics, ORDER=DetEngine.attack.tacticOrder;
+  return { techniques:[...byTech.values()].sort((a,b)=>sevNum(b.level)-sevNum(a.level)||b.count-a.count).map(t=>({id:t.id,name:t.name,tactic:t.tactic,count:t.count,level:t.level,rules:[...t.rules]})),
+    tactics:ORDER.filter(s=>byTac.has(s)).map(s=>({slug:s,name:NAMES[s],count:byTac.get(s).count,techniques:byTac.get(s).techniques.size})),
+    techniqueCount:byTech.size, tacticCount:byTac.size };
+}
+function navColor(level){ return {critical:"#ff3b3b",high:"#ff6b6b",medium:"#e6b450",low:"#6cb6ff",informational:"#7d8a99",info:"#7d8a99"}[String(level||"").toLowerCase()]||"#e6b450"; }
+function exportNavigator(A){
+  if(!A||!A.techniques||!A.techniques.length){ alert("No ATT&CK techniques to export."); return; }
+  const maxScore=Math.max(1,...A.techniques.map(t=>t.count));
+  const techniques=A.techniques.map(t=>({ techniqueID:t.id, score:t.count, color:navColor(t.level),
+    comment:(t.name&&t.name!==t.id?t.name+" — ":"")+t.count+" events; rules: "+(t.rules||[]).slice(0,8).join(", "), enabled:true }));
+  const layer={ name:"EVTX Triage — "+(window.__caseId||"case"), versions:{attack:"14",navigator:"4.9.1",layer:"4.5"},
+    domain:"enterprise-attack", description:"Auto-generated from EVTX Triage detections ("+A.techniqueCount+" techniques across "+A.tacticCount+" tactics).",
+    techniques, gradient:{colors:["#8ec843","#ffe766","#ff6b6b"],minValue:0,maxValue:maxScore},
+    sorting:0, hideDisabled:false, showTacticRowBackground:true, tacticRowBackground:"#205b8f",
+    selectTechniquesAcrossTactics:true, legendItems:[] };
+  const blob=new Blob([JSON.stringify(layer,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="attack-navigator-"+(window.__caseId||"case")+".json"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+/* ---- Attack-chain correlation ---- */
+let clientChains=null;
+function computeChainsFromDetections(){
+  const items=[];
+  for(const [idx,arr] of detections){ const r=rows[idx]; if(!r)continue;
+    let lvl="info", tags=[], title=(arr[0]&&(arr[0].title||arr[0].ruleId))||"";
+    for(const h of arr){ if(sevNum(h.level)>sevNum(lvl)){ lvl=h.level; title=h.title||h.ruleId; } if(h.tags&&h.tags.length)tags=tags.concat(h.tags); }
+    items.push({ idx, tms:r.tms, host:r.computer||"", user:(DetEngine.extractEntities(r.data,r.computer).users[0]||""),
+      level:lvl, title, source:(arr[0]&&arr[0].source)||"", ruleId:(arr[0]&&arr[0].ruleId)||"", tags });
+  }
+  return DetEngine.buildAttackChains(items);
+}
+function fmtSpan(a,b){ if(!a&&!b)return "?"; if(!b||b===a)return fmtTime(a);
+  const d=Math.max(0,b-a); let dur; const m=d/60000;
+  if(m<1)dur="<1 min"; else if(m<60)dur=Math.round(m)+" min"; else if(m<1440)dur=(m/60).toFixed(1)+" h"; else dur=(m/1440).toFixed(1)+" d";
+  return fmtTime(a)+" → "+fmtTime(b).slice(11)+"  ("+dur+")"; }
+function chainsPanel(chains){
+  if(!chains||!chains.length) return "";
+  let h='<div class="panel"><h3>Attack chains <span class="pill">'+chains.length+'</span></h3>'+
+    '<div class="dash-note" style="margin:0 0 8px">Detections grouped per host into time-bounded bursts that progress across ATT&amp;CK tactics — the story, not just the alerts. Click a step to open its event.</div>';
+  for(const c of chains){
+    h+='<details class="chain"><summary>'+
+      '<span class="sev" style="background:'+numColor(sevNum(c.level))+'"></span>'+
+      '<span class="chain-name">'+esc(c.name)+'</span>'+
+      '<span class="chain-host">'+esc(c.host||"(host)")+(c.users&&c.users.length?' · '+esc(c.users.slice(0,2).join(", ")):'')+'</span>'+
+      '<span class="chain-meta">'+c.count.toLocaleString()+' detections · '+c.steps.length+' steps · '+c.tactics.length+' tactics · '+esc(fmtSpan(c.startTms,c.endTms))+'</span>'+
+      '<button class="chain-focus" data-from="'+(c.startTms||0)+'" data-to="'+(c.endTms||0)+'" data-host="'+esc(c.host||"")+'">view in grid ›</button>'+
+      '</summary><div class="chain-body">';
+    h+='<div class="chain-flow">'+c.tactics.map(s=>'<span class="cf">'+esc(DetEngine.attack.tactics[s]||s)+'</span>').join('<span class="cf-a">→</span>')+'</div>';
+    for(const s of c.steps){ h+='<div class="chain-step" data-idx="'+s.idx+'">'+
+      '<span class="cs-t mono">'+esc(fmtTime(s.tms))+'</span>'+
+      '<span class="ddot" style="background:'+numColor(sevNum(s.level))+'"></span>'+
+      '<span class="cs-title">'+esc(s.title||"")+'</span>'+
+      (s.count>1?'<span class="cs-n">×'+s.count.toLocaleString()+'</span>':'')+
+      (s.technique?'<span class="cs-tech">'+esc(s.technique)+'</span>':'')+'</div>'; }
+    h+='</div></details>';
+  }
+  h+='</div>';
+  return h;
+}
+/* ---- Entity risk scoring ---- */
+let clientEntities=null;
+function computeEntitiesFromDetections(){
+  const sc=DetEngine.makeEntityScorer();
+  for(const [idx,arr] of detections){ const r=rows[idx]; if(!r)continue; for(const h of arr) sc.feed(h,r); }
+  return sc.result(60);
+}
+const ENT_ICON={user:"👤",host:"🖥️",ip:"🌐"};
+const ENT_TNAME={user:"user",host:"host",ip:"IP address"};
+function entTime(s){ return s?String(s).slice(0,19).replace("T"," "):"—"; }
+// ---- Entity profile drawer (server mode) ----
+function openEntityProfile(type,name){
+  let ov=$("entOv");
+  if(!ov){ ov=document.createElement("div"); ov.id="entOv"; ov.className="ent-ov"; document.body.appendChild(ov);
+    ov.addEventListener("click",e=>{
+      if(e.target===ov||e.target.closest("[data-entclose]")){ ov.style.display="none"; return; }
+      const ep=e.target.closest("[data-eprof]"); if(ep){ openEntityProfile(ep.getAttribute("data-eptype"),ep.getAttribute("data-eprof")); return; }
+      const pv=e.target.closest("[data-entpivot]"); if(pv){ ov.style.display="none"; entityGridPivot(pv.getAttribute("data-entpivot")); return; }
+      const evr=e.target.closest("[data-idx]"); if(evr){ const i=+evr.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
+    });
+    document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&ov.style.display!=="none")ov.style.display="none"; });
+  }
+  ov.style.display="flex";
+  ov.innerHTML='<div class="ent-card"><div class="ent-hd"><b>'+(ENT_ICON[type]||"•")+' '+esc(name)+'</b>'+
+    '<span class="ent-tt">'+esc(ENT_TNAME[type]||type)+'</span><span class="ent-close" data-entclose title="close">✕</span></div>'+
+    '<div class="ent-bd"><div class="dash-note">Building profile across the full log…</div></div></div>';
+  api("/api/entity?type="+encodeURIComponent(type)+"&name="+encodeURIComponent(name)).then(r=>r.json())
+    .then(j=>{ if(ov.style.display==="none")return; renderProfileInto(ov,j.profile); })
+    .catch(e=>{ const bd=ov.querySelector(".ent-bd"); if(bd)bd.innerHTML='<div class="dash-note">Could not build profile: '+esc(e.message||e)+'</div>'; });
+}
+function entityGridPivot(name){
+  clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
+  showDetOnly=false; $("detBtn").classList.remove("on"); ruleFilter=""; techniqueFilter=""; renderDetChip();
+  query=name.toLowerCase(); escQ=esc(query); $("q").value=name;
+  view=defaultView(); buildProviderList(); buildColPicker(); applyFilter(); setTab("events");
+}
+function renderProfileInto(ov,p){
+  const bd=ov.querySelector(".ent-bd"); if(!bd)return;
+  if(!p){ bd.innerHTML='<div class="dash-note">No events found for this entity.</div>'; return; }
+  const totalHits=Object.values(p.bySev).reduce((a,b)=>a+(b||0),0)||1;
+  let h='<div class="cards">'+
+    statCard(p.count.toLocaleString(),"events","")+
+    statCard(p.detCount.toLocaleString(),"with detections",p.detCount?"bad":"")+
+    statCard(p.risk.toLocaleString(),"risk score",sevNum(p.level)>=3?"bad":sevNum(p.level)>=2?"warn":"")+
+    statCard(p.logonOk.toLocaleString(),"logons","")+
+    statCard(p.logonFail.toLocaleString(),"failed logons",p.logonFail?"warn":"")+
+    statCard(p.techniques.length,"ATT&CK techniques","")+'</div>';
+  h+='<div class="dash-note">First seen <b>'+esc(entTime(p.tMin))+'</b> · last seen <b>'+esc(entTime(p.tMax))+'</b>'+
+     '<button class="chain-focus" data-entpivot="'+esc(p.name)+'" style="float:right">view all '+p.count.toLocaleString()+' events ›</button></div>';
+  if(p.detCount){
+    const segs=[["critical",p.bySev.critical],["high",p.bySev.high],["medium",p.bySev.medium],["low",p.bySev.low],["info",p.bySev.info]];
+    h+='<div class="sevbar">'; for(const [lv,c] of segs){ if(!c)continue; h+='<span title="'+lv+': '+c+'" style="width:'+(c/totalHits*100).toFixed(2)+'%;background:'+numColor(sevNum(lv))+'"></span>'; } h+='</div>';
+    if(p.techniques.length){ h+='<div class="atk-chips">'; for(const t of p.techniques){ const nm=(DetEngine.attack.techniques[t]||{}).name;
+      h+='<span class="atk-chip" title="'+esc(nm||t)+'">'+esc(t)+'</span>'; } h+='</div>'; }
+  }
+  h+='<div class="detgrid">';
+  // detections by rule
+  if(p.rules.length){ h+='<div class="panel"><h3>Detections by rule</h3><div class="dtscroll"><table class="dt"><tbody>';
+    for(const r of p.rules) h+='<tr><td><span class="sev" style="background:'+numColor(sevNum(r.level))+'"></span></td><td>'+esc(r.title)+
+      '</td><td><span class="src-badge '+esc(r.source)+'">'+esc(String(r.source)[0].toUpperCase())+'</span></td><td class="cnt">'+r.count.toLocaleString()+'</td></tr>';
+    h+='</tbody></table></div></div>'; }
+  // related entities (click to open their profile)
+  const rel=[];
+  if(p.coHosts.length) rel.push(["host","Related hosts",p.coHosts]);
+  if(p.coUsers.length) rel.push(["user","Related users",p.coUsers]);
+  if(p.coIps.length) rel.push(["ip","Related IPs",p.coIps]);
+  if(rel.length){ h+='<div class="panel"><h3>Related entities</h3><div class="dtscroll">';
+    for(const [t,label,arr] of rel){ h+='<div class="rel-h">'+esc(label)+'</div><div class="rel-wrap">';
+      for(const x of arr) h+='<button class="rel-chip" data-eprof="'+esc(x.name)+'" data-eptype="'+t+'" title="open profile">'+(ENT_ICON[t]||"")+' '+esc(x.name)+' <b>'+x.count.toLocaleString()+'</b></button>';
+      h+='</div>'; }
+    h+='</div></div>'; }
+  h+='</div>';
+  // logon breakdown
+  if(p.logonOk||p.logonFail){ h+='<div class="dash-note">Logons: <b>'+p.logonOk.toLocaleString()+'</b> success, <b>'+p.logonFail.toLocaleString()+'</b> failed'+
+    (p.logonTypes.length?' · types '+p.logonTypes.map(t=>(LOGON_TYPE[t.name]||("type "+t.name))+"×"+t.count).join(", "):'')+'</div>'; }
+  // recent detections + activity
+  if(p.detSamples&&p.detSamples.length){ h+='<div class="panel"><h3>Detections timeline (latest)</h3><div class="dtscroll tall"><table class="dt tl"><thead><tr><th>Time</th><th>Lvl</th><th>Detection</th></tr></thead><tbody>';
+    for(const s of p.detSamples.slice().reverse()) h+='<tr data-idx="'+s.idx+'"><td class="mono">'+esc(entTime(s.ts))+'</td>'+
+      '<td><span class="sev" style="background:'+numColor(sevNum(s.level))+'"></span></td><td>'+esc(s.title)+' <span class="src-badge '+esc(s.source)+'">'+esc(String(s.source)[0].toUpperCase())+'</span></td></tr>';
+    h+='</tbody></table></div></div>'; }
+  bd.innerHTML=h;
+}
+function entitiesPanel(entities){
+  if(!entities||!entities.length) return "";
+  const max=Math.max(1,...entities.map(e=>e.score));
+  let h='<div class="panel"><h3>Riskiest entities <span class="pill">'+entities.length+' scored</span></h3>'+
+    '<div class="dash-note" style="margin:0 0 8px">Ranked by severity + diversity of the detections tied to each account, host and IP. Click to pivot into Events.</div>'+
+    '<div class="dtscroll tall"><table class="dt ent"><thead><tr><th>Entity</th><th>Risk</th>'+
+    '<th style="text-align:right">Hits</th><th style="text-align:right">Tech</th><th>Top techniques</th></tr></thead><tbody>';
+  for(const e of entities){ const w=(e.score/max*100).toFixed(1);
+    h+='<tr data-entity="'+esc(e.name)+'" data-etype="'+esc(e.type)+'" title="pivot into Events">'+
+      '<td><span class="ent-ic">'+(ENT_ICON[e.type]||"•")+'</span> <span class="ent-nm">'+esc(e.name)+'</span> <span class="ent-ty">'+esc(e.type)+'</span></td>'+
+      '<td><div class="ent-wrap"><div class="ent-bar"><span style="width:'+w+'%;background:'+numColor(sevNum(e.level))+'"></span></div><span class="ent-sc">'+e.score.toLocaleString()+'</span></div></td>'+
+      '<td class="cnt">'+e.hits.toLocaleString()+'</td><td class="cnt">'+e.techniques.length+'</td>'+
+      '<td class="mono dim" style="font-size:10.5px">'+esc(e.techniques.slice(0,4).join(", "))+'</td></tr>'; }
+  h+='</tbody></table></div></div>';
+  return h;
+}
+/* ===================== SUPER-TIMELINE ===================== */
+let tlData=null, tlCase=null, tlFilters=null;
+const TL_KIND={ detection:{label:"detection",c:"#ff6b6b"}, "anti-forensics":{label:"anti-forensics",c:"#ff3b3b"},
+  "priv-group":{label:"priv-group",c:"#ff8a5b"}, persistence:{label:"persistence",c:"#e6b450"},
+  account:{label:"account",c:"#6cb6ff"}, logon:{label:"logon",c:"#5fb2ff"}, lateral:{label:"lateral-move",c:"#f78fb3"},
+  rdp:{label:"RDP",c:"#9ecbff"}, firewall:{label:"firewall",c:"#c792ea"}, vpn:{label:"VPN",c:"#79d3c0"} };
+function renderTimeline(){
+  const w=$("tlWrap");
+  if(!SERVER){ w.innerHTML='<div class="dash-note">The super-timeline is served by the EVTX Triage backend — open this case through the server to use it.</div>'; return; }
+  if(tlData && tlCase===window.__caseId){ paintTimeline(); return; }
+  w.innerHTML='<div class="dash-note">Building the super-timeline across the full log…</div>';
+  api("/api/timeline").then(r=>r.json()).then(j=>{ tlData=j; tlCase=window.__caseId;
+    tlFilters={kinds:new Set(),sevMin:-1,q:"",fromIdx:null,toIdx:null,sortAsc:false};
+    if(document.body.getAttribute("data-mode")==="timeline") paintTimeline(); })
+    .catch(e=>{ w.innerHTML='<div class="dash-note">Could not build timeline: '+esc(e.message||e)+'</div>'; });
+}
+function tlWindow(){ if(!tlData||tlFilters.fromIdx==null)return null;
+  const t0=Date.parse(tlData.tMin), t1=Date.parse(tlData.tMax); if(!(t1>t0))return null;
+  const NB=tlData.buckets.length, bw=(t1-t0)/NB;
+  return { from: t0+tlFilters.fromIdx*bw, to: t0+(tlFilters.toIdx+1)*bw }; }
+function tlFeedFiltered(){ const j=tlData, win=tlWindow();
+  return j.events.filter(e=>{
+    if(tlFilters.kinds.size&&!tlFilters.kinds.has(e.kind))return false;
+    if(tlFilters.sevMin>=0&&sevNum(e.level)<tlFilters.sevMin)return false;
+    if(win&&!(e.tms!=null&&e.tms>=win.from&&e.tms<win.to))return false;
+    if(tlFilters.q&&((e.title||"")+" "+(e.host||"")+" "+e.eid).toLowerCase().indexOf(tlFilters.q)===-1)return false;
+    return true; }); }
+function paintFeed(){
+  let feed=tlFeedFiltered(); if(tlFilters.sortAsc) feed=feed.slice().reverse();   // oldest-first to trace the first attack
+  const hd=$("tlFeedHd"), fc=$("tlFeed"); if(!fc)return;
+  if(hd)hd.textContent=feed.length.toLocaleString()+" events";
+  const SHOW=2000; let h="";
+  for(const e of feed.slice(0,SHOW)){ const km=TL_KIND[e.kind]||{label:e.kind,c:"#888"};
+    h+='<div class="tl-row" data-idx="'+e.idx+'">'+
+      '<span class="tl-t mono">'+esc((e.ts||"").slice(0,19).replace("T"," "))+'</span>'+
+      '<span class="tl-kind" style="border-color:'+km.c+';color:'+km.c+'">'+esc(km.label)+'</span>'+
+      '<span class="ddot" style="background:'+numColor(sevNum(e.level))+'"></span>'+
+      '<span class="tl-host mono">'+esc(e.host||"")+'</span>'+
+      '<span class="tl-title">'+esc(e.title||"")+'</span></div>'; }
+  if(feed.length>SHOW) h+='<div class="dash-note">Showing first '+SHOW.toLocaleString()+' of '+feed.length.toLocaleString()+' — narrow with filters or a time window.</div>';
+  fc.innerHTML=h;
+}
+function paintTimeline(){
+  const w=$("tlWrap"); const j=tlData; if(!j){ w.innerHTML=""; return; }
+  const t0=Date.parse(j.tMin), t1=Date.parse(j.tMax);
+  const maxN=Math.max(1,...j.buckets.map(b=>b.n));
+  let bars=""; for(let k=0;k<j.buckets.length;k++){ const b=j.buckets[k];
+    const hh=b.n>0?Math.max(3,Math.sqrt(b.n)/Math.sqrt(maxN)*100):0;
+    const sel=(tlFilters.fromIdx!=null&&k>=tlFilters.fromIdx&&k<=tlFilters.toIdx);
+    const col=b.d>0?numColor(b.lvl<0?0:b.lvl):"var(--line-2)";
+    bars+='<div class="tlb'+(sel?" sel":"")+'" data-b="'+k+'" title="'+esc(fmtTime(b.t))+' — '+b.n.toLocaleString()+' events'+(b.d?' · '+b.d.toLocaleString()+' notable':'')+'" style="height:'+hh.toFixed(1)+'%;background:'+col+'"></div>'; }
+  const win=tlWindow();
+  let h='<div class="dash-note">Merged notable timeline — <b>'+j.notableTotal.toLocaleString()+'</b> notable events ('+j.detTotal.toLocaleString()+' detections'+(j.truncated?'; feed shows the highest-signal 12,000':'')+') across the whole case. Click the histogram to zoom a window.</div>';
+  h+='<div class="tl-hist">'+bars+'</div>';
+  h+='<div class="tl-ax"><span>'+esc(fmtTime(t0))+'</span>'+
+     (win?'<span class="tl-win">'+esc(fmtTime(win.from))+' → '+esc(fmtTime(win.to))+' <button class="tl-clear" data-tlclear>✕</button> <button class="chain-focus" data-tlgrid>view in grid ›</button></span>':'')+
+     '<span>'+esc(fmtTime(t1))+'</span></div>';
+  h+='<div class="tl-filters"><span class="tl-flabel">Kind</span>';
+  const present=new Set(j.events.map(e=>e.kind));
+  for(const k of Object.keys(TL_KIND)){ if(!present.has(k))continue; const on=tlFilters.kinds.size===0||tlFilters.kinds.has(k);
+    h+='<button class="tl-chip'+(on?" on":"")+'" data-kind="'+k+'"><span class="tl-dot" style="background:'+TL_KIND[k].c+'"></span>'+esc(TL_KIND[k].label)+'</button>'; }
+  h+='<span class="tl-flabel" style="margin-left:12px">Severity</span>';
+  for(const [lbl,v] of [["all",-1],["med+",2],["high+",3],["crit",4]]) h+='<button class="tl-chip'+(tlFilters.sevMin===v?" on":"")+'" data-sev="'+v+'">'+lbl+'</button>';
+  h+='<button class="tl-chip" data-tlsort title="toggle chronological order">'+(tlFilters.sortAsc?"↑ oldest first":"↓ newest first")+'</button>';
+  h+='<input class="tl-search" id="tlq" placeholder="filter…" value="'+esc(tlFilters.q)+'"></div>';
+  h+='<div class="tl-feedhd" id="tlFeedHd"></div><div class="tl-feed" id="tlFeed"></div>';
+  w.innerHTML=h;
+  const q=$("tlq"); if(q){ q.oninput=()=>{ tlFilters.q=q.value.trim().toLowerCase(); paintFeed(); }; }
+  paintFeed();
+}
+$("tlWrap").addEventListener("click",e=>{
+  const bar=e.target.closest(".tlb"); if(bar){ const k=+bar.getAttribute("data-b");
+    if(tlFilters.fromIdx===k&&tlFilters.toIdx===k){ tlFilters.fromIdx=tlFilters.toIdx=null; } else { tlFilters.fromIdx=tlFilters.toIdx=k; }
+    paintTimeline(); return; }
+  if(e.target.closest("[data-tlclear]")){ tlFilters.fromIdx=tlFilters.toIdx=null; paintTimeline(); return; }
+  if(e.target.closest("[data-tlgrid]")){ const win=tlWindow(); if(win){ clearGridFilters(); providerFilter=null;
+    showDetOnly=false; $("detBtn").classList.remove("on"); ruleFilter=""; techniqueFilter=""; renderDetChip();
+    setTimeRange(win.from, win.to, fmtTime(win.from)); view=defaultView(); buildProviderList(); buildColPicker(); applyFilter(); setTab("events"); } return; }
+  const kc=e.target.closest("[data-kind]"); if(kc){ const k=kc.getAttribute("data-kind");
+    if(tlFilters.kinds.size===1&&tlFilters.kinds.has(k)) tlFilters.kinds=new Set(); else tlFilters.kinds=new Set([k]);
+    paintTimeline(); return; }
+  const sc=e.target.closest("[data-sev]"); if(sc){ tlFilters.sevMin=+sc.getAttribute("data-sev"); paintTimeline(); return; }
+  if(e.target.closest("[data-tlsort]")){ tlFilters.sortAsc=!tlFilters.sortAsc; paintTimeline(); return; }
+  const row=e.target.closest(".tl-row[data-idx]"); if(row){ const i=+row.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
+});
+/* ===================== ONE-CLICK IR REPORT ===================== */
+function repEsc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function repCard(n,l){ return '<span class="card"><span class="n">'+n+'</span><br><span class="l">'+repEsc(l)+'</span></span>'; }
+function buildReportHTML(S, dash, ev, meta){
+  const sm=S.summary||{}, bySev=S.bySev||{}, A=S.attack||{};
+  const caseId=window.__caseId||"local", now=new Date().toISOString();
+  const span=((meta&&meta.tsMin)?meta.tsMin.slice(0,19).replace("T"," "):"?")+"  →  "+((meta&&meta.tsMax)?meta.tsMax.slice(0,19).replace("T"," "):"?");
+  const totalEvents=(dash&&dash.total)||(meta&&meta.count)||sm.scanned||0;
+  const hosts=(dash&&dash.computers&&dash.computers.length)||(caseSources?caseSources.length:0)||0;
+  const css="body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,sans-serif;max-width:920px;margin:24px auto;padding:0 22px;color:#161b26;line-height:1.5}h1{font-size:25px;margin-bottom:2px}h2{font-size:16px;border-bottom:2px solid #e4e9f0;padding-bottom:5px;margin-top:30px}table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}th,td{text-align:left;padding:5px 9px;border-bottom:1px solid #eef1f5;vertical-align:top}th{color:#5b6472;font-weight:600}.b{font-weight:700}.muted{color:#8a94a6;font-size:12px}.card{display:inline-block;border:1px solid #e4e9f0;border-radius:9px;padding:9px 15px;margin:4px 8px 4px 0}.card .n{font-size:21px;font-weight:700}.card .l{font-size:10.5px;color:#5b6472;text-transform:uppercase;letter-spacing:.4px}.chain{border:1px solid #e4e9f0;border-radius:9px;padding:10px 14px;margin:8px 0}.chain .nm{font-weight:600}.crit{color:#c81e1e}.high{color:#e5484d}.med{color:#b7791f}code{background:#f2f4f7;padding:1px 5px;border-radius:3px;font-size:12px}";
+  let h='<!doctype html><html><head><meta charset="utf-8"><title>IR Report — '+repEsc(caseId)+'</title><style>'+css+'</style></head><body>';
+  h+='<h1>Incident Response — EVTX Triage Report</h1>';
+  h+='<p class="muted">Generated '+repEsc(now)+' · case <code>'+repEsc(caseId)+'</code></p>';
+  h+='<h2>Executive summary</h2><div>'+
+    repCard(totalEvents.toLocaleString(),"events")+repCard((sm.withDetections||0).toLocaleString(),"events w/ detections")+
+    repCard((sm.total||0).toLocaleString(),"total hits")+repCard(((bySev.critical||0)+(bySev.high||0)).toLocaleString(),"critical + high")+
+    repCard(hosts.toLocaleString(),"hosts")+repCard((A.techniqueCount||0).toLocaleString(),"ATT&CK techniques")+'</div>';
+  h+='<p><span class="muted">Time span:</span> <span class="b">'+repEsc(span)+'</span></p>';
+  h+='<p>Severity: <span class="crit b">critical '+(bySev.critical||0)+'</span> · <span class="high b">high '+(bySev.high||0)+
+     '</span> · <span class="med">medium '+(bySev.medium||0)+'</span> · low/info '+((bySev.low||0)+(bySev.info||0))+'</p>';
+  if(A.tactics&&A.tactics.length){ h+='<h2>MITRE ATT&amp;CK coverage</h2><p class="muted">'+A.tactics.map(t=>repEsc(t.name)+' ('+t.techniques+')').join(' · ')+'</p>'+
+    '<table><tr><th>Technique</th><th>Name</th><th>Events</th></tr>';
+    for(const t of (A.techniques||[]).slice(0,20)) h+='<tr><td><code>'+repEsc(t.id)+'</code></td><td>'+repEsc(t.name)+'</td><td>'+t.count+'</td></tr>'; h+='</table>'; }
+  if(S.chains&&S.chains.length){ h+='<h2>Attack chains ('+S.chains.length+')</h2>';
+    for(const c of S.chains.slice(0,10)) h+='<div class="chain"><div class="nm">'+repEsc(c.name)+'</div>'+
+      '<div class="muted">'+repEsc(c.host)+(c.users&&c.users.length?' · '+repEsc(c.users.slice(0,3).join(", ")):'')+' · '+c.count+' detections · '+repEsc(fmtTime(c.startTms))+' → '+repEsc(fmtTime(c.endTms))+'</div>'+
+      '<div class="muted">'+c.steps.slice(0,10).map(s=>repEsc(s.title)+(s.technique?' ['+s.technique+']':'')).join(' → ')+'</div></div>'; }
+  if(S.entities&&S.entities.length){ h+='<h2>Riskiest entities</h2><table><tr><th>Type</th><th>Entity</th><th>Risk</th><th>Detections</th><th>Techniques</th></tr>';
+    for(const e of S.entities.slice(0,15)) h+='<tr><td>'+e.type+'</td><td class="b">'+repEsc(e.name)+'</td><td>'+e.score+'</td><td>'+e.hits+'</td><td>'+e.techniques.length+'</td></tr>'; h+='</table>'; }
+  if(S.byRule&&S.byRule.length){ h+='<h2>Detections by rule</h2><table><tr><th>Level</th><th>Rule</th><th>Source</th><th>Events</th></tr>';
+    for(const g of S.byRule.slice(0,30)) h+='<tr><td>'+repEsc(g.level)+'</td><td>'+repEsc(g.title)+'</td><td>'+repEsc(g.source)+'</td><td>'+g.count+'</td></tr>'; h+='</table>'; }
+  if(ev){ const cnt=a=>a?a.length:0; h+='<h2>Key forensic artifacts</h2><div>'+
+      repCard(cnt(ev.logCleared),"log clears")+repCard(cnt(ev.accountsCreated),"accounts created")+repCard(cnt(ev.groupAdds),"priv-group adds")+
+      repCard(cnt(ev.services),"services")+repCard((ev.extLogons&&ev.extLogons.size)||0,"external/RDP logons")+repCard(cnt(ev.lsassAccess),"LSASS access")+
+      repCard(cnt(ev.sessions),"logon sessions")+repCard(cnt(ev.defender),"Defender events")+'</div>';
+    const ips=ev.ips?[...ev.ips.entries()].sort((a,b)=>b[1]-a[1]):[], hashes=ev.hashes?[...ev.hashes]:[], domains=ev.domains?[...ev.domains]:[];
+    if(ips.length||hashes.length||domains.length){ h+='<h2>Indicators of compromise</h2>';
+      if(ips.length) h+='<p class="b">External IPs ('+ips.length+')</p><p><code>'+ips.slice(0,50).map(([ip,c])=>repEsc(ip)+'×'+c).join('</code> <code>')+'</code></p>';
+      if(domains.length) h+='<p class="b">Domains ('+domains.length+')</p><p><code>'+domains.slice(0,50).map(repEsc).join('</code> <code>')+'</code></p>';
+      if(hashes.length) h+='<p class="b">File hashes ('+hashes.length+')</p><p class="muted" style="word-break:break-all">'+hashes.slice(0,40).map(repEsc).join('<br>')+'</p>'; }
+  }
+  h+='<h2>Notes</h2><p class="muted">Auto-generated triage summary from EVTX Triage. Findings are heuristic and rule-based (Sigma/YARA/built-in) and require analyst validation — this is a starting point, not a substitute for full forensic analysis.</p>';
+  return h+'</body></html>';
+}
+/* ---- DOCX export: store-only ZIP + WordprocessingML (no libraries) ---- */
+function crc32(u8){ let c=~0>>>0; for(let i=0;i<u8.length;i++){ c^=u8[i]; for(let k=0;k<8;k++) c=(c>>>1)^(0xEDB88320&-(c&1)); } return (~c)>>>0; }
+function zipStore(files){
+  const enc=new TextEncoder(); const u16=n=>[n&255,(n>>8)&255]; const u32=n=>[n&255,(n>>8)&255,(n>>16)&255,(n>>24)&255];
+  const parts=[], cen=[]; let off=0;
+  for(const f of files){ const nm=enc.encode(f.name), data=f.data, crc=crc32(data), sz=data.length;
+    const lfh=Uint8Array.from([0x50,0x4b,0x03,0x04,...u16(20),...u16(0),...u16(0),...u16(0),...u16(0),...u32(crc),...u32(sz),...u32(sz),...u16(nm.length),...u16(0)]);
+    parts.push(lfh,nm,data); cen.push({nm,crc,sz,off}); off+=lfh.length+nm.length+sz; }
+  const cStart=off, cparts=[];
+  for(const c of cen){ const h=Uint8Array.from([0x50,0x4b,0x01,0x02,...u16(20),...u16(20),...u16(0),...u16(0),...u16(0),...u16(0),...u32(c.crc),...u32(c.sz),...u32(c.sz),...u16(c.nm.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(c.off)]);
+    cparts.push(h,c.nm); off+=h.length+c.nm.length; }
+  const cSize=off-cStart;
+  const eocd=Uint8Array.from([0x50,0x4b,0x05,0x06,...u16(0),...u16(0),...u16(cen.length),...u16(cen.length),...u32(cSize),...u32(cStart),...u16(0)]);
+  const all=[...parts,...cparts,eocd]; let tot=0; for(const a of all)tot+=a.length;
+  const out=new Uint8Array(tot); let p=0; for(const a of all){ out.set(a,p); p+=a.length; } return out;
+}
+function wp(text,o){ o=o||{}; const rpr=(o.b||o.sz||o.color||o.gray)?('<w:rPr>'+(o.b?'<w:b/>':'')+(o.sz?'<w:sz w:val="'+o.sz+'"/><w:szCs w:val="'+o.sz+'"/>':'')+((o.color||o.gray)?'<w:color w:val="'+(o.gray?'808080':o.color)+'"/>':'')+'</w:rPr>'):'';
+  const ppr=(o.sz&&o.sz>=28)?'<w:pPr><w:spacing w:before="200" w:after="60"/></w:pPr>':'';
+  return '<w:p>'+ppr+'<w:r>'+rpr+'<w:t xml:space="preserve">'+repEsc(text)+'</w:t></w:r></w:p>'; }
+function wtable(head,rows){
+  const bd='<w:tblBorders><w:top w:val="single" w:sz="4" w:color="CCCCCC"/><w:left w:val="single" w:sz="4" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="4" w:color="CCCCCC"/><w:right w:val="single" w:sz="4" w:color="CCCCCC"/><w:insideH w:val="single" w:sz="4" w:color="EEEEEE"/><w:insideV w:val="single" w:sz="4" w:color="EEEEEE"/></w:tblBorders>';
+  const cell=(t,b)=>'<w:tc><w:tcPr><w:tcMar><w:top w:w="20" w:type="dxa"/><w:left w:w="60" w:type="dxa"/><w:bottom w:w="20" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:r>'+(b?'<w:rPr><w:b/></w:rPr>':'')+'<w:t xml:space="preserve">'+repEsc(String(t))+'</w:t></w:r></w:p></w:tc>';
+  let x='<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/>'+bd+'</w:tblPr>';
+  x+='<w:tr>'+head.map(h=>cell(h,true)).join('')+'</w:tr>';
+  for(const r of rows) x+='<w:tr>'+r.map(c=>cell(c,false)).join('')+'</w:tr>';
+  return x+'</w:tbl><w:p/>'; }
+function buildReportDocx(S, dash, ev, meta){
+  const sm=S.summary||{}, bySev=S.bySev||{}, A=S.attack||{};
+  const caseId=window.__caseId||"local";
+  const span=((meta&&meta.tsMin)?meta.tsMin.slice(0,19).replace("T"," "):"?")+"  →  "+((meta&&meta.tsMax)?meta.tsMax.slice(0,19).replace("T"," "):"?");
+  const totalEvents=(dash&&dash.total)||(meta&&meta.count)||sm.scanned||0;
+  const hosts=(dash&&dash.computers&&dash.computers.length)||(caseSources?caseSources.length:0)||0;
+  let b=wp("Incident Response — EVTX Triage Report",{b:true,sz:40})+wp("Generated "+new Date().toISOString()+" · case "+caseId,{gray:true,sz:18});
+  b+=wp("Executive summary",{b:true,sz:28})+wtable(["Metric","Value"],[["Events",totalEvents.toLocaleString()],["Events with detections",(sm.withDetections||0).toLocaleString()],["Total hits",(sm.total||0).toLocaleString()],["Critical + high",((bySev.critical||0)+(bySev.high||0)).toLocaleString()],["Hosts",String(hosts)],["ATT&CK techniques",String(A.techniqueCount||0)],["Time span",span],["Severity","critical "+(bySev.critical||0)+" · high "+(bySev.high||0)+" · medium "+(bySev.medium||0)+" · low/info "+((bySev.low||0)+(bySev.info||0))]]);
+  if(A.tactics&&A.tactics.length){ b+=wp("MITRE ATT&CK coverage",{b:true,sz:28})+wp(A.tactics.map(t=>t.name+" ("+t.techniques+")").join(" · "),{gray:true,sz:18})+wtable(["Technique","Name","Events"],(A.techniques||[]).slice(0,20).map(t=>[t.id,t.name,String(t.count)])); }
+  if(S.chains&&S.chains.length){ b+=wp("Attack chains ("+S.chains.length+")",{b:true,sz:28});
+    for(const c of S.chains.slice(0,10)) b+=wp(c.name,{b:true})+wp(c.host+(c.users&&c.users.length?" · "+c.users.slice(0,3).join(", "):"")+" · "+c.count+" detections · "+fmtTime(c.startTms)+" → "+fmtTime(c.endTms),{gray:true,sz:18})+wp(c.steps.slice(0,10).map(s=>s.title+(s.technique?" ["+s.technique+"]":"")).join("  →  "),{sz:18}); }
+  if(S.entities&&S.entities.length){ b+=wp("Riskiest entities",{b:true,sz:28})+wtable(["Type","Entity","Risk","Detections","Tech"],S.entities.slice(0,15).map(e=>[e.type,e.name,String(e.score),String(e.hits),String(e.techniques.length)])); }
+  if(S.byRule&&S.byRule.length){ b+=wp("Detections by rule",{b:true,sz:28})+wtable(["Level","Rule","Source","Events"],S.byRule.slice(0,30).map(g=>[g.level,g.title,g.source,String(g.count)])); }
+  if(ev){ const cnt=a=>a?a.length:0; b+=wp("Key forensic artifacts",{b:true,sz:28})+wtable(["Artifact","Count"],[["Log clears",cnt(ev.logCleared)],["Accounts created",cnt(ev.accountsCreated)],["Priv-group adds",cnt(ev.groupAdds)],["Services",cnt(ev.services)],["External/RDP logons",(ev.extLogons&&ev.extLogons.size)||0],["LSASS access",cnt(ev.lsassAccess)],["Logon sessions",cnt(ev.sessions)],["Defender events",cnt(ev.defender)]].map(([k,v])=>[k,String(v)]));
+    const ips=ev.ips?[...ev.ips.entries()].sort((a,b)=>b[1]-a[1]):[], hashes=ev.hashes?[...ev.hashes]:[], domains=ev.domains?[...ev.domains]:[];
+    if(ips.length||hashes.length||domains.length){ b+=wp("Indicators of compromise",{b:true,sz:28});
+      if(ips.length) b+=wp("External IPs ("+ips.length+")",{b:true})+wp(ips.slice(0,50).map(([ip,c])=>ip+"×"+c).join("   "),{sz:16});
+      if(domains.length) b+=wp("Domains ("+domains.length+")",{b:true})+wp(domains.slice(0,50).join("   "),{sz:16});
+      if(hashes.length) b+=wp("File hashes ("+hashes.length+")",{b:true})+wp(hashes.slice(0,40).join("\n"),{sz:14}); } }
+  b+=wp("Notes",{b:true,sz:28})+wp("Auto-generated triage summary from EVTX Triage. Findings are heuristic and rule-based and require analyst validation.",{gray:true,sz:18});
+  const doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+b+'<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/></w:sectPr></w:body></w:document>';
+  const ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
+  const rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
+  const enc=new TextEncoder();
+  return zipStore([{name:"[Content_Types].xml",data:enc.encode(ct)},{name:"_rels/.rels",data:enc.encode(rels)},{name:"word/document.xml",data:enc.encode(doc)}]);
+}
+function dlBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
+function reportBtns(){ return '<div style="display:flex;gap:8px;justify-content:flex-end;margin:-2px 0 10px">'+
+  '<button class="btn" onclick="generateIRReport(\'pdf\',this)">📄 PDF report</button>'+
+  '<button class="btn" onclick="generateIRReport(\'docx\',this)">📝 Word (DOCX)</button></div>'; }
+async function generateIRReport(fmt, btn){
+  const haveDet = (SERVER&&serverDet) || detections.size;
+  if(!haveDet){ alert("Run detections first (⚑ Detections tab)."); return; }
+  const old=btn?btn.textContent:null; if(btn){ btn.textContent="Building…"; btn.disabled=true; }
+  try{
+    let dash=fullDash; if(SERVER && !dash){ try{ dash=await (await api("/api/dashboard")).json(); }catch(_){} }
+    let ev=null;
+    if(SERVER){ try{ ev=JSON.parse(await (await api("/api/evidence")).text(), mapSetRevive).evidence; }catch(_){} }
+    else { try{ ev=EVID||buildEvidence(); }catch(_){} }
+    const S = serverDet || { summary:{withDetections:detections.size,total:detTotalHits(),scanned:rows.length},
+      bySev:(function(){const b={critical:0,high:0,medium:0,low:0,info:0};for(const[,a]of detections)for(const h of a)b[String(h.level).toLowerCase()]=(b[String(h.level).toLowerCase()]||0)+1;return b;})(),
+      attack:clientAttack||computeAttackFromDetections(), chains:clientChains||computeChainsFromDetections(),
+      entities:clientEntities||computeEntitiesFromDetections(), byRule:[] };
+    const base="IR-report-"+(window.__caseId||"case");
+    if(fmt==="docx"){ const bytes=buildReportDocx(S, dash, ev, window.__meta);
+      dlBlob(new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}), base+".docx"); }
+    else if(fmt==="pdf"){ const html=buildReportHTML(S, dash, ev, window.__meta);
+      const wnd=window.open("","_blank"); if(!wnd){ alert("Allow pop-ups to export as PDF (or use Word / HTML)."); return; }
+      const inject="<scr"+"ipt>window.onload=function(){setTimeout(function(){try{window.print();}catch(e){}},350);};</scr"+"ipt>";
+      wnd.document.write(html.replace("</body>", inject+"</body>")); wnd.document.close(); }
+    else { const html=buildReportHTML(S, dash, ev, window.__meta); dlBlob(new Blob([html],{type:"text/html"}), base+".html"); }
+  }catch(e){ alert("Report failed: "+(e.message||e)); }
+  finally{ if(btn){ btn.textContent=old; btn.disabled=false; } }
+}
 /* ---- detections tab ---- */
 function renderDetectionsServer(){
   const w=$("detWrap"); const S=serverDet, sm=S.summary||{};
@@ -5140,6 +5969,9 @@ function renderDetectionsServer(){
   const total=sm.total||1;
   const segs=[["critical",bySev.critical],["high",bySev.high],["medium",bySev.medium],["low",bySev.low],["info",bySev.info]];
   h+='<div class="sevbar">'; for(const [lv,c] of segs){ if(!c)continue; h+='<span title="'+lv+': '+c+'" style="width:'+(c/total*100).toFixed(2)+'%;background:'+numColor(sevNum(lv))+'"></span>'; } h+='</div>';
+  h+=chainsPanel(S.chains);
+  h+=attackPanel(S.attack);
+  h+=entitiesPanel(S.entities);
   h+='<div class="detgrid">';
   const groups=S.byRule||[];
   h+='<div class="panel"><h3>Detections by rule ('+groups.length+')</h3><div class="dtscroll"><table class="dt"><thead><tr><th>Lvl</th><th>Rule</th><th>Src</th><th style="text-align:right">Events</th></tr></thead><tbody>';
@@ -5197,6 +6029,12 @@ function renderDetections(){
   h+='<div class="sevbar">'; for(const [lv,c] of segs){ if(!c)continue; const pc=(c/total*100);
     h+='<span title="'+lv+': '+c+'" style="width:'+pc.toFixed(2)+'%;background:'+numColor(sevNum(lv))+'"></span>'; }
   h+='</div>';
+  clientChains=computeChainsFromDetections();
+  h+=chainsPanel(clientChains);
+  clientAttack=computeAttackFromDetections();
+  h+=attackPanel(clientAttack);
+  clientEntities=computeEntitiesFromDetections();
+  h+=entitiesPanel(clientEntities);
   // ---- two-column: rules + top computers ----
   h+='<div class="detgrid">';
   h+='<div class="panel"><h3>Detections by rule ('+groups.length+')</h3><div class="dtscroll"><table class="dt"><thead><tr>'+
@@ -5230,10 +6068,31 @@ function renderDetections(){
   w.innerHTML=h;
 }
 $("detWrap").addEventListener("click",e=>{
+  if(e.target.closest("#navExport")){ exportNavigator((serverDet&&serverDet.attack)||clientAttack); return; }
+  const cf=e.target.closest(".chain-focus");
+  if(cf){ e.preventDefault();                       // don't toggle the <details>
+    const from=+cf.getAttribute("data-from"), to=+cf.getAttribute("data-to"), host=cf.getAttribute("data-host");
+    clearGridFilters(); providerFilter=null; showDetOnly=false; $("detBtn").classList.remove("on"); ruleFilter=""; techniqueFilter=""; renderDetChip();
+    if(from||to) setTimeRange(from, (to||from)+1000, fmtTime(from));
+    if(host){ query=host.toLowerCase(); escQ=esc(query); $("q").value=host; }
+    view=defaultView(); buildProviderList(); buildColPicker(); applyFilter(); setTab("events"); return; }
+  const cst=e.target.closest(".chain-step");
+  if(cst){ const i=+cst.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
   const td=e.target.closest("tr[data-idx]");
   if(td){ const i=+td.getAttribute("data-idx");
     if(rows[i]){ openDetail(rows[i]); }
     else if(SERVER){ openServerEvent(i); }
+    return; }
+  const at=e.target.closest(".atk-tech");
+  if(at){ const tid=at.getAttribute("data-tech");
+    clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
+    showDetOnly=false; $("detBtn").classList.remove("on");
+    setTechFilter(tid);
+    view=defaultView(); buildProviderList(); buildColPicker(); applyFilter(); setTab("events"); return; }
+  const en=e.target.closest("tr[data-entity]");
+  if(en){ const name=en.getAttribute("data-entity"), etype=en.getAttribute("data-etype");
+    if(SERVER) openEntityProfile(etype,name);      // full dossier drawer
+    else entityGridPivot(name);                    // offline: pivot into the grid
     return; }
   const tr=e.target.closest("tr[data-rule]"); if(!tr)return;
   clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
@@ -5263,8 +6122,9 @@ function buildEvidence(){
     netConns:new Map(), dns:new Map(), shareAccess:[], logCleared:[], defender:[],
     kerberos:[], kerbRoast:0, ntlm:[], auditChanges:[], wmiPersist:[], rdpSessions:[], bits:[],
     lsassAccess:[], remoteThread:[], rawAccess:[], procTamper:[], appBlocks:[], timeChange:[],
-    ips:new Map(), users:new Set(), hosts:new Set(), hashes:new Set(), domains:new Set() };
+    ips:new Map(), users:new Set(), hosts:new Set(), hashes:new Set(), domains:new Set(), sessions:[] };
   const isSys=p=>/sysmon/i.test(p||"");
+  const sessById=new Map(); const SESS_TYPES=new Set(["2","3","7","9","10","11"]);
   for(let i=0;i<rows.length;i++){ const r=rows[i], d=r.data||{}, id=String(r.eventId);
     const U=k=>d[k]!=null?String(d[k]):"";
     if(r.computer)E.hosts.add(r.computer);
@@ -5279,7 +6139,13 @@ function buildEvidence(){
       case "4624": { const ip=U("IpAddress"), lt=U("LogonType"), u=U("TargetUserName");
         if(u)E.users.add(u);
         if(lt==="10"||isExtIp(ip)){ const key=u+"|"+ip+"|"+lt; const e=E.extLogons.get(key)||{i,user:u,ip,lt,count:0}; e.count++; e.i=i; E.extLogons.set(key,e); }
-        if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
+        if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1);
+        const lid=U("TargetLogonId")||U("LogonId");
+        if(lid && SESS_TYPES.has(lt) && u && !/\$$/.test(u) && !sessById.has(lid))
+          sessById.set(lid,{i,user:u,lt,ip,ws:U("WorkstationName"),onTms:r.tms,onTs:r.ts,offTms:null});
+        break; }
+      case "4634": case "4647": { const lid=U("TargetLogonId")||U("LogonId"); const s=lid&&sessById.get(lid);
+        if(s && s.offTms==null) s.offTms=r.tms; break; }
       case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0}; e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName")); E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
       case "4648": E.explicitCreds.push({i,subj:U("SubjectUserName"),target:U("TargetUserName"),server:U("TargetServerName")||U("TargetInfo"),ip:U("IpAddress"),ts:r.ts}); break;
       case "4688": { const cmd=U("CommandLine")||U("NewProcessName"); if(cmd)E.procs.push({i,cmd,parent:U("ParentProcessName"),user:U("SubjectUserName"),ts:r.ts}); break; }
@@ -5321,6 +6187,9 @@ function buildEvidence(){
         E.timeChange.push({i,by:u,prev:U("PreviousTime"),nw:U("NewTime"),ts:r.ts}); break; }
     }
   }
+  E.sessions=[...sessById.values()].map(s=>({ i:s.i, user:s.user, lt:s.lt, ip:s.ip, ws:s.ws, onTs:s.onTs, onTms:s.onTms, offTms:s.offTms,
+    durationMs:(s.offTms&&s.onTms&&s.offTms>=s.onTms)?(s.offTms-s.onTms):null }))
+    .sort((a,b)=>(b.onTms||0)-(a.onTms||0)).slice(0,5000);
   return E;
 }
 function evRow(cells,q,eid){ return '<tr data-q="'+esc(q||"")+'"'+(eid?' data-eid="'+esc(eid)+'"':'')+'>'+
@@ -5330,12 +6199,40 @@ function evPanel(title,total,headers,trs,flag){ if(!trs.length)return"";
     '<div class="dtscroll"><table class="dt">'+(headers?'<thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead>':'')+
     '<tbody>'+trs.join("")+'</tbody></table></div></div>'; }
 function topMap(m,n){ return [...m.entries()].sort((a,b)=>(b[1].count||b[1])-(a[1].count||a[1])).slice(0,n); }
+const LOGON_TYPE={"2":"Interactive","3":"Network","4":"Batch","5":"Service","7":"Unlock","8":"NetworkCleartext","9":"NewCredentials","10":"RemoteInteractive (RDP)","11":"CachedInteractive"};
+function fmtDur(ms){ if(ms==null)return "—"; if(ms<0)return "?"; const m=ms/60000;
+  if(m<1)return "<1m"; if(m<60)return Math.round(m)+"m"; if(m<1440)return (m/60).toFixed(1)+"h"; return (m/1440).toFixed(1)+"d"; }
+// decode a PowerShell -EncodedCommand base64 blob (UTF-16LE, falling back to UTF-8)
+function decodePwshEnc(cmd){
+  const m=/(?:-e|-en|-enc|-enco|-encod|-encode|-encoded|-encodedc|-encodedco|-encodedcom|-encodedcomm|-encodedcomma|-encodedcomman|-encodedcommand)\s+([A-Za-z0-9+/=]{20,})/i.exec(String(cmd||""));
+  if(!m)return null;
+  try{ const bin=atob(m[1].replace(/[^A-Za-z0-9+/=]/g,"").replace(/=+$/,""));
+    const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+    let txt=new TextDecoder("utf-16le").decode(bytes);
+    const printable=s=>{ const p=(s.match(/[\x20-\x7e]/g)||[]).length; return s.length?p/s.length:0; };
+    if(printable(txt)<0.6){ const t2=new TextDecoder("utf-8").decode(bytes); if(printable(t2)>printable(txt))txt=t2; }
+    txt=txt.replace(/ /g,"");
+    return printable(txt)>0.5 ? txt : null;
+  }catch(_){ return null; }
+}
+let evidCache=null, evidCacheCase=null;
+function mapSetRevive(k,v){ if(v&&v.__t==="M")return new Map(v.v); if(v&&v.__t==="S")return new Set(v.v); return v; }
+async function renderEvidenceScroll(){
+  const w=$("evWrap");
+  if(evidCache && evidCacheCase===window.__caseId){ EVID=evidCache; renderEvidence(); return; }
+  w.innerHTML='<div class="dash-note">Mining forensic artifacts across the full log on the server…</div>';
+  try{ const r=await api("/api/evidence"); const txt=await r.text();
+    const j=JSON.parse(txt, mapSetRevive);
+    evidCache=EVID=j.evidence||null; evidCacheCase=window.__caseId;
+  }catch(err){ w.innerHTML='<div class="dash-note">Could not extract evidence: '+esc(err.message||err)+'</div>'; return; }
+  if(document.body.getAttribute("data-mode")==="ev") renderEvidence();
+}
 function renderEvidence(){
   const w=$("evWrap");
-  if(!rows.length){ w.innerHTML='<div class="empty-dash">Load events to extract evidence.</div>'; return; }
+  if(!EVID || (!rows.length && !SCROLL)){ w.innerHTML='<div class="empty-dash">Load events to extract evidence.</div>'; return; }
   const E=EVID; const CAP=120;
   const susp=/powershell|cmd\.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|wmic|psexec|-enc|encodedcommand|downloadstring|invoke-|frombase64|vssadmin|bcdedit|nltest|whoami|net\s+user|net\s+localgroup|schtasks|reg\s+add/i;
-  let h='<div class="dash-note">Forensic artifacts mined from <b>'+rows.length.toLocaleString()+'</b> events — independent of rule hits. Click any row to pivot into the Events grid.</div>';
+  let h='<div class="dash-note">Forensic artifacts mined from <b>'+gridEventTotal().toLocaleString()+'</b> events — independent of rule hits. Click any row to pivot into the Events grid.</div>';
   // summary cards
   h+='<div class="cards">'+
      statCard(E.lsassAccess.length.toLocaleString(),"LSASS access",E.lsassAccess.length?"bad":"")+
@@ -5368,13 +6265,26 @@ function renderEvidence(){
   const sp=[...E.specialPriv.entries()].sort((a,b)=>b[1]-a[1]);
   h+=evPanel("Special privileges assigned (4672)",sp.length,["Account","#"],
      sp.slice(0,CAP).map(([u,c])=>evRow([{t:u},{t:c,cls:"cnt"}],u,"4672")));
+  // logon sessions (4624 paired with 4634/4647 by Logon ID)
+  const sess=E.sessions||[];
+  h+=evPanel("Logon sessions (paired 4624 → 4634/4647)",sess.length,["Logon time","User","Type","Source","Duration"],
+     sess.slice(0,CAP).map(x=>evRow([
+       {t:x.onTs,cls:"ev-trunc"},{t:x.user},
+       {html:'<span class="ev-tag '+(x.lt==="10"?"warn":"")+'">'+esc(LOGON_TYPE[x.lt]||("type "+x.lt))+'</span>'},
+       {html:(isExtIp(x.ip)?'<span class="ev-tag bad">ext</span>':'')+esc(x.ip||x.ws||"-")},
+       {html:x.offTms?esc(fmtDur(x.durationMs)):'<span class="dim">open</span>'}
+     ],x.ip&&isExtIp(x.ip)?x.ip:x.user,"4624")));
   h+=evPanel("Explicit credential use (4648)",E.explicitCreds.length,["Time","Subject","→ Target","Server/IP"],
      E.explicitCreds.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.subj},{t:x.target},{t:x.server||x.ip}],x.target)));
   // execution
   h+=evPanel("Process executions",E.procs.length,["Time","Command line"],
-     E.procs.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{html:(susp.test(x.cmd)?'<span class="ev-tag warn">!</span>':'')+esc(x.cmd.slice(0,160)),cls:"ev-trunc",title:x.cmd}],x.cmd.slice(0,40))));
+     E.procs.slice(0,CAP).map(x=>{ const dec=decodePwshEnc(x.cmd);
+       return evRow([{t:x.ts,cls:"ev-trunc"},{html:(susp.test(x.cmd)?'<span class="ev-tag warn">!</span>':'')+esc(x.cmd.slice(0,160))+
+         (dec?'<div class="ev-dec"><span class="ev-tag bad">decoded</span> '+esc(dec.slice(0,400))+'</div>':''),cls:dec?"":"ev-trunc",title:x.cmd}],x.cmd.slice(0,40)); }));
   h+=evPanel("PowerShell script blocks (4104)",E.psBlocks.length,["Time","Script (excerpt)"],
-     E.psBlocks.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{html:(susp.test(x.text)?'<span class="ev-tag warn">!</span>':'')+esc(x.text.replace(/\s+/g," ").slice(0,160)),cls:"ev-trunc",title:x.text.slice(0,800)}],"")));
+     E.psBlocks.slice(0,CAP).map(x=>{ const dec=decodePwshEnc(x.text);
+       return evRow([{t:x.ts,cls:"ev-trunc"},{html:(susp.test(x.text)?'<span class="ev-tag warn">!</span>':'')+esc(x.text.replace(/\s+/g," ").slice(0,160))+
+         (dec?'<div class="ev-dec"><span class="ev-tag bad">decoded</span> '+esc(dec.slice(0,400))+'</div>':''),cls:dec?"":"ev-trunc",title:x.text.slice(0,800)}],""); }));
   // persistence
   h+=evPanel("Services installed (7045 / 4697)",E.services.length,["Time","Service","Image path"],
      E.services.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.name},{t:x.path,cls:"ev-trunc",title:x.path}],x.name)));
