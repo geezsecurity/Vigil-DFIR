@@ -439,6 +439,13 @@
   table.dt.tl td.dim{color:var(--txt-dim)}
   table.dt tr[data-idx]{cursor:pointer}
   table.dt tr[data-idx]:hover{background:var(--sel)}
+  /* rule suppression controls */
+  .rsup{opacity:0;border:1px solid var(--line-2);background:none;color:var(--txt-dim);border-radius:4px;
+    font-size:10px;padding:0 6px;cursor:pointer;margin-left:6px;vertical-align:middle;line-height:16px}
+  table.dt tr:hover .rsup{opacity:.9}
+  .rsup:hover{color:#e5736a;border-color:#e5736a}
+  .sup-panel .rsup{opacity:.9;color:var(--accent);border-color:var(--line-2)}
+  .sup-panel .rsup:hover{color:#6ec98a;border-color:#6ec98a}
   .src-badge.heuristic{color:var(--accent)}
   /* evidence */
   #evWrap{display:none;flex:1;overflow:auto;padding:18px 22px}
@@ -5280,6 +5287,19 @@ async function runDetectionsServer(){
   try{ const r=await api("/api/detect",{method:"POST"}); applyServerDetections(await r.json()); }
   catch(err){ showProgress(false); setRulesStatus('<span class="err">Server detect failed: '+esc(err.message)+'</span>'); }
 }
+let suppressedRules=[];        // rule IDs currently suppressed on the server (hidden from all detections)
+async function loadSuppressions(){ if(!SERVER)return;
+  try{ const j=await (await api("/api/suppressions")).json(); suppressedRules=j.suppressed||[]; }catch(_){} }
+async function toggleSuppress(ruleId, suppress){
+  try{ showProgress(true); $("progLbl").textContent = suppress ? "suppressing rule…" : "restoring rule (re-scanning)…";
+    const r=await api("/api/suppressions",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ruleId, suppress})});
+    const j=await r.json(); suppressedRules=j.suppressed||[];
+    if(j.detections) applyServerDetections(j.detections);   // re-renders the Detections tab + grid dets
+    showProgress(false);
+    if(document.body.getAttribute("data-mode")==="det") renderDetections();
+  }catch(err){ showProgress(false); alert((suppress?"Suppress":"Restore")+" failed: "+(err&&err.message||err)); }
+}
 function applyServerDetections(obj){
   serverDet=obj||null;
   detections=new Map();
@@ -5585,6 +5605,7 @@ async function serverInit(){
   SERVER=true; document.title="Vigil (server)";
   window.__browseCap=j.browseCap||200000;
   renderCaseSwitcher(j.cases||[], j.activeCase||null);
+  loadSuppressions();
   if(j.rules) $("rulesCounts").textContent=(j.rules.sigmaFiles||0)+" sigma · "+(j.rules.yaraFiles||0)+" yara files (server)";
   if(j.meta && j.meta.count){                  // a stored session exists -> restore it on refresh
     defaultRulesTried=true;                     // server already has rules; don't auto-pull on client
@@ -6157,11 +6178,18 @@ function renderDetectionsServer(){
   h+=chainsPanel(S.chains);
   h+=attackPanel(S.attack);
   h+=entitiesPanel(S.entities);
+  if(suppressedRules.length){
+    h+='<div class="panel sup-panel"><h3>Suppressed rules ('+suppressedRules.length+') <span class="pill">hidden from all detections — restore re-scans</span></h3><div class="dtscroll"><table class="dt"><tbody>';
+    for(const rid of suppressedRules) h+='<tr><td class="mono dim">'+esc(rid)+'</td>'+
+      '<td style="text-align:right"><button class="rsup" data-unsuppress="'+esc(rid)+'" title="Restore this rule (triggers a re-scan)">restore</button></td></tr>';
+    h+='</tbody></table></div></div>';
+  }
   h+='<div class="detgrid">';
   const groups=S.byRule||[];
   h+='<div class="panel"><h3>Detections by rule ('+groups.length+')</h3><div class="dtscroll"><table class="dt"><thead><tr><th>Lvl</th><th>Rule</th><th>Src</th><th style="text-align:right">Events</th></tr></thead><tbody>';
   for(const g of groups){ h+='<tr data-rule="'+esc(g.ruleId)+'" data-label="'+esc(g.title)+'">'+
-    '<td><span class="sev" style="background:'+numColor(sevNum(g.level))+'"></span></td><td>'+esc(g.title)+'</td>'+
+    '<td><span class="sev" style="background:'+numColor(sevNum(g.level))+'"></span></td>'+
+    '<td>'+esc(g.title)+'<button class="rsup" data-suppress="'+esc(g.ruleId)+'" title="Suppress this rule — hide its detections everywhere (persists)">🚫 suppress</button></td>'+
     '<td><span class="src-badge '+esc(g.source)+'">'+esc(String(g.source)[0].toUpperCase())+'</span></td><td class="cnt">'+g.count.toLocaleString()+'</td></tr>'; }
   h+='</tbody></table></div></div>';
   h+='<div class="panel"><h3>Top computers</h3><table class="dt"><tbody>';
@@ -6253,6 +6281,10 @@ function renderDetections(){
   w.innerHTML=h;
 }
 $("detWrap").addEventListener("click",e=>{
+  const sup=e.target.closest("[data-suppress]");
+  if(sup){ e.stopPropagation(); toggleSuppress(sup.getAttribute("data-suppress"), true); return; }
+  const uns=e.target.closest("[data-unsuppress]");
+  if(uns){ e.stopPropagation(); toggleSuppress(uns.getAttribute("data-unsuppress"), false); return; }
   if(e.target.closest("#navExport")){ exportNavigator((serverDet&&serverDet.attack)||clientAttack); return; }
   const cf=e.target.closest(".chain-focus");
   if(cf){ e.preventDefault();                       // don't toggle the <details>

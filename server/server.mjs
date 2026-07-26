@@ -530,67 +530,119 @@ app.post("/api/rules/clear", (req,res)=>{
 });
 
 // run heuristics + sigma + yara on the server over the stored log; persist enriched results
+/* ---------- rule suppression (global allowlist, survives restarts) --------------
+   Suppressed rule IDs are stored once for the whole server (rules are shared across
+   cases) and applied at detect time. Toggling suppression re-filters the stored
+   detections in place — no full re-scan — so it feels instant on huge cases.        */
+const SUPPRESS_FILE = path.join(DATA, "suppressions.json");
+function loadSuppressed(){ try{ return new Set(JSON.parse(fs.readFileSync(SUPPRESS_FILE,"utf8")).suppressed||[]); }catch{ return new Set(); } }
+function saveSuppressed(set){ try{ fs.writeFileSync(SUPPRESS_FILE, JSON.stringify({ suppressed:[...set] })); }catch(e){ console.error(e); } }
+
+// Assemble the full detection payload (timeline + ATT&CK + entities + chains + aggregates)
+// from a per-event hit map. Shared by /api/detect (fresh scan) and suppression re-filtering.
+function assembleDetections(byIdx, rows, meta, ruleStats){
+  ruleStats=ruleStats||{}; meta=meta||{};
+  const SEV={critical:4,high:3,medium:2,low:1,informational:0,info:0};
+  const sevn=l=>{const n=SEV[String(l||"").toLowerCase()];return n==null?2:n;};
+  const obj={}; let total=0; const timeline=[]; const byRule=new Map(); const byComp=new Map();
+  const bySev={critical:0,high:0,medium:0,low:0,info:0}; const bySrc={sigma:0,yara:0,heuristic:0};
+  const byTech=new Map(), byTac=new Map();   // ATT&CK technique/tactic coverage
+  const scorer=Engine.makeEntityScorer();    // entity risk scoring
+  const chainItems=[];                        // one item per detected event -> attack-chain correlation
+  for(const [i,a] of byIdx){ if(!a||!a.length)continue; obj[i]=a; total+=a.length;
+    const r=rows[i]||{computer:"",ts:"",tms:NaN,data:{},provider:"",channel:"",eventId:""};
+    byComp.set(r.computer||"(none)",(byComp.get(r.computer||"(none)")||0)+1);
+    let evLvl="info", evTags=[], evTitle=(a[0]&&(a[0].title||a[0].ruleId))||"";
+    for(const h of a){ const key=h.source+"|"+(h.ruleId||h.title); scorer.feed(h, r);
+      if(sevn(h.level)>sevn(evLvl)){ evLvl=h.level; evTitle=h.title||h.ruleId; }
+      if(h.tags&&h.tags.length) evTags=evTags.concat(h.tags);
+      let g=byRule.get(key); if(!g){g={ruleId:h.ruleId||h.title,title:h.title||h.ruleId,source:h.source,level:h.level,count:0};byRule.set(key,g);}
+      g.count++; if(sevn(h.level)>sevn(g.level))g.level=h.level;
+      bySev[String(h.level).toLowerCase()]=(bySev[String(h.level).toLowerCase()]||0)+1; bySrc[h.source]=(bySrc[h.source]||0)+1;
+      if(timeline.length<TIMELINE_CAP) timeline.push({idx:i,ts:r.ts,tms:r.tms,computer:r.computer,channel:r.channel||r.provider,eid:r.eventId,level:h.level,title:h.title||h.ruleId,source:h.source});
+      const pa=Engine.parseAttack(h.tags);
+      for(const t of pa.techniques){ let g2=byTech.get(t.id);
+        if(!g2){ g2={id:t.id,name:t.name,tactic:t.tactic,count:0,level:"info",rules:new Set()}; byTech.set(t.id,g2); }
+        g2.count++; if(sevn(h.level)>sevn(g2.level))g2.level=h.level; g2.rules.add(h.ruleId||h.title); }
+      for(const slug of new Set(pa.tactics)){ let g3=byTac.get(slug); if(!g3){ g3={tactic:slug,count:0,techniques:new Set()}; byTac.set(slug,g3);} g3.count++; }
+    }
+    chainItems.push({ idx:i, tms:r.tms, host:r.computer||"", user:(Engine.extractEntities(r.data,r.computer).users[0]||""),
+      level:evLvl, title:evTitle, source:(a[0]&&a[0].source)||"", ruleId:(a[0]&&a[0].ruleId)||"", tags:evTags });
+  }
+  timeline.sort((a,b)=>(b.tms||0)-(a.tms||0));
+  for(const t of byTech.values()){ if(t.tactic){ const g=byTac.get(t.tactic); if(g)g.techniques.add(t.id); } }
+  const TAC_NAMES=Engine.attack.tactics, TAC_ORDER=Engine.attack.tacticOrder;
+  const attack={
+    techniques:[...byTech.values()].sort((a,b)=>sevn(b.level)-sevn(a.level)||b.count-a.count)
+      .map(t=>({id:t.id,name:t.name,tactic:t.tactic,count:t.count,level:t.level,rules:[...t.rules]})),
+    tactics:TAC_ORDER.filter(s=>byTac.has(s)).map(s=>({slug:s,name:TAC_NAMES[s],count:byTac.get(s).count,techniques:byTac.get(s).techniques.size})),
+    techniqueCount:byTech.size, tacticCount:byTac.size };
+  return { hits:obj, timeline, entities:scorer.result(60), chains:Engine.buildAttackChains(chainItems),
+    byRule:[...byRule.values()].sort((a,b)=>sevn(b.level)-sevn(a.level)||b.count-a.count),
+    byComputer:[...byComp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([c,n])=>({computer:c,count:n})),
+    bySev, bySrc, attack,
+    summary:{ events:rows.length, scanned:rows.length, fullCount:meta.count||rows.length,
+      truncated:!!(meta.count&&meta.count>rows.length), withDetections:Object.keys(obj).length, total,
+      sigma:ruleStats.sigma||0, correlation:ruleStats.correlation||0, yara:ruleStats.yara||0, skipped:ruleStats.skipped||0,
+      suppressed:ruleStats.suppressed||0 } };
+}
+
+// Full detection scan of the active case's log -> stored detections.json. Returns the payload.
+async function runFullDetect(){
+  const rows=await eventRecords(DETECT_CAP);
+  if(!rows.length) return null;
+  const meta=readMeta()||{};
+  const sig=loadSigmaRules(), yar=loadYaraRules();
+  const suppressed=loadSuppressed();
+  const byIdx=new Map();
+  const add=(i,h)=>{ if(suppressed.has(h.ruleId)) return;   // skip allowlisted / disabled rules
+    let a=byIdx.get(i); if(!a){a=[];byIdx.set(i,a);} if(!a.some(x=>x.ruleId===h.ruleId&&x.source===h.source))a.push(h); };
+  for(const h of Engine.runHeuristics(rows)) add(h.idx,{ruleId:h.ruleId,title:h.title,level:h.level,source:"heuristic",why:h.why,tags:h.tags});
+  if(sig.rules.length||yar.rules.length){ const index=Engine.buildIndex(sig.rules);
+    const m=Engine.runRules(rows,sig.rules,yar.rules,{index}); for(const [i,hits] of m)for(const h of hits)add(i,h); }
+  // windowed Sigma aggregations (brute force / spray / roasting) — a correlation pass over the log
+  if(sig.aggRules&&sig.aggRules.length){ const mc=Engine.runCorrelations(rows,sig.aggRules); for(const [i,hits] of mc)for(const h of hits)add(i,h); }
+  const out=assembleDetections(byIdx, rows, meta,
+    { sigma:sig.rules.length, correlation:(sig.aggRules||[]).length, yara:yar.rules.length, skipped:sig.skipped, suppressed:suppressed.size });
+  fs.writeFileSync(DETS, JSON.stringify(out));
+  return out;
+}
+
 app.post("/api/detect", async (req,res)=>{
   try{
-    const rows=await eventRecords(DETECT_CAP);
-    if(!rows.length) return res.status(400).json({error:"no log loaded"});
-    const meta=readMeta()||{};
-    const truncated = meta.count && meta.count>rows.length;
-    const sig=loadSigmaRules(), yar=loadYaraRules();
-    const byIdx=new Map();
-    const add=(i,h)=>{ let a=byIdx.get(i); if(!a){a=[];byIdx.set(i,a);} if(!a.some(x=>x.ruleId===h.ruleId&&x.source===h.source))a.push(h); };
-    for(const h of Engine.runHeuristics(rows)) add(h.idx,{ruleId:h.ruleId,title:h.title,level:h.level,source:"heuristic",why:h.why,tags:h.tags});
-    if(sig.rules.length||yar.rules.length){ const index=Engine.buildIndex(sig.rules);
-      const m=Engine.runRules(rows,sig.rules,yar.rules,{index}); for(const [i,hits] of m)for(const h of hits)add(i,h); }
-    // windowed Sigma aggregations (brute force / spray / roasting) — a correlation pass over the log
-    if(sig.aggRules&&sig.aggRules.length){ const mc=Engine.runCorrelations(rows,sig.aggRules); for(const [i,hits] of mc)for(const h of hits)add(i,h); }
-    // build self-contained timeline + aggregations so the UI renders the full picture (not just the loaded grid window)
-    const SEV={critical:4,high:3,medium:2,low:1,informational:0,info:0};
-    const sevn=l=>{const n=SEV[String(l||"").toLowerCase()];return n==null?2:n;};
-    const obj={}; let total=0; const timeline=[]; const byRule=new Map(); const byComp=new Map();
-    const bySev={critical:0,high:0,medium:0,low:0,info:0}; const bySrc={sigma:0,yara:0,heuristic:0};
-    const byTech=new Map(), byTac=new Map();   // ATT&CK technique/tactic coverage
-    const scorer=Engine.makeEntityScorer();    // entity risk scoring
-    const chainItems=[];                        // one item per detected event -> attack-chain correlation
-    for(const [i,a] of byIdx){ obj[i]=a; total+=a.length; const r=rows[i];
-      byComp.set(r.computer||"(none)",(byComp.get(r.computer||"(none)")||0)+1);
-      let evLvl="info", evTags=[], evTitle=(a[0]&&(a[0].title||a[0].ruleId))||"";
-      for(const h of a){ const key=h.source+"|"+(h.ruleId||h.title); scorer.feed(h, r);
-        if(sevn(h.level)>sevn(evLvl)){ evLvl=h.level; evTitle=h.title||h.ruleId; }
-        if(h.tags&&h.tags.length) evTags=evTags.concat(h.tags);
-        let g=byRule.get(key); if(!g){g={ruleId:h.ruleId||h.title,title:h.title||h.ruleId,source:h.source,level:h.level,count:0};byRule.set(key,g);}
-        g.count++; if(sevn(h.level)>sevn(g.level))g.level=h.level;
-        bySev[String(h.level).toLowerCase()]=(bySev[String(h.level).toLowerCase()]||0)+1; bySrc[h.source]=(bySrc[h.source]||0)+1;
-        if(timeline.length<TIMELINE_CAP) timeline.push({idx:i,ts:r.ts,tms:r.tms,computer:r.computer,channel:r.channel||r.provider,eid:r.eventId,level:h.level,title:h.title||h.ruleId,source:h.source});
-        // ATT&CK: tally per technique (events, max severity, contributing rules) and per tactic
-        const pa=Engine.parseAttack(h.tags);
-        for(const t of pa.techniques){ let g2=byTech.get(t.id);
-          if(!g2){ g2={id:t.id,name:t.name,tactic:t.tactic,count:0,level:"info",rules:new Set()}; byTech.set(t.id,g2); }
-          g2.count++; if(sevn(h.level)>sevn(g2.level))g2.level=h.level; g2.rules.add(h.ruleId||h.title); }
-        for(const slug of new Set(pa.tactics)){ let g3=byTac.get(slug); if(!g3){ g3={tactic:slug,count:0,techniques:new Set()}; byTac.set(slug,g3);} g3.count++; }
-      }
-      chainItems.push({ idx:i, tms:r.tms, host:r.computer||"", user:(Engine.extractEntities(r.data,r.computer).users[0]||""),
-        level:evLvl, title:evTitle, source:(a[0]&&a[0].source)||"", ruleId:(a[0]&&a[0].ruleId)||"", tags:evTags });
-    }
-    timeline.sort((a,b)=>(b.tms||0)-(a.tms||0));
-    for(const t of byTech.values()){ if(t.tactic){ const g=byTac.get(t.tactic); if(g)g.techniques.add(t.id); } }
-    const TAC_NAMES=Engine.attack.tactics, TAC_ORDER=Engine.attack.tacticOrder;
-    const attack={
-      techniques:[...byTech.values()].sort((a,b)=>sevn(b.level)-sevn(a.level)||b.count-a.count)
-        .map(t=>({id:t.id,name:t.name,tactic:t.tactic,count:t.count,level:t.level,rules:[...t.rules]})),
-      tactics:TAC_ORDER.filter(s=>byTac.has(s)).map(s=>({slug:s,name:TAC_NAMES[s],count:byTac.get(s).count,techniques:byTac.get(s).techniques.size})),
-      techniqueCount:byTech.size, tacticCount:byTac.size };
-    const entities=scorer.result(60);
-    const chains=Engine.buildAttackChains(chainItems);
-    const out={ hits:obj,
-      timeline, entities, chains,
-      byRule:[...byRule.values()].sort((a,b)=>sevn(b.level)-sevn(a.level)||b.count-a.count),
-      byComputer:[...byComp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([c,n])=>({computer:c,count:n})),
-      bySev, bySrc, attack,
-      summary:{ events:rows.length, scanned:rows.length, fullCount:meta.count||rows.length, truncated:!!truncated,
-        withDetections:byIdx.size, total, sigma:sig.rules.length, correlation:(sig.aggRules||[]).length, yara:yar.rules.length, skipped:sig.skipped } };
-    fs.writeFileSync(DETS, JSON.stringify(out));
+    const out=await runFullDetect();
+    if(!out) return res.status(400).json({error:"no log loaded"});
     res.json({ ok:true, ...out });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
+// list / update suppressed rules. POST { ruleId, suppress } toggles one; { suppressed:[...] }
+// replaces the list. Adding a suppression re-filters the stored detections in place (fast);
+// removing one (un-suppress) needs a full re-scan to recover the rule's hits.
+app.get("/api/suppressions", (req,res)=> res.json({ ok:true, suppressed:[...loadSuppressed()] }));
+app.post("/api/suppressions", async (req,res)=>{
+  try{
+    const b=req.body||{}; const before=loadSuppressed(); const set=new Set(before);
+    if(Array.isArray(b.suppressed)){ set.clear(); for(const r of b.suppressed) if(r) set.add(String(r)); }
+    else if(b.ruleId!=null){ const rid=String(b.ruleId); if(b.suppress===false) set.delete(rid); else set.add(rid); }
+    else return res.status(400).json({error:"ruleId or suppressed[] required"});
+    saveSuppressed(set);
+    const removedAny=[...before].some(r=>!set.has(r));   // a rule was un-suppressed -> its hits must be rescanned
+    let out=null;
+    if(ACTIVE && fs.existsSync(EVENTS)){
+      if(removedAny){ out=await runFullDetect(); }
+      else if(fs.existsSync(DETS)){                       // additions only -> re-filter stored detections
+        let stored={}; try{ stored=JSON.parse(fs.readFileSync(DETS,"utf8")); }catch{}
+        const hits=stored.hits||{}; const rows=await eventRecords(DETECT_CAP); const meta=readMeta()||{};
+        const byIdx=new Map();
+        for(const k in hits){ const arr=(hits[k]||[]).filter(h=>!set.has(h.ruleId)); if(arr.length) byIdx.set(+k, arr); }
+        const st=(stored.summary||{});
+        out=assembleDetections(byIdx, rows, meta,
+          { sigma:st.sigma, correlation:st.correlation, yara:st.yara, skipped:st.skipped, suppressed:set.size });
+        fs.writeFileSync(DETS, JSON.stringify(out));       // mtime change -> search det index re-syncs on next query
+      }
+    }
+    res.json({ ok:true, suppressed:[...set], rescanned:removedAny, ...(out?{detections:out}:{}) });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 

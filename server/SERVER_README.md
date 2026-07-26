@@ -141,6 +141,8 @@ mapped to events tagged by source with the original line preserved as the messag
 | POST   | `/api/detect`         | scan stored log with stored rules         |
 | GET    | `/api/detections`     | stored detection results                  |
 | POST   | `/api/reset`          | remove current log + detections           |
+| GET    | `/api/suppressions`   | list suppressed rule IDs                  |
+| POST   | `/api/suppressions`   | `{ruleId,suppress}` toggle (or `{suppressed:[]}`) — re-filters detections |
 | GET    | `/api/cases`          | list cases (id, name, count, active)      |
 | POST   | `/api/cases`          | `{name}` → create + activate a new case   |
 | POST   | `/api/cases/:id/activate` | switch the active case                |
