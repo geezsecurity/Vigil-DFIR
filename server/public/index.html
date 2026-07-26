@@ -194,6 +194,14 @@
   #modal .mhead .t{font-family:var(--mono);font-size:12px;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #modal pre{margin:0;flex:1;overflow:auto;padding:16px;font-family:var(--mono);font-size:12.5px;line-height:1.6;
              white-space:pre;tab-size:2}
+  /* readable multi-line field panels (PowerShell ScriptBlockText, command lines) */
+  #modalScript{flex:0 0 auto;padding:0 16px;max-height:46vh;overflow:auto}
+  .mscript{margin:10px 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .mscript .mscript-h{font-family:var(--mono);font-size:10.5px;color:var(--txt-dim);background:var(--line-2);
+    padding:5px 10px;text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between;gap:8px}
+  .mscript .mscript-h .cp{cursor:pointer;text-transform:none;letter-spacing:0}
+  #modalScript pre{flex:none;margin:0;padding:10px 12px;max-height:300px;overflow:auto;font-family:var(--mono);
+    font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--txt);tab-size:2}
   .j-key{color:var(--blue)} .j-str{color:var(--accent)} .j-num{color:var(--amber)}
   .j-bool{color:var(--violet)} .j-null{color:var(--txt-faint)} .j-punc{color:var(--txt-dim)}
   ::-webkit-scrollbar{width:11px;height:11px}
@@ -627,6 +635,7 @@
       <div class="aibody" id="aiBody"></div>
     </div>
     <div id="modalDet"></div>
+    <div id="modalScript"></div>
     <pre id="modalBody"></pre>
   </div>
 </div>
@@ -4662,6 +4671,22 @@ function syntaxHighlight(json){
       else if(/true|false/.test(m))cls="j-bool"; else if(/null/.test(m))cls="j-null";
       return '<span class="'+cls+'">'+esc(m)+'</span>'; });
 }
+// Render multi-line / long text fields (PowerShell ScriptBlockText, command lines) as
+// readable vertical blocks — real line breaks and wrapping instead of one squished row.
+const READABLE_FIELDS=["ScriptBlockText","CommandLine","ParentCommandLine","Payload","Message","Details"];
+function readablePanels(d){
+  if(!d||typeof d!=="object")return "";
+  const seen=new Set(); let out="";
+  const emit=(k,v)=>{ if(seen.has(k))return; seen.add(k);
+    const lines=String(v).split(/\r\n|\r|\n/).length;
+    out+='<div class="mscript"><div class="mscript-h"><span>'+esc(k)+(lines>1?' · '+lines+' lines':'')+
+      '</span><span class="cp" data-copytext="'+esc(String(v))+'">copy</span></div><pre>'+esc(String(v))+'</pre></div>'; };
+  // ScriptBlockText first (the PowerShell case), then other known long/command fields, then any multi-line string
+  for(const key of READABLE_FIELDS){ for(const k in d){ if(k.toLowerCase()===key.toLowerCase()){ const v=d[k];
+    if(typeof v==="string" && v.trim() && (v.indexOf("\n")>=0 || key==="ScriptBlockText" || v.length>120)) emit(k,v); } } }
+  for(const k in d){ const v=d[k]; if(typeof v==="string" && v.indexOf("\n")>=0 && v.trim()) emit(k,v); }
+  return out;
+}
 function openDetail(r){
   modalJSON=JSON.stringify(reconstruct(r),null,2);
   $("modalTitle").textContent=r.provider+"  ·  ID "+r.eventId+"  ·  "+(r.ts||"");
@@ -4676,11 +4701,15 @@ function openDetail(r){
       (h.why?'<div class="mdet-why">'+esc(h.why)+'</div>':'')+'</div>'; }
     dh+='</div>'; }
   $("modalDet").innerHTML=dh;
+  $("modalScript").innerHTML=readablePanels(r.data);
   $("modalBody").innerHTML=syntaxHighlight(modalJSON);
   const box=$("aiBox"); box.classList.remove("show","err"); $("aiBody").innerHTML="";
   $("modal").style.display="block";
 }
-$("modal").addEventListener("click",e=>{ if(e.target.hasAttribute("data-close")) $("modal").style.display="none"; });
+$("modal").addEventListener("click",e=>{ if(e.target.hasAttribute("data-close")) $("modal").style.display="none";
+  const cp=e.target.closest&&e.target.closest(".cp[data-copytext]");
+  if(cp){ if(navigator.clipboard)navigator.clipboard.writeText(cp.getAttribute("data-copytext"));
+    const t=cp.textContent; cp.textContent="copied"; setTimeout(()=>cp.textContent=t,900); } });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") $("modal").style.display="none"; });
 $("maxBtn").onclick=()=>{ $("sheet").classList.toggle("max"); };
 $("copyBtn").onclick=()=>{ if(navigator.clipboard)navigator.clipboard.writeText(modalJSON);

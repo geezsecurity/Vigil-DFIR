@@ -175,9 +175,38 @@ function testRec(rule, rec){ if(!rule._fulltext){} rec._fulltext = Engine.buildF
   ok(testRec(rAllThem, rec(1,{CommandLine:"xxxx and yyyy"})), "all of them match");
   ok(!testRec(rAllThem, rec(1,{CommandLine:"xxxx only"})), "all of them miss");
 
-  // unsupported aggregation -> skipped (not compiled as a normal rule)
-  const rAgg = Engine.compileSigmaRule({ title:"count", detection:{ sel:{ "EventID":"4625" }, condition:"sel | count() by IpAddress > 5" } });
-  ok(rAgg.unsupported===true, "aggregation condition -> unsupported/skipped");
+  // pipe-aggregation now compiles to an aggRule (windowed correlation), not skipped
+  const cAgg = Engine.compileSigmaRule({ title:"bruteforce", level:"high",
+    detection:{ sel:{ "EventID":"4625" }, timeframe:"5m", condition:"sel | count() by IpAddress > 5" } });
+  ok(cAgg.aggRule && !cAgg.unsupported && !cAgg.rule, "pipe-aggregation compiles to aggRule");
+  eq(cAgg.aggRule.agg.func, "count", "agg func parsed");
+  eq(cAgg.aggRule.agg.groupBy, "IpAddress", "agg group-by parsed");
+  eq(cAgg.aggRule.agg.threshold, 5, "agg threshold parsed");
+  eq(cAgg.aggRule.timeframeMs, 300000, "timeframe 5m -> ms");
+
+  // brute force: 6 failed logons from one IP within window -> exactly one burst hit
+  const at=(s,d)=>rec(4625, d, { tms: Date.parse("2025-01-01T00:00:0"+s+"Z"), ts:"2025-01-01T00:00:0"+s+"Z" });
+  const bf=[0,1,2,3,4,5].map(s=>at(s,{ IpAddress:"45.61.187.9", TargetUserName:"bob" }));
+  const bfHits=Engine.runCorrelations(bf, [cAgg.aggRule]);
+  let bfCount=0; for(const [,h] of bfHits) bfCount+=h.length;
+  eq(bfCount, 1, "brute force fires exactly once per burst");
+  ok(bfHits.has(5), "brute force hit attached to the threshold-crossing event");
+
+  // 5 failures (== threshold, not >) -> no hit
+  const bf5=[0,1,2,3,4].map(s=>at(s,{ IpAddress:"10.0.0.9" }));
+  let bf5c=0; for(const [,h] of Engine.runCorrelations(bf5,[cAgg.aggRule])) bf5c+=h.length;
+  eq(bf5c, 0, "below/at threshold -> no hit");
+
+  // password spray: count(distinct user) by IP > 3
+  const cSpray = Engine.compileSigmaRule({ title:"spray",
+    detection:{ sel:{ "EventID":"4625" }, timeframe:"5m", condition:"sel | count(TargetUserName) by IpAddress > 3" } });
+  const spray=["ann","bob","cyd","dan"].map((u,s)=>at(s,{ IpAddress:"8.8.8.8", TargetUserName:u }));
+  let sprayC=0; for(const [,h] of Engine.runCorrelations(spray,[cSpray.aggRule])) sprayC+=h.length;
+  eq(sprayC, 1, "password spray (distinct-count) fires");
+  // same IP but only 2 distinct users repeated -> no spray
+  const noSpray=["ann","ann","bob","bob"].map((u,s)=>at(s,{ IpAddress:"9.9.9.9", TargetUserName:u }));
+  let nsC=0; for(const [,h] of Engine.runCorrelations(noSpray,[cSpray.aggRule])) nsC+=h.length;
+  eq(nsC, 0, "distinct-count respects distinctness");
 
   // eidHints derived from EventID selection
   ok(r1.eidHints && r1.eidHints.has(4688), "eidHints from category process_creation includes 4688");

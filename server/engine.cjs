@@ -250,6 +250,32 @@ function compileCondition(condStr, selNames){
   return { fn: orE() };
 }
 
+/* ----------------- SIGMA AGGREGATION / CORRELATION ------------------------------
+   Sigma v1 pipe-aggregations (e.g. `selection | count() by User > 5`) used to be
+   dropped as unsupported. We now compile them into an aggRule: a base matcher (the
+   search-expression left of the pipe) plus an aggregate spec, evaluated in a sliding
+   `timeframe` window grouped by a field. This lights up brute force / password spray /
+   Kerberoasting-style detections that a per-event engine can't express.               */
+function parseTimeframeMs(tf){
+  if(tf==null) return null;
+  const m=/^(\d+)\s*([smhd])$/i.exec(String(tf).trim()); if(!m) return null;
+  const mult={s:1000,m:60000,h:3600000,d:86400000}[m[2].toLowerCase()];
+  return (+m[1])*mult;
+}
+// Split "<search> | <func>(<field>?) [by <group>] <op> <n>" into a base expr + agg spec.
+function parseAggCondition(condStr){
+  const pipe=condStr.lastIndexOf("|");
+  if(pipe<0) return { error:"no pipe" };
+  const base=condStr.slice(0,pipe).trim();
+  const agg=condStr.slice(pipe+1).trim();
+  const m=/^(count|sum|min|max|avg)\s*\(\s*([A-Za-z0-9_.\-]*)\s*\)\s*(?:by\s+([A-Za-z0-9_.\-]+)\s*)?(>=|<=|==|=|>|<)\s*(\d+(?:\.\d+)?)$/i.exec(agg);
+  if(!m) return { error:"aggregation not recognized" };
+  return { base, agg:{ func:m[1].toLowerCase(), field:m[2]||"", groupBy:m[3]||"", op:m[4]==="="?"==":m[4], threshold:parseFloat(m[5]) } };
+}
+function aggCompare(v,op,t){
+  switch(op){ case ">":return v>t; case ">=":return v>=t; case "<":return v<t; case "<=":return v<=t;
+    case "==":return v===t; default:return false; }
+}
 function collectEidHints(det, selNames){
   const set=new Set();
   for (const n of selNames){
@@ -295,7 +321,23 @@ function compileSigmaRule(doc){
   const selNames=Object.keys(det).filter(k=>k!=="condition"&&k!=="timeframe");
   const compiled={};
   for (const n of selNames){ try{ compiled[n]=compileSelection(det[n]); }catch(e){ return {error:"selection '"+n+"': "+e.message}; } }
-  const conds=asArray(det.condition); const condFns=[];
+  const conds=asArray(det.condition);
+  const ls0=doc.logsource||{};
+  // Pipe-aggregation (count/sum/min/max/avg): compile as a windowed correlation rule.
+  if (conds.length===1 && /\|\s*(count|sum|min|max|avg)\s*\(/i.test(String(conds[0]))){
+    const parsed=parseAggCondition(String(conds[0]));
+    if(parsed.error) return { unsupported:true, reason:"aggregation: "+parsed.error };
+    const baseCC=compileCondition(parsed.base, selNames);
+    if(baseCC.unsupported) return { unsupported:true, reason:"aggregation base unsupported" };
+    return { aggRule:{
+      id:doc.id||"", title:doc.title||"(untitled sigma rule)", level:lc(doc.level||"medium"),
+      tags:doc.tags||[], description:doc.description||"", source:"sigma",
+      product:lc(ls0.product||""), service:lc(ls0.service||""), category:lc(ls0.category||""),
+      agg:parsed.agg, timeframeMs:parseTimeframeMs(det.timeframe),
+      baseTest(rec){ const ev=(name,r)=>compiled[name]?compiled[name].test(r):false; return baseCC.fn(rec,ev); }
+    }};
+  }
+  const condFns=[];
   for (const c of conds){ const cc=compileCondition(String(c),selNames); if(cc.unsupported) return {unsupported:true,reason:"aggregation/correlation"}; condFns.push(cc.fn); }
   const ls=doc.logsource||{};
   const cat=lc(ls.category||"");
@@ -781,15 +823,41 @@ const Engine={
   attack:{ tactics:ATTACK_TACTIC_NAMES, tacticOrder:ATTACK_TACTIC_ORDER, techniques:ATTACK_TECHNIQUES },
   extractEntities, makeEntityScorer, buildAttackChains, parseProcessArtifacts,
   parseSigmaDocs(yamlText, yamlLoadAll){
-    const docs=yamlLoadAll(yamlText)||[]; const rules=[], skipped=[], errors=[];
+    const docs=yamlLoadAll(yamlText)||[]; const rules=[], aggRules=[], skipped=[], errors=[];
     for (const doc of docs){
       if(!doc||typeof doc!=="object"||!doc.detection)continue;
       const r=compileSigmaRule(doc);
       if(r.rule)rules.push(r.rule);
+      else if(r.aggRule)aggRules.push(r.aggRule);
       else if(r.unsupported)skipped.push({title:doc.title||doc.id||"(rule)",reason:r.reason||"unsupported"});
       else errors.push({title:doc.title||doc.id||"(rule)",error:r.error||"unknown"});
     }
-    return { rules, skipped, errors };
+    return { rules, aggRules, skipped, errors };
+  },
+  /* Windowed Sigma aggregations. Collect the events each aggRule's base matches, group
+     by its `by` field, and slide a `timeframe` window; emit one hit per burst (when the
+     window aggregate first crosses the threshold) on the triggering event.              */
+  runCorrelations(rows, aggRules, opts){
+    opts=opts||{}; const hitsByIdx=new Map();
+    if(!aggRules||!aggRules.length) return hitsByIdx;
+    const push=(i,hit)=>{ if(!hitsByIdx.has(i))hitsByIdx.set(i,[]); hitsByIdx.get(i).push(hit); };
+    const indices=opts.indices||null; const N=indices?indices.length:rows.length; const getIdx=k=>indices?indices[k]:k;
+    const matchesPer=aggRules.map(()=>[]);
+    for(let k=0;k<N;k++){ const ix=getIdx(k); const rec=rows[ix];
+      if(!rec._fulltext)rec._fulltext=buildFulltext(rec);
+      for(let a=0;a<aggRules.length;a++){ const ar=aggRules[a];
+        let ok=false; try{ ok=ar.baseTest(rec); }catch(_){}
+        if(!ok)continue;
+        const g=ar.agg.groupBy ? String(resolveField(rec,ar.agg.groupBy)??"") : "";
+        let fv=null; if(ar.agg.field){ const rv=resolveField(rec,ar.agg.field); fv=(rv==null?"":String(rv)); }
+        matchesPer[a].push({ idx:ix, tms:Number.isFinite(rec.tms)?rec.tms:null, g, fv });
+      }
+    }
+    for(let a=0;a<aggRules.length;a++){ const ar=aggRules[a], all=matchesPer[a]; if(!all.length)continue;
+      const groups=new Map(); for(const m of all){ let arr=groups.get(m.g); if(!arr){arr=[];groups.set(m.g,arr);} arr.push(m); }
+      for(const [g,arr] of groups) windowAgg(ar, g, arr, push);
+    }
+    return hitsByIdx;
   },
   /* Build a reusable scan index. Strategy: extract selective literals (rare across the
      ruleset), build an Aho-Corasick automaton over them, and map each literal -> rules.
@@ -848,6 +916,43 @@ const Engine={
   }
 };
 function sigHit(r){ return {ruleId:r.id||r.title,title:r.title,level:r.level,source:"sigma",why:r.description||"",tags:r.tags}; }
+/* Slide a timeframe window over one group's (time-sorted) matches, emitting a hit each
+   time the aggregate first satisfies the comparison (dedup per contiguous burst). */
+function windowAgg(ar, g, arr, push){
+  const { func, field, op, threshold }=ar.agg;
+  const tf=ar.timeframeMs;
+  arr.sort((x,y)=>(x.tms==null?Infinity:x.tms)-(y.tms==null?Infinity:y.tms));
+  let left=0, firing=false;
+  const distinct=new Map(); let dsize=0, sum=0, num=0;   // incremental window state
+  const addVal=(v)=>{ if(field){ const key=v.fv==null?"":v.fv; distinct.set(key,(distinct.get(key)||0)+1); if(distinct.get(key)===1)dsize++;
+      const n=Number(v.fv); if(!Number.isNaN(n)){ sum+=n; num++; } } };
+  const remVal=(v)=>{ if(field){ const key=v.fv==null?"":v.fv; const c=(distinct.get(key)||0)-1; if(c<=0){distinct.delete(key);dsize--;} else distinct.set(key,c);
+      const n=Number(v.fv); if(!Number.isNaN(n)){ sum-=n; num--; } } };
+  const value=(l,r)=>{
+    switch(func){
+      case "count": return field?dsize:(r-l+1);              // count() = events; count(field) = distinct values
+      case "sum": return sum;
+      case "avg": return num?sum/num:0;
+      case "min": case "max": { let acc=null; for(let i=l;i<=r;i++){ const n=Number(arr[i].fv); if(Number.isNaN(n))continue;
+          acc=acc==null?n:(func==="min"?Math.min(acc,n):Math.max(acc,n)); } return acc==null?0:acc; }
+      default: return 0;
+    }
+  };
+  for(let r=0;r<arr.length;r++){
+    addVal(arr[r]);
+    if(tf!=null){ while(left<r && arr[r].tms!=null && arr[left].tms!=null && (arr[r].tms-arr[left].tms)>tf){ remVal(arr[left]); left++; } }
+    const v=value(left,r);
+    if(aggCompare(v,op,threshold)){ if(!firing){ firing=true; push(arr[r].idx, aggHit(ar, g, v)); } }
+    else firing=false;
+  }
+}
+function aggHit(ar, g, v){
+  const a=ar.agg;
+  const what=a.func+"("+(a.field||"")+")"+(a.groupBy?(" by "+a.groupBy+(g!==""?("="+g):"")):"");
+  const win=ar.timeframeMs?(" within "+Math.round(ar.timeframeMs/1000)+"s"):"";
+  const why=(ar.description?ar.description+" — ":"")+what+" = "+(Number.isInteger(v)?v:v.toFixed(2))+" "+a.op+" "+a.threshold+win;
+  return { ruleId:ar.id||ar.title, title:ar.title, level:ar.level, source:"sigma", why, tags:ar.tags, agg:true };
+}
 const EMPTY=[];
 function someLit(lits,set){ for(let i=0;i<lits.length;i++) if(set.has(lits[i]))return true; return false; }
 /* ---- Aho-Corasick multi-substring matcher (returns set of matched patterns) ---- */

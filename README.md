@@ -17,6 +17,9 @@ running server-side so multi-hundred-MB logs never choke your tab.
 - **3 layers:** behavioral heuristics (always on) + a Sigma subset (with Windows field
   mapping, modifiers, and boolean conditions) + a YARA-lite string/regex/hex engine.
 - **Aho-Corasick prescreen** so thousands of Sigma rules scan huge logs quickly.
+- **Sigma pipe-aggregations** (`count` / distinct `count(field)` / `sum` / `min` / `max` /
+  `avg`, `by <field>`, sliding `timeframe`) run as a windowed correlation pass — brute
+  force, password spray, user guessing, Kerberoasting-style thresholds.
 - Heuristics for log clearing, brute force / password spray, encoded PowerShell, new
   services, external RDP, account & privileged-group changes, Kerberoasting, **DCSync,
   LSASS dumping, PsExec, overpass-the-hash, and malicious scheduled tasks**.

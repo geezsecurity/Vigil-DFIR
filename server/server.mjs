@@ -196,10 +196,10 @@ async function streamParseToFile(srcPath, name, ws, onMeta, srcLabel, cat){
 
 /* ---------- rules persistence ---------- */
 function listRuleFiles(dir){ try { return fs.readdirSync(dir).map(f=>path.join(dir,f)); } catch { return []; } }
-function loadSigmaRules(){ const rules=[]; let skipped=0, errors=0;
+function loadSigmaRules(){ const rules=[], aggRules=[]; let skipped=0, errors=0;
   for(const f of listRuleFiles(SIGMA_DIR)){ try{ const res=Engine.parseSigmaDocs(fs.readFileSync(f,"utf8"), yaml.loadAll);
-    rules.push(...res.rules); skipped+=res.skipped.length; errors+=res.errors.length; }catch{ errors++; } }
-  return { rules, skipped, errors }; }
+    rules.push(...res.rules); if(res.aggRules)aggRules.push(...res.aggRules); skipped+=res.skipped.length; errors+=res.errors.length; }catch{ errors++; } }
+  return { rules, aggRules, skipped, errors }; }
 function loadYaraRules(){ let txt=""; for(const f of listRuleFiles(YARA_DIR)){ try{ txt+="\n"+fs.readFileSync(f,"utf8"); }catch{} }
   if(!txt.trim())return { rules:[], errors:0 };
   try{ const r=Engine.compileYaraRules(txt); return { rules:r.rules, errors:r.errors.length }; }catch{ return { rules:[], errors:1 }; } }
@@ -542,6 +542,8 @@ app.post("/api/detect", async (req,res)=>{
     for(const h of Engine.runHeuristics(rows)) add(h.idx,{ruleId:h.ruleId,title:h.title,level:h.level,source:"heuristic",why:h.why,tags:h.tags});
     if(sig.rules.length||yar.rules.length){ const index=Engine.buildIndex(sig.rules);
       const m=Engine.runRules(rows,sig.rules,yar.rules,{index}); for(const [i,hits] of m)for(const h of hits)add(i,h); }
+    // windowed Sigma aggregations (brute force / spray / roasting) — a correlation pass over the log
+    if(sig.aggRules&&sig.aggRules.length){ const mc=Engine.runCorrelations(rows,sig.aggRules); for(const [i,hits] of mc)for(const h of hits)add(i,h); }
     // build self-contained timeline + aggregations so the UI renders the full picture (not just the loaded grid window)
     const SEV={critical:4,high:3,medium:2,low:1,informational:0,info:0};
     const sevn=l=>{const n=SEV[String(l||"").toLowerCase()];return n==null?2:n;};
@@ -586,7 +588,7 @@ app.post("/api/detect", async (req,res)=>{
       byComputer:[...byComp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([c,n])=>({computer:c,count:n})),
       bySev, bySrc, attack,
       summary:{ events:rows.length, scanned:rows.length, fullCount:meta.count||rows.length, truncated:!!truncated,
-        withDetections:byIdx.size, total, sigma:sig.rules.length, yara:yar.rules.length, skipped:sig.skipped } };
+        withDetections:byIdx.size, total, sigma:sig.rules.length, correlation:(sig.aggRules||[]).length, yara:yar.rules.length, skipped:sig.skipped } };
     fs.writeFileSync(DETS, JSON.stringify(out));
     res.json({ ok:true, ...out });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }

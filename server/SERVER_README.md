@@ -176,8 +176,10 @@ large server (very large windows will stress the browser).
   the full log. True on-demand row virtualization across 10M+ rows with server-side search is
   a possible future step.
 - YARA support is a lightweight subset (strings/regex/hex/counts), not full libyara.
-- Count/correlation Sigma rules are skipped (per-event engine); heuristics cover the
-  common aggregations (brute force, spray, Kerberoasting).
+- Sigma **pipe-aggregations** are supported — `count() / count(field) / sum / min / max /
+  avg`, optional `by <field>`, with a sliding `timeframe` window (brute force, password
+  spray, user guessing, Kerberoasting…). `near` and Sigma v2 reference-based correlation
+  rules are not yet evaluated.
 - Sigma field mapping uses a synonym map, not the full Sigma pipeline config.
 
 ## Offline / static fallback
