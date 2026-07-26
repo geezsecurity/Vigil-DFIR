@@ -1,6 +1,7 @@
 # EVTX Triage — server image
-# Pure-JS deps (winevtx has no native build), so a slim Alpine base is enough.
-FROM node:20-alpine
+# Pure-JS deps (winevtx has no native build) + Node's built-in node:sqlite (needs
+# Node >=22.5), so a slim Alpine base is still enough — no native toolchain required.
+FROM node:22-alpine
 
 WORKDIR /app
 

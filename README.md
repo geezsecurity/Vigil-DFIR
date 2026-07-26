@@ -37,8 +37,15 @@ running server-side so multi-hundred-MB logs never choke your tab.
 
 **Performance & UX**
 - Constant-memory streaming `.evtx` parser (handles multi-GB files).
-- Server-side in-memory case index → sub-50 ms search/filter/sort across the whole log.
+- **Disk-backed SQLite event index (FTS5)** → search / filter / sort + true `LIMIT/OFFSET`
+  pagination that scales past RAM to 10M+ events (built on Node's built-in `node:sqlite`,
+  so there's still no native build step). Free-text is token/prefix via FTS5, with an exact
+  substring fallback for IPs / paths / hash fragments.
 - Fetch-on-scroll grid: the browser holds only the visible rows.
+- **Multi-case workspace** — each case is its own directory + index; create, switch, and
+  delete cases from the toolbar without losing the others.
+- **Chain of custody** — every ingested file is SHA-256 hashed on upload and recorded with
+  its size, type and ingest time.
 - Dedicated Firewall and VPN sections; multi-file case management; flagging; session
   persistence across refreshes.
 
@@ -53,6 +60,8 @@ npm install
 npm start
 # → EVTX Triage server on http://localhost:8742
 ```
+> Requires **Node.js 22.5+** (the case index uses the built-in `node:sqlite`). The server
+> checks your version on startup and tells you if it's too old.
 
 ### Docker
 ```bash
@@ -101,17 +110,24 @@ npm test
 ```
 server/
   server.mjs        Express backend: streaming .evtx parser, /api/* endpoints,
-                    in-memory case index, server-side detection + analytics
+                    multi-case management, server-side detection + analytics
+  store.mjs         SQLite layer (node:sqlite): case catalog, chain of custody,
+                    per-case event index + FTS5 search
   engine.cjs        Detection engine (heuristics + Sigma + YARA + ATT&CK + correlation)
   public/index.html Single-file UI ("Vigil") — engine is inlined for offline use
   test/             engine regression harness  (npm test)
-  Dockerfile        Alpine image (pure-JS, no native build)
+  Dockerfile        Alpine image (node:22, pure-JS, no native build)
   docker-compose.yml
+
+data/
+  catalog.db        cases list + SHA-256 chain of custody
+  cases/<id>/       events.jsonl (bodies) · events.idx · index.db (SQLite+FTS) · meta/dets/flags
 ```
 
-Key endpoints: `/api/upload`, `/api/search`, `/api/bodies` (fetch-on-scroll),
-`/api/detect`, `/api/detections`, `/api/dashboard`, `/api/evidence`, `/api/entity`,
-`/api/timeline`, `/api/cat` (Firewall/VPN).
+Key endpoints: `/api/upload`, `/api/search` (SQLite/FTS, paginated), `/api/bodies`
+(fetch-on-scroll), `/api/detect`, `/api/detections`, `/api/dashboard`, `/api/evidence`,
+`/api/entity`, `/api/timeline`, `/api/cat` (Firewall/VPN), and case management
+(`/api/cases`, `POST /api/cases`, `POST /api/cases/:id/activate`, `DELETE /api/cases/:id`).
 
 ---
 

@@ -14,12 +14,12 @@ Log** wipes it and starts fresh (your loaded rules are kept).
   browser refresh re-loads them instead of starting empty.
 
 ## Requirements
-- Node.js **14.18+** (18 or 20 LTS recommended). The server checks your version on
-  startup and tells you if it's too old. It uses only built-in modules for networking
-  (no global `fetch` needed), so it runs on older Node too.
+- Node.js **22.5+** — the case index uses Node's built-in `node:sqlite` (SQLite + FTS5),
+  which is still pure-JS (no native build / toolchain). The server checks your version on
+  startup and tells you if it's too old.
 
-If `npm start` prints `Cannot find package 'fs'` or similar, your Node is older than
-14.18 — install a current one (e.g. `nvm install 20`) and retry.
+If `npm start` prints that Node is too old, install a current one (e.g. `nvm install 22`)
+and retry.
 
 ## Install & run
 ```bash
@@ -141,6 +141,15 @@ mapped to events tagged by source with the original line preserved as the messag
 | POST   | `/api/detect`         | scan stored log with stored rules         |
 | GET    | `/api/detections`     | stored detection results                  |
 | POST   | `/api/reset`          | remove current log + detections           |
+| GET    | `/api/cases`          | list cases (id, name, count, active)      |
+| POST   | `/api/cases`          | `{name}` → create + activate a new case   |
+| POST   | `/api/cases/:id/activate` | switch the active case                |
+| DELETE | `/api/cases/:id`      | delete a case (logs + index + custody)    |
+
+`/api/search` accepts `{ q, eid, provider, src, excluded[], det, ruleId, technique,
+flagged, timeRange, sort, limit, offset }` and runs against the per-case SQLite index
+(FTS5 free-text + `LIMIT/OFFSET` pagination). `/api/meta` now also returns `activeCase`,
+`cases[]` and the current case's `custody[]` (SHA-256 per ingested file).
 
 ## Security notes (read before exposing it)
 - There is **no authentication**. Anyone who can reach the port can upload logs, read

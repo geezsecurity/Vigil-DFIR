@@ -523,6 +523,9 @@
     </div>
   </div>
   <button class="btn" id="exportBtn" disabled>Export view</button>
+  <select id="caseSel" class="btn" style="display:none;max-width:240px" title="Switch active case"></select>
+  <button class="btn" id="newCaseBtn" style="display:none" title="Start a new empty case (keeps existing cases)">+ New case</button>
+  <button class="btn" id="delCaseBtn" style="display:none" title="Delete the active case (removes its logs permanently)">🗑</button>
   <button class="btn" id="removeLogBtn" style="display:none">Remove Current Log</button>
   <button class="btn" id="sampleBtn">Load sample</button>
   <button class="btn primary" id="openBtn">Open file</button>
@@ -5552,6 +5555,7 @@ async function serverInit(){
   if(!j||!j.ok)return;
   SERVER=true; document.title="Vigil (server)";
   window.__browseCap=j.browseCap||200000;
+  renderCaseSwitcher(j.cases||[], j.activeCase||null);
   if(j.rules) $("rulesCounts").textContent=(j.rules.sigmaFiles||0)+" sigma · "+(j.rules.yaraFiles||0)+" yara files (server)";
   if(j.meta && j.meta.count){                  // a stored session exists -> restore it on refresh
     defaultRulesTried=true;                     // server already has rules; don't auto-pull on client
@@ -5567,6 +5571,45 @@ async function serverInit(){
     }
   }
 }
+
+/* ---- multi-case switcher (server mode) ---- */
+function renderCaseSwitcher(cases, active){
+  const sel=$("caseSel"), nb=$("newCaseBtn"), db=$("delCaseBtn");
+  if(!SERVER){ [sel,nb,db].forEach(e=>e&&(e.style.display="none")); return; }
+  nb.style.display="inline-block";
+  if(cases && cases.length){
+    sel.style.display="inline-block"; db.style.display="inline-block";
+    sel.innerHTML=cases.map(c=>{
+      const n=(c.count||0).toLocaleString();
+      const label=(c.name||c.id)+" · "+n+" ev";
+      return '<option value="'+esc(c.id)+'"'+(c.id===active?" selected":"")+'>'+esc(label)+'</option>';
+    }).join("");
+  } else { sel.style.display="none"; db.style.display="none"; }
+}
+$("caseSel").onchange=async(e)=>{
+  const id=e.target.value; if(!id)return;
+  try{ showProgress(true); $("progLbl").textContent="switching case…";
+    await api("/api/cases/"+encodeURIComponent(id)+"/activate",{method:"POST"});
+    location.reload();                              // full reload -> clean state for the new case
+  }catch(err){ showProgress(false); alert("Couldn't switch case: "+(err.message||err)); }
+};
+$("newCaseBtn").onclick=async()=>{
+  const name=prompt("Name for the new case:", "Case "+new Date().toISOString().slice(0,16).replace("T"," "));
+  if(name===null)return;
+  try{ showProgress(true); $("progLbl").textContent="creating case…";
+    await api("/api/cases",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
+    location.reload();
+  }catch(err){ showProgress(false); alert("Couldn't create case: "+(err.message||err)); }
+};
+$("delCaseBtn").onclick=async()=>{
+  const sel=$("caseSel"); const id=sel.value; const label=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:id;
+  if(!id)return;
+  if(!confirm("Delete case \""+label+"\"?\nThis permanently removes its logs, detections and index. Saved rules are kept."))return;
+  try{ showProgress(true); $("progLbl").textContent="deleting case…";
+    await api("/api/cases/"+encodeURIComponent(id),{method:"DELETE"});
+    location.reload();
+  }catch(err){ showProgress(false); alert("Couldn't delete case: "+(err.message||err)); }
+};
 
 /* ---- toolbar toggles ---- */
 $("detBtn").onclick=()=>{ showDetOnly=!showDetOnly; $("detBtn").classList.toggle("on",showDetOnly);

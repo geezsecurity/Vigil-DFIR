@@ -14,6 +14,8 @@ import https from "node:https";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import crypto from "node:crypto";
+import { Catalog, CaseIndex } from "./store.mjs";
 
 const require = createRequire(import.meta.url);
 const Engine = require("./engine.cjs");
@@ -40,15 +42,62 @@ function httpGetText(url, redirects = 5){
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA = process.env.EVTX_DATA || path.join(__dirname, "data");
-const RULES_DIR = path.join(DATA, "rules");
+const RULES_DIR = path.join(DATA, "rules");        // rules are shared across all cases
 const SIGMA_DIR = path.join(RULES_DIR, "sigma");
 const YARA_DIR = path.join(RULES_DIR, "yara");
-const EVENTS = path.join(DATA, "events.jsonl");
-const META = path.join(DATA, "meta.json");
-const DETS = path.join(DATA, "detections.json");
-const FLAGS = path.join(DATA, "flags.json");
 const TMP = path.join(DATA, "tmp");
-for (const d of [DATA, RULES_DIR, SIGMA_DIR, YARA_DIR, TMP]) fs.mkdirSync(d, { recursive: true });
+const CASES_DIR = path.join(DATA, "cases");         // one sub-dir per case
+for (const d of [DATA, RULES_DIR, SIGMA_DIR, YARA_DIR, TMP, CASES_DIR]) fs.mkdirSync(d, { recursive: true });
+
+/* ---------- multi-case state ------------------------------------------------------
+   Each case is a directory under data/cases/<caseId>/ holding events.jsonl (bodies),
+   events.idx (byte offsets), meta.json, detections.json, flags.json and index.db (the
+   SQLite event index + FTS). One case is "active" at a time; the per-case file paths
+   below are re-pointed by setActiveCase().  catalog.db lists cases + chain of custody. */
+const catalog = new Catalog(DATA);
+let ACTIVE = null, CASE_DIR = null;
+let EVENTS, META, DETS, FLAGS, EVENTS_IDX, CASE_DB;
+let _caseIndex = null;   // CaseIndex instance bound to ACTIVE
+let _evCache = null, _idxCache = null;   // per-case caches (declared here so setActiveCase can clear them)
+function caseDir(id){ return path.join(CASES_DIR, id); }
+function newCaseId(){ return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function setActiveCase(id){
+  if (_caseIndex){ _caseIndex.close(); _caseIndex = null; }
+  _evCache = null; _idxCache = null;                 // drop caches keyed to the old case's files
+  ACTIVE = id || null;
+  if (ACTIVE){
+    CASE_DIR = caseDir(ACTIVE); fs.mkdirSync(CASE_DIR, { recursive: true });
+    EVENTS = path.join(CASE_DIR, "events.jsonl"); META = path.join(CASE_DIR, "meta.json");
+    DETS = path.join(CASE_DIR, "detections.json"); FLAGS = path.join(CASE_DIR, "flags.json");
+    EVENTS_IDX = path.join(CASE_DIR, "events.idx"); CASE_DB = path.join(CASE_DIR, "index.db");
+    catalog.setActive(ACTIVE);
+  } else {
+    CASE_DIR = EVENTS = META = DETS = FLAGS = EVENTS_IDX = CASE_DB = null;
+  }
+}
+// Move a pre-multicase case (files sitting in data/ root) into data/cases/<id>/ and register it.
+function migrateLegacy(){
+  const legacy = path.join(DATA, "events.jsonl");
+  if (!fs.existsSync(legacy)) return;
+  let meta = {}; try{ meta = JSON.parse(fs.readFileSync(path.join(DATA, "meta.json"), "utf8")); }catch{}
+  const id = meta.caseId || newCaseId();
+  const dir = caseDir(id); fs.mkdirSync(dir, { recursive: true });
+  for (const f of ["events.jsonl", "meta.json", "detections.json", "flags.json", "events.idx"]){
+    const s = path.join(DATA, f); if (fs.existsSync(s)) { try{ fs.renameSync(s, path.join(dir, f)); }catch{} }
+  }
+  catalog.upsertCase({ id, name: (meta.files && meta.files[0]) || ("Case " + new Date().toISOString().slice(0,10)),
+    createdAt: meta.uploadedAt || new Date().toISOString(), count: meta.count||0, tsMin: meta.tsMin, tsMax: meta.tsMax });
+  for (const s of (meta.sources||[])) catalog.addCustody(id, { name: s.name, sha256: null, bytes: 0, type: s.type, count: s.count });
+  if (!catalog.getActive()) catalog.setActive(id);
+}
+migrateLegacy();
+// pick up the last-active case (verify its dir still exists), else newest, else none
+(function initActive(){
+  let id = catalog.getActive();
+  if (id && !fs.existsSync(caseDir(id))) id = null;
+  if (!id){ const cs = catalog.listCases().filter(c => fs.existsSync(caseDir(c.id))); id = cs[0] ? cs[0].id : null; }
+  setActiveCase(id);
+})();
 
 const PORT = process.env.PORT || 8742;
 const SIGMA_REPO = "SigmaHQ/sigma", SIGMA_BRANCH = "master";
@@ -179,7 +228,7 @@ async function eventRecords(cap){
    multi-GB logs fall back to streaming rather than exhausting RAM. Big servers can
    raise EVTX_RECORD_CACHE.                                                          */
 const RECORD_CACHE_MAX = parseInt(process.env.EVTX_RECORD_CACHE || "3000000", 10);
-let _evCache=null;   // { mtimeMs, size, evs:[{i, ev}] }
+// _evCache declared in the multi-case state block above  // { mtimeMs, size, evs:[{i, ev}] }
 async function getParsedEvents(){
   if(!fs.existsSync(EVENTS)) return null;
   const st=fs.statSync(EVENTS);
@@ -205,8 +254,7 @@ async function forEachEvent(fn){
    line start as consecutive little-endian Float64 (safe past 2^53 bytes). This lets
    any event be fetched by index with a single seek+read instead of scanning the file,
    powering fetch-on-scroll and server-side search without loading bodies into RAM.   */
-const EVENTS_IDX = path.join(DATA, "events.idx");
-let _idxCache = null;   // { mtimeMs, size, offsets: Float64Array }
+// _idxCache declared in the multi-case state block above  // { mtimeMs, size, offsets: Float64Array }
 function idxFresh(){
   try{ const a=fs.statSync(EVENTS), b=fs.statSync(EVENTS_IDX);
     return b.mtimeMs>=a.mtimeMs && b.size>0 && b.size%8===0; }catch{ return false; }
@@ -263,41 +311,110 @@ async function readBodies(ids){
   return out;
 }
 
-/* ---------- in-memory case index -------------------------------------------------
-   Parse the whole log ONCE into a compact per-event record so /api/search (and other
-   analytics) filter in RAM instead of re-streaming the 258MB file every call. Strings
-   are interned (provider/computer/source repeat heavily). Rebuilt when events.jsonl
-   changes; keyed by mtime+size like the byte-offset index.                            */
-let _caseIdx=null;   // { mtimeMs, size, recs:[{i,prov,eid,comp,src,tms,cat,ft}], dict:{prov,comp,src} }
-const FT_CAP=1200;   // cap fulltext per event so RAM stays bounded on very large cases
-async function buildCaseIndex(){
-  const provA=[], provM=new Map(), compA=[], compM=new Map(), srcA=[], srcM=new Map();
-  const intern=(v,arr,map)=>{ v=v||""; let id=map.get(v); if(id===undefined){ id=arr.length; arr.push(v); map.set(v,id);} return id; };
-  const recs=[];
-  await forEachEvent((ev, i)=>{
-    const sys=(ev.Event&&ev.Event.System)||ev.System||{};
-    const prov=getProvider(ev), eidv=String(getEventId(sys)||""), comp=getComputer(ev), srcv=ev._src||ev._source||"";
-    const ts=getTime(ev), tms=ts?Date.parse(ts):NaN, cat=ev._cat||"";
-    const data=getData(ev);
-    let ft=prov+" "+eidv+" "+comp+" "+srcv;
-    for(const k in data){ const v=data[k]; ft+=" "+(v==null?"":(typeof v==="object"?JSON.stringify(v):v)); if(ft.length>FT_CAP)break; }
-    recs.push({ i, prov:intern(prov,provA,provM), eid:eidv, comp:intern(comp,compA,compM), src:intern(srcv,srcA,srcM),
-      tms:Number.isNaN(tms)?null:tms, ts, cat, ft:ft.slice(0,FT_CAP).toLowerCase() });
-  });
-  return { recs, dict:{ prov:provA, comp:compA, src:srcA } };
+/* ---------- SQLite-backed case index (Phase 1) -----------------------------------
+   The per-event metadata + a bounded fulltext blob live in cases/<id>/index.db (see
+   store.mjs), so /api/search filters + paginates on disk instead of holding the whole
+   log in RAM. The index is built incrementally: events.jsonl is append-only, so only
+   the tail (new bytes) is parsed on refresh; a shrink/rewrite triggers a full rebuild. */
+const IDX_BATCH = 20000;   // events per insert transaction (bounds memory on huge cases)
+const SEVN_IDX = {critical:4,high:3,medium:2,low:1,informational:0,info:0};
+const sevNumIdx = l => { const n = SEVN_IDX[String(l||"").toLowerCase()]; return n==null?2:n; };
+
+// Build the lowercased fulltext blob for one event (mirrors the old in-memory `ft`).
+function bodyText(ev){
+  const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+  const prov=getProvider(ev), eidv=String(getEventId(sys)||""), comp=getComputer(ev), srcv=ev._src||ev._source||"";
+  const data=getData(ev);
+  let ft=prov+" "+eidv+" "+comp+" "+srcv;
+  for(const k in data){ const v=data[k]; ft+=" "+(v==null?"":(typeof v==="object"?JSON.stringify(v):v)); if(ft.length>2000)break; }
+  return ft.toLowerCase();
 }
-async function getCaseIndex(){
-  if(!fs.existsSync(EVENTS)) return null;
-  const st=fs.statSync(EVENTS);
-  if(_caseIdx && _caseIdx.mtimeMs===st.mtimeMs && _caseIdx.size===st.size) return _caseIdx;
-  const built=await buildCaseIndex();
-  _caseIdx={ mtimeMs:st.mtimeMs, size:st.size, ...built };
-  return _caseIdx;
+// Bring index.db up to date with the current events.jsonl (incremental tail-index).
+async function refreshIndex(ci){
+  const size = fs.existsSync(EVENTS) ? fs.statSync(EVENTS).size : 0;
+  const have = ci.indexedBytes();
+  if(size === have) return;
+  if(size < have) ci.resetEvents();                 // file shrank/rewritten -> rebuild
+  const startByte = ci.indexedBytes();
+  let idx = ci.indexedCount(), bytepos = startByte, batch = [];
+  const flush = ()=>{ if(batch.length){ ci.ingest(batch, bytepos, idx); batch=[]; } };
+  const rl = readline.createInterface({ input: fs.createReadStream(EVENTS, { encoding:"utf8", start:startByte }), crlfDelay: Infinity });
+  for await (const ln of rl){
+    bytepos += Buffer.byteLength(ln, "utf8") + 1;    // events.jsonl is strictly \n-terminated
+    if(!ln){ idx++; continue; }
+    let ev; try{ ev = JSON.parse(ln); }catch{ idx++; continue; }
+    const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+    const ts=getTime(ev), tms=ts?Date.parse(ts):NaN;
+    batch.push({ idx, ts, tms:Number.isNaN(tms)?null:tms, provider:getProvider(ev), eid:String(getEventId(sys)||""),
+      computer:getComputer(ev), channel:getChannel(ev), src:ev._src||ev._source||"", cat:ev._cat||"", body:bodyText(ev) });
+    idx++;
+    if(batch.length >= IDX_BATCH) flush();
+  }
+  flush();
+}
+// Sync detections.json + flags.json into the index (so their filters are one SQL query).
+function syncDetFlags(ci){
+  let detSig=""; try{ const st=fs.statSync(DETS); detSig=st.mtimeMs+":"+st.size; }catch{}
+  if(detSig !== ci.detSig()){
+    let hits={}; if(detSig){ try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{} }
+    ci.syncDetections(hits, sevNumIdx, Engine.techniqueFromTag, detSig);
+  }
+  let flagSig=""; try{ const st=fs.statSync(FLAGS); flagSig=st.mtimeMs+":"+st.size; }catch{}
+  if(flagSig !== ci.flagSig()){
+    let arr=[]; if(flagSig){ try{ arr=JSON.parse(fs.readFileSync(FLAGS,"utf8")); }catch{} }
+    ci.syncFlags(arr, flagSig);
+  }
+}
+// Get the active case's index, built/synced up to the current on-disk state.
+async function caseIndex(){
+  if(!ACTIVE || !fs.existsSync(EVENTS)) return null;
+  if(!_caseIndex) _caseIndex = new CaseIndex(CASE_DB);
+  await refreshIndex(_caseIndex);
+  syncDetFlags(_caseIndex);
+  return _caseIndex;
+}
+// Stream a file through SHA-256 (chain of custody) without buffering it in RAM.
+function sha256File(p){
+  return new Promise((resolve,reject)=>{ const h=crypto.createHash("sha256");
+    const s=fs.createReadStream(p); s.on("error",reject); s.on("data",c=>h.update(c)); s.on("end",()=>resolve(h.digest("hex"))); });
 }
 
 /* =====================  ROUTES  ===================== */
 app.get("/api/meta", (req,res)=> res.json({ ok:true, meta:readMeta(), rules:ruleCounts(),
-  hasDetections: fs.existsSync(DETS), browseCap: BROWSE_CAP }));
+  hasDetections: ACTIVE && fs.existsSync(DETS), browseCap: BROWSE_CAP,
+  activeCase: ACTIVE, cases: listCasesView(), custody: ACTIVE ? catalog.getCustody(ACTIVE) : [] }));
+
+/* ---------- multi-case management ---------- */
+function listCasesView(){
+  return catalog.listCases().filter(c=>fs.existsSync(caseDir(c.id)))
+    .map(c=>({ id:c.id, name:c.name, count:c.count, tsMin:c.tsMin, tsMax:c.tsMax,
+      createdAt:c.createdAt, active:c.id===ACTIVE }));
+}
+app.get("/api/cases", (req,res)=> res.json({ ok:true, active:ACTIVE, cases:listCasesView() }));
+// create a new empty case and make it active (the upload that follows populates it)
+app.post("/api/cases", (req,res)=>{
+  const name=(req.body&&String(req.body.name||"").trim())||("Case "+new Date().toISOString().slice(0,16).replace("T"," "));
+  const id=newCaseId(); setActiveCase(id);
+  catalog.upsertCase({ id, name, createdAt:new Date().toISOString(), count:0, tsMin:null, tsMax:null });
+  res.json({ ok:true, active:ACTIVE, cases:listCasesView() });
+});
+// switch the active case
+app.post("/api/cases/:id/activate", (req,res)=>{
+  const id=req.params.id;
+  if(!catalog.getCase(id) || !fs.existsSync(caseDir(id))) return res.status(404).json({error:"no such case"});
+  setActiveCase(id);
+  res.json({ ok:true, active:ACTIVE, meta:readMeta(), cases:listCasesView() });
+});
+// delete a case (files + catalog entry). If it was active, fall back to the newest remaining case.
+app.delete("/api/cases/:id", (req,res)=>{
+  const id=req.params.id;
+  if(!catalog.getCase(id)) return res.status(404).json({error:"no such case"});
+  if(id===ACTIVE && _caseIndex){ _caseIndex.close(); _caseIndex=null; }
+  try{ fs.rmSync(caseDir(id), { recursive:true, force:true }); }catch{}
+  catalog.deleteCase(id);
+  if(id===ACTIVE){ const rest=catalog.listCases().filter(c=>fs.existsSync(caseDir(c.id))); setActiveCase(rest[0]?rest[0].id:null); }
+  res.json({ ok:true, active:ACTIVE, cases:listCasesView() });
+});
 
 // classify a filename into a friendly log-type label
 function logType(name){ const n=String(name||"").toLowerCase();
@@ -316,27 +433,35 @@ function logType(name){ const n=String(name||"").toLowerCase();
 app.post("/api/upload", upload.array("file"), async (req,res)=>{
   try{
     if(!req.files||!req.files.length) return res.status(400).json({error:"no file"});
-    const append = String(req.query.mode||"")==="append" && fs.existsSync(EVENTS);
     const cat = (req.query.cat==="firewall"||req.query.cat==="vpn") ? req.query.cat : null;
+    const append = String(req.query.mode||"")==="append" && ACTIVE && fs.existsSync(EVENTS);
+    if(!append){                                   // a plain upload starts a NEW case (old cases are kept)
+      setActiveCase(newCaseId());
+      catalog.clearCustody(ACTIVE);
+    }
     const prev = append ? (readMeta()||{}) : {};
-    const ws = fs.createWriteStream(EVENTS, append ? { flags:"a" } : {}); // append -> add to case
+    const ws = fs.createWriteStream(EVENTS, append ? { flags:"a" } : {});
     let total = append ? (prev.count||0) : 0;
     let tsMin = append ? (prev.tsMin||null) : null, tsMax = append ? (prev.tsMax||null) : null;
     const sources = append ? (prev.sources||[]).slice() : [];
     for(const f of req.files){
       const label=f.originalname; let c=0, sMin=null, sMax=null;
+      let sha=null, bytes=0; try{ bytes=fs.statSync(f.path).size; sha=await sha256File(f.path); }catch{} // chain of custody
       const onMeta=(ts)=>{ total++; c++;
         if(ts){ if(tsMin===null||ts<tsMin)tsMin=ts; if(tsMax===null||ts>tsMax)tsMax=ts;
           if(sMin===null||ts<sMin)sMin=ts; if(sMax===null||ts>sMax)sMax=ts; } };
       try{ await streamParseToFile(f.path, f.originalname, ws, onMeta, label, cat); }
       finally{ try{ fs.unlinkSync(f.path); }catch{} }
-      sources.push({ name:label, type:(cat==="firewall"?"Firewall":cat==="vpn"?"VPN":logType(label)), count:c, tsMin:sMin, tsMax:sMax, cat:cat||undefined });
+      const type=(cat==="firewall"?"Firewall":cat==="vpn"?"VPN":logType(label));
+      sources.push({ name:label, type, count:c, tsMin:sMin, tsMax:sMax, cat:cat||undefined, sha256:sha, bytes });
+      catalog.addCustody(ACTIVE, { name:label, sha256:sha, bytes, type, count:c, ingestedAt:new Date().toISOString() });
     }
     await new Promise(r=>ws.end(r));
-    const caseId = append ? (prev.caseId || ("c"+Date.now().toString(36)+Math.random().toString(36).slice(2,8)))
-                          : ("c"+Date.now().toString(36)+Math.random().toString(36).slice(2,8));
-    const meta={ caseId, count:total, tsMin, tsMax, sources, files:sources.map(s=>s.name), uploadedAt:new Date().toISOString() };
+    const meta={ caseId:ACTIVE, count:total, tsMin, tsMax, sources, files:sources.map(s=>s.name), uploadedAt:new Date().toISOString() };
     fs.writeFileSync(META, JSON.stringify(meta));
+    const existing=catalog.getCase(ACTIVE);
+    catalog.upsertCase({ id:ACTIVE, name:(existing&&existing.name)||(sources[0]&&sources[0].name)||("Case "+new Date().toISOString().slice(0,10)),
+      createdAt:(existing&&existing.createdAt)||meta.uploadedAt, count:total, tsMin, tsMax });
     try{ fs.unlinkSync(DETS); }catch{}            // detections must be recomputed for the new case contents
     if(!append){ try{ fs.unlinkSync(FLAGS); }catch{} }  // keep flags when appending (indices stay valid)
     res.json({ ok:true, meta, appended:append });
@@ -530,55 +655,26 @@ app.post("/api/bodies", async (req,res)=>{
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
+// Server-side search over the SQLite index: structured filters + FTS free-text, sorted.
+// Returns the ordered ids (+ detection level) for the whole match set, OR a page of them
+// when {limit, offset} are given (true virtualization for 10M+ event cases).
 app.post("/api/search", async (req,res)=>{
   try{
-    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, total:0, ids:[], levels:[] });
+    if(!ACTIVE || !fs.existsSync(EVENTS)) return res.json({ ok:true, total:0, ids:[], levels:[] });
     const b=req.body||{};
-    const q=String(b.q||"").toLowerCase();
-    const eid=(b.eid!=null&&b.eid!=="")?String(b.eid):"";
-    const src=b.src||null, provider=b.provider||null;   // provider = include-only
-    const excluded=new Set(Array.isArray(b.excluded)?b.excluded:[]);
-    const detOnly=!!b.det, ruleId=b.ruleId||"", flaggedOnly=!!b.flagged, technique=b.technique||"";
-    const tr=(b.timeRange&&isFinite(b.timeRange.from)&&isFinite(b.timeRange.to))?b.timeRange:null;
+    const ci=await caseIndex();
+    if(!ci) return res.json({ ok:true, total:0, ids:[], levels:[] });
+    const f={
+      q: b.q||"",
+      eid: (b.eid!=null&&b.eid!=="")?String(b.eid):"",
+      provider: b.provider!=null ? b.provider : null,    // include-only
+      src: b.src!=null ? b.src : null,
+      excluded: Array.isArray(b.excluded) ? b.excluded : [],
+      detOnly: !!b.det, ruleId: b.ruleId||"", technique: b.technique||"", flagged: !!b.flagged,
+      timeRange: (b.timeRange&&isFinite(b.timeRange.from)&&isFinite(b.timeRange.to)) ? b.timeRange : null };
     const sortKey=(b.sort&&b.sort.key)||"ts", sortDir=(b.sort&&b.sort.dir===-1)?-1:1;
-
-    let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{ hits={}; }
-    let flags=null; if(flaggedOnly){ try{ flags=new Set(JSON.parse(fs.readFileSync(FLAGS,"utf8"))); }catch{ flags=new Set(); } }
-
-    const idx=await getCaseIndex();
-    const D=idx.dict; const provId=D.prov, compId=D.comp, srcId=D.src;
-    // resolve include/exclude filters to interned ids once (avoids per-row string compares)
-    const provWant = provider!=null ? provId.indexOf(provider) : -2;   // -2 = no include filter
-    const provExcl = excluded.size ? new Set([...excluded].map(p=>provId.indexOf(p)).filter(x=>x>=0)) : null;
-    const srcWant  = src!=null ? srcId.indexOf(src) : -2;
-    const matched=[];
-    for(const r of idx.recs){ const i=r.i;
-      if(r.cat==="firewall"||r.cat==="vpn") continue;
-      if(provWant!==-2){ if(r.prov!==provWant) continue; } else if(provExcl && provExcl.has(r.prov)) continue;
-      if(eid && r.eid!==eid) continue;
-      if(srcWant!==-2 && r.src!==srcWant) continue;
-      if(flaggedOnly && !flags.has(i)) continue;
-      const hit=hits[i];
-      if(detOnly && !(hit&&hit.length)) continue;
-      if(ruleId && !(hit&&hit.some(h=>h.ruleId===ruleId))) continue;
-      if(technique && !(hit&&hit.some(h=>(h.tags||[]).some(tg=>Engine.techniqueFromTag(tg)===technique)))) continue;
-      if(tr){ if(!(r.tms>=tr.from&&r.tms<tr.to)) continue; }
-      if(q && r.ft.indexOf(q)===-1) continue;
-      let lvl=-1; if(hit&&hit.length){ for(const h of hit){ const n=sevNumS(h.level); if(n>lvl)lvl=n; } }
-      let sv; switch(sortKey){
-        case "eventId": sv=Number(r.eid); if(Number.isNaN(sv))sv=r.eid; break;
-        case "provider": sv=provId[r.prov]; break;
-        case "computer": sv=compId[r.comp]; break;
-        case "det": sv=lvl; break;
-        default: sv=r.ts||""; }
-      matched.push({ i, sv, lvl });
-    }
-    matched.sort((a,c)=>{ let x=a.sv,y=c.sv; const nx=+x,ny=+y;
-      if(x!==""&&y!==""&&!Number.isNaN(nx)&&!Number.isNaN(ny)) return (nx-ny)*sortDir;
-      x=x==null?"":String(x); y=y==null?"":String(y); return x<y?-sortDir:x>y?sortDir:0; });
-    const ids=new Array(matched.length), levels=new Array(matched.length);
-    for(let k=0;k<matched.length;k++){ ids[k]=matched[k].i; levels[k]=matched[k].lvl; }
-    res.json({ ok:true, total:ids.length, ids, levels });
+    const r=ci.search(f, { sortKey, sortDir, limit: parseInt(b.limit||0,10)||0, offset: parseInt(b.offset||0,10)||0 });
+    res.json({ ok:true, total:r.total, ids:r.ids, levels:r.levels });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
@@ -833,9 +929,14 @@ app.post("/api/flags", (req,res)=>{
   res.json({ ok:true, count:a.length });
 });
 
-// "Remove Current Log" — wipe the log + detections + flags, keep saved rules
+// "Remove Current Log" — wipe the active case's log + detections + flags + index, keep saved rules
 app.post("/api/reset", (req,res)=>{
-  for(const f of [EVENTS,META,DETS,FLAGS]){ try{ fs.unlinkSync(f); }catch{} }
+  if(!ACTIVE) return res.json({ ok:true });
+  if(_caseIndex){ _caseIndex.close(); _caseIndex=null; }
+  for(const f of [EVENTS,META,DETS,FLAGS,EVENTS_IDX,CASE_DB]){ try{ fs.unlinkSync(f); }catch{} }
+  try{ fs.unlinkSync(CASE_DB+"-wal"); }catch{} try{ fs.unlinkSync(CASE_DB+"-shm"); }catch{}
+  catalog.clearCustody(ACTIVE);
+  catalog.upsertCase({ id:ACTIVE, name:(catalog.getCase(ACTIVE)||{}).name, createdAt:(catalog.getCase(ACTIVE)||{}).createdAt, count:0, tsMin:null, tsMax:null });
   res.json({ ok:true });
 });
 
@@ -848,10 +949,10 @@ app.get("/", (req,res)=>{ res.set("Cache-Control","no-store"); res.sendFile(path
 // only bind a port when run directly (node server.mjs); importing it (tests) won't listen
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const major = parseInt(process.versions.node.split(".")[0], 10);
-  if (major < 14) {
-    console.error(`\n  Node ${process.versions.node} is too old. EVTX Triage needs Node 14.18+ (18 LTS recommended).`);
-    console.error("  Install a newer Node, e.g.:  nvm install 20   (or)   https://nodejs.org/\n");
+  const [maj, min] = process.versions.node.split(".").map(n=>parseInt(n,10));
+  if (maj < 22 || (maj === 22 && min < 5)) {   // node:sqlite (the case index) needs Node >=22.5
+    console.error(`\n  Node ${process.versions.node} is too old. EVTX Triage needs Node 22.5+ (uses the built-in node:sqlite).`);
+    console.error("  Install a newer Node, e.g.:  nvm install 22   (or)   https://nodejs.org/\n");
     process.exit(1);
   }
   app.listen(PORT, ()=> console.log(`EVTX Triage server on http://localhost:${PORT}  (data: ${DATA})`));
