@@ -160,14 +160,45 @@ function safeName(s){ return String(s||"rule").replace(/[^a-zA-Z0-9._-]/g,"_").s
 /* ---------- meta / events ---------- */
 const DETECT_CAP = parseInt(process.env.EVTX_DETECT_CAP || "2000000", 10); // max events scanned in one pass
 function readMeta(){ try{ return JSON.parse(fs.readFileSync(META,"utf8")); }catch{ return null; } }
-// stream events.jsonl into engine records, capped, never loading the whole file as one string
+// engine records for detection — reuses the shared parsed-event cache when available
 async function eventRecords(cap){
-  const recs=[]; if(!fs.existsSync(EVENTS))return recs;
+  if(!fs.existsSync(EVENTS))return [];
+  const evs=await getParsedEvents();
+  if(evs){ const recs=evs.map(e=>recordOf(e.ev)); return (cap && recs.length>cap)?recs.slice(0,cap):recs; }
+  const recs=[];   // fallback: log too big to cache -> stream
   const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
   for await (const ln of rl){ if(!ln.trim())continue;
     try{ recs.push(recordOf(JSON.parse(ln))); }catch{}
     if(cap && recs.length>=cap){ rl.close(); break; } }
   return recs; }
+
+/* ---------- shared parsed-event cache -------------------------------------------
+   The log is JSON-parsed ONCE into memory and reused by every analytics endpoint
+   (evidence / timeline / dashboard) instead of each one re-streaming + re-parsing
+   the whole file — the parse is the expensive part. Keyed by mtime+size; bounded so
+   multi-GB logs fall back to streaming rather than exhausting RAM. Big servers can
+   raise EVTX_RECORD_CACHE.                                                          */
+const RECORD_CACHE_MAX = parseInt(process.env.EVTX_RECORD_CACHE || "3000000", 10);
+let _evCache=null;   // { mtimeMs, size, evs:[{i, ev}] }
+async function getParsedEvents(){
+  if(!fs.existsSync(EVENTS)) return null;
+  const st=fs.statSync(EVENTS);
+  if(_evCache && _evCache.mtimeMs===st.mtimeMs && _evCache.size===st.size) return _evCache.evs;
+  const evs=[]; let i=-1, over=false;
+  const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
+  for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+    evs.push({ i, ev });
+    if(evs.length>RECORD_CACHE_MAX){ over=true; rl.close(); break; } }
+  if(over){ _evCache=null; return null; }          // too large to hold — callers stream instead
+  _evCache={ mtimeMs:st.mtimeMs, size:st.size, evs };
+  return evs; }
+// iterate every (parsed event, global index) — from the RAM cache when possible, else streaming
+async function forEachEvent(fn){
+  const evs=await getParsedEvents();
+  if(evs){ for(const e of evs) fn(e.ev, e.i); return; }
+  const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
+  let i=-1;
+  for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; } fn(ev, i); } }
 
 /* ---------- byte-offset index (random access into events.jsonl) ----------------
    events.jsonl is one JSON event per line. events.idx holds the byte offset of each
@@ -243,9 +274,7 @@ async function buildCaseIndex(){
   const provA=[], provM=new Map(), compA=[], compM=new Map(), srcA=[], srcM=new Map();
   const intern=(v,arr,map)=>{ v=v||""; let id=map.get(v); if(id===undefined){ id=arr.length; arr.push(v); map.set(v,id);} return id; };
   const recs=[];
-  const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
-  let i=-1;
-  for await(const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+  await forEachEvent((ev, i)=>{
     const sys=(ev.Event&&ev.Event.System)||ev.System||{};
     const prov=getProvider(ev), eidv=String(getEventId(sys)||""), comp=getComputer(ev), srcv=ev._src||ev._source||"";
     const ts=getTime(ev), tms=ts?Date.parse(ts):NaN, cat=ev._cat||"";
@@ -254,7 +283,7 @@ async function buildCaseIndex(){
     for(const k in data){ const v=data[k]; ft+=" "+(v==null?"":(typeof v==="object"?JSON.stringify(v):v)); if(ft.length>FT_CAP)break; }
     recs.push({ i, prov:intern(prov,provA,provM), eid:eidv, comp:intern(comp,compA,compM), src:intern(srcv,srcA,srcM),
       tms:Number.isNaN(tms)?null:tms, ts, cat, ft:ft.slice(0,FT_CAP).toLowerCase() });
-  }
+  });
   return { recs, dict:{ prov:provA, comp:compA, src:srcA } };
 }
 async function getCaseIndex(){
@@ -444,14 +473,14 @@ app.get("/api/detections", (req,res)=>{
 });
 
 // full-log dashboard aggregates (so big windowed cases still get an overview of the WHOLE log)
-app.get("/api/dashboard", (req,res)=>{
+app.get("/api/dashboard", async (req,res)=>{
+  try{
   if(!fs.existsSync(EVENTS)) return res.json({ ok:true, total:0 });
   const provs=new Map(), comps=new Map(), users=new Map(), eids=new Map(), hours=new Map();
   let total=0, fail=0, susp=0, tMin=null, tMax=null, fwCount=0, vpnCount=0;
   const bump=(m,k)=>{ if(k!=null&&k!=="") m.set(k,(m.get(k)||0)+1); };
   const SUSP=new Set(["4625","4720","4728","4732","4756","4724","1102","104","7045","4698","4697","1116","1117"]);
-  const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
-  rl.on("line", l=>{ if(!l) return; let ev; try{ ev=JSON.parse(l); }catch{ return; }
+  await forEachEvent((ev)=>{
     if(ev._cat==="firewall"){ fwCount++; return; }               // those have their own sections
     if(ev._cat==="vpn"){ vpnCount++; return; }
     total++;
@@ -465,12 +494,11 @@ app.get("/api/dashboard", (req,res)=>{
     if(ts){ if(tMin===null||ts<tMin)tMin=ts; if(tMax===null||ts>tMax)tMax=ts;
       const h=ts.slice(0,13); bump(hours,h); }   // hourly histogram (bounded)
   });
-  rl.on("close", ()=>{
-    const top=(m,n)=>[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,n);
-    res.json({ ok:true, total, fail, susp, tsMin:tMin, tsMax:tMax, fwCount, vpnCount,
-      providers: top(provs,15), computers: top(comps,12), users: top(users,12),
-      eids: top(eids,30), hours: [...hours.entries()].sort() });
-  });
+  const top=(m,n)=>[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,n);
+  res.json({ ok:true, total, fail, susp, tsMin:tMin, tsMax:tMax, fwCount, vpnCount,
+    providers: top(provs,15), computers: top(comps,12), users: top(users,12),
+    eids: top(eids,30), hours: [...hours.entries()].sort() });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
 
@@ -566,13 +594,11 @@ app.post("/api/cat", async (req,res)=>{
     if(!fs.existsSync(EVENTS)) return res.json({ ok:true, total:0, rows:[] });
     const cat=(req.body&&req.body.cat)==="vpn"?"vpn":"firewall";
     const CAP=20000; const out=[]; let total=0;
-    const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
-    let i=-1;
-    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
-      if(ev._cat!==cat) continue; total++;
+    await forEachEvent((ev, i)=>{
+      if(ev._cat!==cat) return; total++;
       if(out.length<CAP){ const data=getData(ev);
         out.push({ i, ts:getTime(ev), src:ev._src||ev._source||"", msg:(data&&data.Message)||svSummary(data) }); }
-    }
+    });
     res.json({ ok:true, total, rows:out });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
@@ -608,9 +634,7 @@ app.get("/api/evidence", async (req,res)=>{
       for(const sv of pa.services)push(E.services,{i,name:sv.name,path:sv.path,ts,via:"cmdline"}); };
     const sessById=new Map();                 // TargetLogonId -> session (paired 4624 logon / 4634-4647 logoff)
     const SESS_TYPES=new Set(["2","3","7","9","10","11"]);   // interactive/network/unlock/newcred/remote/cached
-    const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
-    let i=-1;
-    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+    await forEachEvent((ev, i)=>{
       const sys=(ev.Event&&ev.Event.System)||ev.System||{};
       const provider=getProvider(ev), computer=getComputer(ev), ts=getTime(ev), d=getData(ev)||{};
       const id=String(getEventId(sys)||"");
@@ -685,7 +709,7 @@ app.get("/api/evidence", async (req,res)=>{
         case "4616": { const u=U("SubjectUserName"); if(u && !/\$$/.test(u) && !/^(LOCAL SERVICE|SYSTEM|NETWORK SERVICE)$/i.test(u))
           push(E.timeChange,{i,by:u,prev:U("PreviousTime"),nw:U("NewTime"),ts}); break; }
       }
-    }
+    });
     // finalize logon sessions (newest first), compute duration
     E.sessions=[...sessById.values()].map(s=>({ i:s.i, user:s.user, lt:s.lt, ip:s.ip, ws:s.ws, onTs:s.onTs,
       onTms:s.onTms, offTms:s.offTms, durationMs:(s.offTms&&s.onTms&&s.offTms>=s.onTms)?(s.offTms-s.onTms):null }))
@@ -771,9 +795,7 @@ app.get("/api/timeline", async (req,res)=>{
     const NB=200, haveSpan=(t0!=null&&t1!=null&&t1>t0), span=haveSpan?(t1-t0):1;
     const buckets=Array.from({length:NB},()=>({n:0,d:0,lvl:-1}));
     const events=[]; const CAP=12000, COLLECT=80000; let notableTotal=0, detTotal=0;
-    const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
-    let i=-1;
-    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+    await forEachEvent((ev, i)=>{
       const sys=(ev.Event&&ev.Event.System)||ev.System||{};
       const ts=getTime(ev), tms=ts?Date.parse(ts):NaN, cat=ev._cat||"", eid=String(getEventId(sys)||"");
       let b=-1; if(haveSpan && !Number.isNaN(tms)){ b=Math.floor((tms-t0)/span*NB); if(b>=NB)b=NB-1; if(b<0)b=0; buckets[b].n++; }
@@ -790,7 +812,7 @@ app.get("/api/timeline", async (req,res)=>{
         if(b>=0){ buckets[b].d++; const n=sevNumS(level); if(n>buckets[b].lvl)buckets[b].lvl=n; }
         if(events.length<COLLECT) events.push({ idx:i, tms:Number.isNaN(tms)?null:tms, ts, kind, level, eid, host:getComputer(ev), title:String(title||"").slice(0,180) });
       }
-    }
+    });
     // 1) select the highest-signal events (severity, then rare non-detection artifacts, then recency)
     events.sort((a,c)=> (sevNumS(c.level)-sevNumS(a.level)) || ((c.kind!=="detection")-(a.kind!=="detection")) || ((c.tms||0)-(a.tms||0)) );
     const truncated=events.length>CAP;
