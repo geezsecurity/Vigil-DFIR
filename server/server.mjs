@@ -1362,7 +1362,7 @@ app.post("/api/ai", async (req,res)=>{
     if(!prompt) return res.status(400).json({error:"no prompt"});
     const { provider, model, key }=aiConfig();
     if(!key) return res.json({ ok:false, error:"No API key set for "+(AI_PROVIDER_LABEL[provider]||provider)+". Pick a model and add its key in ⚙ Settings." });
-    const maxTokens=Math.min(4000, parseInt(b.maxTokens,10)||900);
+    const maxTokens=Math.min(8000, parseInt(b.maxTokens,10)||900);
     let text="";
     if(provider==="anthropic") text=await callAnthropic(model,key,system,prompt,maxTokens);
     else if(provider==="openai") text=await callOpenAI(model,key,system,prompt,maxTokens);

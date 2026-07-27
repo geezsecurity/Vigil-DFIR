@@ -7925,7 +7925,8 @@ const AI_BASE="You are a lead DFIR/SOC analyst. Write a detailed but skimmable a
   "Use markdown '## ' headers for the sections listed below, in that exact order, with 2-5 bullets under each. "+
   "Be specific and CITE the data (exact counts, and real host / user / IP / file names). "+
   "NEVER invent values — if a section has no supporting evidence, say so explicitly and state what data would answer it. Use **bold** for key terms. No filler.";
-function aiStruct(sections){ return AI_BASE+"\n\nSections (use these exact '## ' headers, in order):\n"+sections.map(s=>"## "+s).join("\n"); }
+function aiStruct(sections){ return AI_BASE+"\n\nSections (use these exact '## ' headers, in order):\n"+sections.map(s=>"## "+s).join("\n")+
+  "\n\nCover EVERY section through to the last one — keep each to 2-4 tight bullets so the whole briefing fits. Never stop mid-section or mid-sentence."; }
 async function aiProcText(){
   let j=procTreeData; if(!j){ try{ j=await (await api("/api/proctree")).json(); }catch(_){} }
   if(!j||!j.roots||!j.roots.length) return "No Sysmon process trees (EID 1) present in this case.";
@@ -7988,9 +7989,10 @@ async function aiSectionContext(mode){
     system:"You are a senior DFIR analyst. Write a clear, substantive incident summary (a solid paragraph, ~6-9 sentences, plain prose, no headers) for a case report: what happened, scope (named hosts/users), key evidence, and an assessment with severity. Only use the data provided; never invent values.",
     prompt:"Case data:\n\n"+(await gatherCaseContext())+"\n\nWrite the incident summary." };
   // dash / events / timeline / fw / vpn / default → full case-wide DFIR briefing
-  return { title:"Case DFIR briefing", canInsert:true, maxTokens:2600,
-    system:aiStruct(["Summary","What happened (narrative / timeline)","Initial access & execution","Persistence, credential access & lateral movement","Scope (affected hosts & accounts)","Impact & exfiltration risk","Key indicators","Assessment (severity & confidence)","Recommended next actions (prioritised)","DFIR questions to answer"]),
-    prompt:"Triage data for the whole case:\n\n"+(await gatherCaseContext())+"\n\nWrite the full DFIR triage briefing." };
+  return { title:"Case DFIR briefing", canInsert:true, maxTokens:5000,
+    system:aiStruct(["Summary","What happened (narrative / timeline)","Initial access & execution","Persistence, credential access & lateral movement","Scope (affected hosts & accounts)","Impact & exfiltration risk","Key indicators","Assessment (severity & confidence)","Recommended next actions (prioritised)","DFIR questions to answer"])+
+      " IMPORTANT: keep each section to 2-4 tight bullets so the WHOLE briefing (all 10 sections) fits — do not run out of space before the final sections. Never stop mid-section.",
+    prompt:"Triage data for the whole case:\n\n"+(await gatherCaseContext())+"\n\nWrite the full DFIR triage briefing — cover every section through to \"DFIR questions to answer\"." };
 }
 /* --- panel --- */
 function aiSetTitle(t){ $("aiPanelTitle").textContent="✦ "+t; }
