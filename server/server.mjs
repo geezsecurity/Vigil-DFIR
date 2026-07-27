@@ -1339,6 +1339,15 @@ app.post("/api/enrich", async (req,res)=>{
     res.json({ ok:true, value, type, results, errors, cached:false, at:Date.now() });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
+// All still-valid cached verdicts — lets the client restore results after a page refresh
+// without re-querying the providers.
+app.get("/api/enrich/cache", (req,res)=>{
+  try{ const c=loadEnrichCache(); const now=Date.now(); const entries=[];
+    for(const k in c){ const e=c[k]; if(!e || !(now-e.at < ENRICH_TTL_MS)) continue;
+      const sep=k.indexOf(":"); entries.push({ type:k.slice(0,sep), value:k.slice(sep+1), at:e.at, results:e.results }); }
+    res.json({ ok:true, entries });
+  }catch(err){ res.status(500).json({error:String(err.message||err)}); }
+});
 
 // flagged events (★) — persisted so they survive a refresh; indices align with the stored log
 app.get("/api/flags", (req,res)=>{ let a=[]; try{ a=JSON.parse(fs.readFileSync(FLAGS,"utf8")); }catch{} res.json({ ok:true, indices:a }); });

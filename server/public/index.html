@@ -6803,7 +6803,8 @@ async function renderWatchlist(){
   if(wlSettings===null){ try{ wlSettings=await (await api("/api/settings")).json(); }catch{ wlSettings={}; } }
   if(wlMode==="observed"){
     if(wlObserved===null){ w.innerHTML=wlModeBar()+ptNote("Extracting the IPs, hashes and domains present in this case…");
-      try{ wlObserved=await (await api("/api/observed")).json(); }catch(err){ w.innerHTML=wlModeBar()+'<div class="dash-note err">'+esc(err.message||err)+'</div>'; return; } }
+      try{ wlObserved=await (await api("/api/observed")).json(); }catch(err){ w.innerHTML=wlModeBar()+'<div class="dash-note err">'+esc(err.message||err)+'</div>'; return; }
+      await prefillEnrichFromCache(); }        // restore verdicts checked earlier (survives refresh, 24h cache)
     paintObserved();
   } else {
     if(wlIocs===null){ w.innerHTML=wlModeBar()+ptNote("Loading watchlist…");
@@ -6877,6 +6878,12 @@ function paintObserved(){
     : '<div class="hint" style="padding:16px">No '+wlObsType+'s observed in this case'+(wlObsType==="ip"&&wlObsExtOnly?' (external only — toggle it off to include internal IPs).':'.')+'</div>';
   const note = checkable&&!canCheck ? '<p class="hint" style="margin:0 0 10px">Add a VirusTotal / AbuseIPDB key in <b>⚙ Settings</b> to check these against threat intel.</p>' : '';
   w.innerHTML=wlModeBar()+bar+note+'<div class="wlpanel" style="padding:0;overflow:hidden">'+table+'</div>';
+}
+async function prefillEnrichFromCache(){
+  try{ const j=await (await api("/api/enrich/cache")).json();
+    for(const e of (j.entries||[])){ const key=String(e.value).toLowerCase();
+      if(!enrichMap[key]) enrichMap[key]={ ok:true, value:e.value, type:e.type, results:e.results, cached:true, at:e.at }; }
+  }catch(_){}
 }
 async function enrichFetch(value,type){ return await (await api("/api/enrich",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ value, type }) })).json(); }
 async function checkObserved(value,type){
