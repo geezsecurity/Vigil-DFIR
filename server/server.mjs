@@ -850,8 +850,17 @@ app.get("/api/evidence", async (req,res)=>{
       netConns:new Map(), dns:new Map(), shareAccess:[], logCleared:[], defender:[],
       kerberos:[], kerbRoast:0, ntlm:[], auditChanges:[], wmiPersist:[], rdpSessions:[], bits:[],
       lsassAccess:[], remoteThread:[], rawAccess:[], procTamper:[], appBlocks:[], timeChange:[],
+      namedPipes:[], fileDeletes:[],
       ips:new Map(), users:new Set(), hosts:new Set(), hashes:new Set(), domains:new Set(), sessions:[] };
     const push=(a,x)=>{ if(a.length<AR)a.push(x); };
+    // decode a 4625 sub-status into an attack-relevant failure reason
+    const failReason=code=>{ const s=String(code||"").toLowerCase(); return {
+      "0xc000006a":"bad password", "0xc0000064":"no such user", "0xc0000072":"account disabled",
+      "0xc0000234":"account locked out", "0xc0000070":"workstation restriction", "0xc000006f":"outside logon hours",
+      "0xc0000193":"account expired", "0xc0000071":"password expired", "0xc0000133":"clock skew",
+      "0xc0000224":"must change password", "0xc000015b":"logon-type not granted" }[s] || (s?s:"unknown"); };
+    // named pipes used by PsExec-style remote-exec and C2 frameworks (Cobalt Strike, Meterpreter…)
+    const SUSP_PIPE=/psexesvc|paexec|remcom|csexec|cobalt|meterpreter|msagent_|status_[0-9a-f]{2}|postex_|MSSE-|_stager|\\atsvc\b/i;
     const isSys=p=>/sysmon/i.test(p||"");
     // process-based LSASS credential dumping (procdump/comsvcs/rundll32 MiniDump, nanodump, dumpert, mimikatz, etc.)
     const LSASS_DUMP=/procdump(64)?(\.exe)?[^\n]*\blsass|comsvcs(\.dll)?[^\n]*minidump|minidump[^\n]*lsass|lsass[^\n]*minidump|rundll32[^\n]*comsvcs|nanodump|dumpert|handlekatz|createdump[^\n]*lsass|sqldumper[^\n]*lsass|sekurlsa|invoke-mimikatz|out-minidump|lsass\.dmp|-ma\s+lsass|\blsass\.exe\b[^\n]*(dump|dmp)/i;
@@ -888,7 +897,10 @@ app.get("/api/evidence", async (req,res)=>{
           break; }
         case "4634": case "4647": { const lid=U("TargetLogonId")||U("LogonId"); const s=lid&&sessById.get(lid);
           if(s && s.offTms==null){ s.offTms=(ts?Date.parse(ts):NaN); } break; }
-        case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0}; e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName")); E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
+        case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0,reasons:{}};
+          e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName"));
+          if(!e.reasons)e.reasons={}; const rsn=failReason(U("SubStatus")||U("Status")); e.reasons[rsn]=(e.reasons[rsn]||0)+1;
+          E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
         case "4648": push(E.explicitCreds,{i,subj:U("SubjectUserName"),target:U("TargetUserName"),server:U("TargetServerName")||U("TargetInfo"),ip:U("IpAddress"),ts}); break;
         case "4688": { const cmd=U("CommandLine")||U("NewProcessName"); if(cmd){ push(E.procs,{i,cmd,parent:U("ParentProcessName"),user:U("SubjectUserName"),ts});
           if(LSASS_DUMP.test(cmd)) push(E.lsassAccess,{i,src:U("NewProcessName")||cmd.slice(0,90),ga:"process dump",user:U("SubjectUserName"),ts,via:"process"});
@@ -931,6 +943,10 @@ app.get("/api/evidence", async (req,res)=>{
         case "8": if(isSys(provider)) push(E.remoteThread,{i,src:U("SourceImage"),tgt:U("TargetImage"),start:U("StartFunction")||U("StartModule"),ts}); break;
         case "9": if(isSys(provider)) push(E.rawAccess,{i,img:U("Image"),dev:U("Device"),ts}); break;
         case "25": if(isSys(provider)) push(E.procTamper,{i,img:U("Image"),type:U("Type"),ts}); break;
+        case "17": case "18": if(isSys(provider)){ const pipe=U("PipeName"); if(pipe)
+          push(E.namedPipes,{i,pipe,image:U("Image"),act:id==="17"?"created":"connected",susp:SUSP_PIPE.test(pipe),ts}); } break;
+        case "23": case "26": if(isSys(provider)){ const f=U("TargetFilename"); if(f)
+          push(E.fileDeletes,{i,file:f,image:U("Image"),user:U("User"),archived:id==="23",ts}); } break;
         case "8003": case "8004": case "8006": case "8007":
           push(E.appBlocks,{i,kind:(id==="8004"||id==="8007")?"blocked":"audit",file:U("FullFilePath")||U("FilePath")||U("TargetFilename"),src:"AppLocker",ts}); break;
         case "3077": case "3033":

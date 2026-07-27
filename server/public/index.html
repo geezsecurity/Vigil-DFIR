@@ -7460,8 +7460,15 @@ function buildEvidence(){
     netConns:new Map(), dns:new Map(), shareAccess:[], logCleared:[], defender:[],
     kerberos:[], kerbRoast:0, ntlm:[], auditChanges:[], wmiPersist:[], rdpSessions:[], bits:[],
     lsassAccess:[], remoteThread:[], rawAccess:[], procTamper:[], appBlocks:[], timeChange:[],
+    namedPipes:[], fileDeletes:[],
     ips:new Map(), users:new Set(), hosts:new Set(), hashes:new Set(), domains:new Set(), sessions:[] };
   const isSys=p=>/sysmon/i.test(p||"");
+  const failReason=code=>{ const s=String(code||"").toLowerCase(); return {
+    "0xc000006a":"bad password","0xc0000064":"no such user","0xc0000072":"account disabled",
+    "0xc0000234":"account locked out","0xc0000070":"workstation restriction","0xc000006f":"outside logon hours",
+    "0xc0000193":"account expired","0xc0000071":"password expired","0xc0000133":"clock skew",
+    "0xc0000224":"must change password","0xc000015b":"logon-type not granted"}[s]||(s?s:"unknown"); };
+  const SUSP_PIPE=/psexesvc|paexec|remcom|csexec|cobalt|meterpreter|msagent_|status_[0-9a-f]{2}|postex_|MSSE-|_stager|\\atsvc\b/i;
   const LSASS_DUMP=/procdump(64)?(\.exe)?[^\n]*\blsass|comsvcs(\.dll)?[^\n]*minidump|minidump[^\n]*lsass|lsass[^\n]*minidump|rundll32[^\n]*comsvcs|nanodump|dumpert|handlekatz|createdump[^\n]*lsass|sqldumper[^\n]*lsass|sekurlsa|invoke-mimikatz|out-minidump|lsass\.dmp|-ma\s+lsass|\blsass\.exe\b[^\n]*(dump|dmp)/i;
   const addProcArtifacts=(i,cmd,by,ts)=>{ if(!cmd)return; const pa=DetEngine.parseProcessArtifacts(cmd);
     for(const a of pa.accounts) E.accountsCreated.push({i,user:a.user,by,ts,via:"cmdline"});
@@ -7491,7 +7498,7 @@ function buildEvidence(){
         break; }
       case "4634": case "4647": { const lid=U("TargetLogonId")||U("LogonId"); const s=lid&&sessById.get(lid);
         if(s && s.offTms==null) s.offTms=r.tms; break; }
-      case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0}; e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName")); E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
+      case "4625": { const ip=U("IpAddress")||"(none)"; const e=E.failedBySrc.get(ip)||{i,ip,users:new Set(),count:0,reasons:{}}; e.count++; e.i=i; if(U("TargetUserName"))e.users.add(U("TargetUserName")); if(!e.reasons)e.reasons={}; const rsn=failReason(U("SubStatus")||U("Status")); e.reasons[rsn]=(e.reasons[rsn]||0)+1; E.failedBySrc.set(ip,e); if(isExtIp(ip))E.ips.set(ip,(E.ips.get(ip)||0)+1); break; }
       case "4648": E.explicitCreds.push({i,subj:U("SubjectUserName"),target:U("TargetUserName"),server:U("TargetServerName")||U("TargetInfo"),ip:U("IpAddress"),ts:r.ts}); break;
       case "4688": { const cmd=U("CommandLine")||U("NewProcessName"); if(cmd){ E.procs.push({i,cmd,parent:U("ParentProcessName"),user:U("SubjectUserName"),ts:r.ts});
         if(LSASS_DUMP.test(cmd)) E.lsassAccess.push({i,src:U("NewProcessName")||cmd.slice(0,90),ga:"process dump",user:U("SubjectUserName"),ts:r.ts,via:"process"});
@@ -7534,6 +7541,8 @@ function buildEvidence(){
       case "8": if(isSys(r.provider)) E.remoteThread.push({i,src:U("SourceImage"),tgt:U("TargetImage"),start:U("StartFunction")||U("StartModule"),ts:r.ts}); break;
       case "9": if(isSys(r.provider)) E.rawAccess.push({i,img:U("Image"),dev:U("Device"),ts:r.ts}); break;
       case "25": if(isSys(r.provider)) E.procTamper.push({i,img:U("Image"),type:U("Type"),ts:r.ts}); break;
+      case "17": case "18": if(isSys(r.provider)){ const pipe=U("PipeName"); if(pipe) E.namedPipes.push({i,pipe,image:U("Image"),act:id==="17"?"created":"connected",susp:SUSP_PIPE.test(pipe),ts:r.ts}); } break;
+      case "23": case "26": if(isSys(r.provider)){ const f=U("TargetFilename"); if(f) E.fileDeletes.push({i,file:f,image:U("Image"),user:U("User"),archived:id==="23",ts:r.ts}); } break;
       case "8003": case "8004": case "8006": case "8007":
         E.appBlocks.push({i,kind:(id==="8004"||id==="8007")?"blocked":"audit",file:U("FullFilePath")||U("FilePath")||U("TargetFilename"),src:"AppLocker",ts:r.ts}); break;
       case "3077": case "3033":
@@ -7553,6 +7562,9 @@ function evPanel(title,total,headers,trs,flag){ if(!trs.length)return"";
   return '<div class="panel'+(flag==="alert"?' panel-alert':'')+'"><h3>'+esc(title)+'<span class="pill">'+total.toLocaleString()+'</span></h3>'+
     '<div class="dtscroll"><table class="dt">'+(headers?'<thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead>':'')+
     '<tbody>'+trs.join("")+'</tbody></table></div></div>'; }
+function evReasons(r){ if(!r)return ""; return Object.entries(r).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,c])=>{
+  const cls=/no such user/.test(k)?"bad":(/bad password|locked|disabled|expired/.test(k)?"warn":"");
+  return '<span class="ev-tag '+cls+'" title="'+esc(k)+' (×'+c+')">'+esc(k)+' ×'+c+'</span>'; }).join(" "); }
 function topMap(m,n){ return [...m.entries()].sort((a,b)=>(b[1].count||b[1])-(a[1].count||a[1])).slice(0,n); }
 const LOGON_TYPE={"2":"Interactive","3":"Network","4":"Batch","5":"Service","7":"Unlock","8":"NetworkCleartext","9":"NewCredentials","10":"RemoteInteractive (RDP)","11":"CachedInteractive"};
 function fmtDur(ms){ if(ms==null)return "—"; if(ms<0)return "?"; const m=ms/60000;
@@ -7616,8 +7628,8 @@ function renderEvidence(){
   h+=evPanel("External / RDP logons (4624)",extL.length,["User","Source IP","Type","#"],
      extL.slice(0,CAP).map(x=>evRow([{t:x.user},{t:x.ip,cls:isExtIp(x.ip)?"":""},{html:'<span class="ev-tag '+(x.lt==="10"?"warn":"")+'">type '+esc(x.lt)+'</span>'},{t:x.count,cls:"cnt"}],x.ip&&isExtIp(x.ip)?x.ip:x.user,"4624")));
   const failed=[...E.failedBySrc.values()].sort((a,b)=>b.count-a.count);
-  h+=evPanel("Failed logons by source (4625)",failed.length,["Source IP","Targeted users","#"],
-     failed.slice(0,CAP).map(x=>evRow([{html:(isExtIp(x.ip)?'<span class="ev-tag bad">ext</span>':'')+esc(x.ip)},{t:[...x.users].slice(0,6).join(", "),cls:"ev-trunc",title:[...x.users].join(", ")},{t:x.count,cls:"cnt"}],x.ip==="(none)"?"":x.ip,"4625")));
+  h+=evPanel("Failed logons by source (4625)",failed.length,["Source IP","Targeted users","Failure reason(s)","#"],
+     failed.slice(0,CAP).map(x=>evRow([{html:(isExtIp(x.ip)?'<span class="ev-tag bad">ext</span>':'')+esc(x.ip)},{t:[...x.users].slice(0,6).join(", "),cls:"ev-trunc",title:[...x.users].join(", ")},{html:evReasons(x.reasons)},{t:x.count,cls:"cnt"}],x.ip==="(none)"?"":x.ip,"4625")));
   const sp=[...E.specialPriv.entries()].sort((a,b)=>b[1]-a[1]);
   h+=evPanel("Special privileges assigned (4672)",sp.length,["Account","#"],
      sp.slice(0,CAP).map(([u,c])=>evRow([{t:u},{t:c,cls:"cnt"}],u,"4672")));
@@ -7674,6 +7686,12 @@ function renderEvidence(){
      E.procTamper.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.img,cls:"ev-trunc",title:x.img},{html:'<span class="ev-tag warn">'+esc(x.type)+'</span>'}],x.img)),E.procTamper.length?"alert":"");
   h+=evPanel("Raw disk access (Sysmon 9)",E.rawAccess.length,["Time","Image","Device"],
      E.rawAccess.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.img,cls:"ev-trunc",title:x.img},{t:x.dev,cls:"ev-trunc",title:x.dev}],x.img)));
+  const pipes=E.namedPipes||[]; const suspPipes=pipes.filter(p=>p.susp);
+  h+=evPanel("Named pipes — PsExec / C2 (Sysmon 17/18)",pipes.length,["Time","Pipe","Process","Act"],
+     [...suspPipes,...pipes.filter(p=>!p.susp)].slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{html:(x.susp?'<span class="ev-tag bad">tool</span> ':'')+esc(x.pipe)},{t:x.image,cls:"ev-trunc",title:x.image},{t:x.act}],x.pipe)),suspPipes.length?"alert":"");
+  const dels=E.fileDeletes||[];
+  h+=evPanel("File deletions — anti-forensics (Sysmon 23/26)",dels.length,["Time","Deleted file","Process"],
+     dels.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.file,cls:"ev-trunc",title:x.file},{t:x.image,cls:"ev-trunc",title:x.image}],x.file)),dels.length?"alert":"");
   h+=evPanel("Application control blocks (AppLocker / WDAC)",E.appBlocks.length,["Time","Action","Source","File"],
      E.appBlocks.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{html:x.kind==="blocked"?'<span class="ev-tag bad">blocked</span>':'<span class="ev-tag warn">audit</span>'},{t:x.src},{t:x.file,cls:"ev-trunc",title:x.file}],x.file)));
   h+=evPanel("System time changed (4616)",E.timeChange.length,["Time","By","Previous","New"],
