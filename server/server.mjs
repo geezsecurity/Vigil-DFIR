@@ -1347,12 +1347,19 @@ async function callOpenAI(model,key,system,prompt,maxTokens){
 }
 async function callGemini(model,key,system,prompt,maxTokens){
   const url="https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(model)+":generateContent?key="+encodeURIComponent(key);
+  const genCfg={ maxOutputTokens:maxTokens||900, temperature:0.2 };
+  // Gemini 2.5 models "think" first, and thinking tokens count against maxOutputTokens — that
+  // starves the visible answer and cuts it off mid-sentence. Disable thinking so all tokens are output.
+  if(/2\.5/.test(String(model)) && /flash/i.test(String(model))) genCfg.thinkingConfig={ thinkingBudget:0 };
   const r=await fetchWithTimeout(url,{ method:"POST", headers:{ "content-type":"application/json" },
-    body:JSON.stringify({ system_instruction:{ parts:[{ text:system }] }, contents:[{ parts:[{ text:prompt }] }], generationConfig:{ maxOutputTokens:maxTokens||900, temperature:0.2 } }) }, 45000);
+    body:JSON.stringify({ system_instruction:{ parts:[{ text:system }] }, contents:[{ parts:[{ text:prompt }] }], generationConfig:genCfg }) }, 45000);
   const d=await r.json().catch(()=>null);
   if(!r.ok) throw new Error((d&&d.error&&d.error.message)||("HTTP "+r.status));
   const c=d&&d.candidates&&d.candidates[0];
-  return (c&&c.content&&c.content.parts&&c.content.parts.map(p=>p.text||"").join("").trim())||"";
+  const text=(c&&c.content&&c.content.parts&&c.content.parts.map(p=>p.text||"").join("").trim())||"";
+  // if it still hit the cap (e.g. a 2.5 model that ignores thinkingBudget:0), retry once without thinking limit but bigger budget
+  if(!text && c && c.finishReason==="MAX_TOKENS") throw new Error("model hit the output limit before producing text — raise the token budget or pick a non-thinking model");
+  return text;
 }
 app.post("/api/ai", async (req,res)=>{
   try{
