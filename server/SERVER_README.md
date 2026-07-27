@@ -153,9 +153,10 @@ mapped to events tagged by source with the original line preserved as the messag
 | POST   | `/api/casework/annotate` | `{idx, verdict, tags[], note}` set/clear an event verdict |
 | POST   | `/api/casework/finding`  | `{title, severity, note}` add / `{id, remove:true}` a finding |
 | POST   | `/api/casework/summary`  | `{summary}` save the case narrative       |
-| GET    | `/api/settings`       | which intel providers are configured (booleans; never the keys) |
-| POST   | `/api/settings`       | `{abuseipdbApiKey?, virustotalApiKey?}` — save/clear keys (server-side) |
+| GET    | `/api/settings`       | which providers + AI model are configured (booleans; never the keys) |
+| POST   | `/api/settings`       | save/clear keys, AI provider + model (`aiProvider`, `aiModel`, `*ApiKey`) |
 | POST   | `/api/enrich`         | `{value,type}` → AbuseIPDB (IP) + VirusTotal (IP/hash) reputation, 24h cache |
+| POST   | `/api/ai`             | `{system, prompt}` → completion from the configured AI provider (Claude / ChatGPT / Gemini) |
 | GET    | `/api/suppressions`   | list suppressed rule IDs                  |
 | POST   | `/api/suppressions`   | `{ruleId,suppress}` toggle (or `{suppressed:[]}`) — re-filters detections |
 | GET    | `/api/cases`          | list cases (id, name, count, active)      |

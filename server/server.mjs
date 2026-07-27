@@ -1302,19 +1302,73 @@ app.get("/api/rarity", async (req,res)=>{
 });
 
 // ---- Settings: report which intel providers are configured; save keys (never returned) ----
-app.get("/api/settings", (req,res)=>{
-  res.json({ ok:true, abuseipdbConfigured:!!getApiKey("abuseipdb"), virustotalConfigured:!!getApiKey("virustotal"),
-    enrichTtlHours:Math.round(ENRICH_TTL_MS/3600000) });
-});
+// ---- AI Support: provider config + generic completion endpoint (Claude / OpenAI / Gemini) ----
+const AI_PROVIDERS=["anthropic","openai","gemini"];
+const AI_DEFAULT_MODEL={ anthropic:"claude-sonnet-5", openai:"gpt-4o-mini", gemini:"gemini-1.5-flash" };
+const AI_PROVIDER_LABEL={ anthropic:"Claude", openai:"ChatGPT", gemini:"Gemini" };
+function aiConfig(){ const s=loadSettings();
+  const provider=AI_PROVIDERS.includes(s.aiProvider)?s.aiProvider:"anthropic";
+  const model=(s.aiModel&&String(s.aiModel).trim())||AI_DEFAULT_MODEL[provider];
+  return { provider, model, key:getApiKey(provider) };
+}
+function settingsPayload(){ const { provider, model }=aiConfig();
+  return { ok:true, abuseipdbConfigured:!!getApiKey("abuseipdb"), virustotalConfigured:!!getApiKey("virustotal"),
+    anthropicConfigured:!!getApiKey("anthropic"), openaiConfigured:!!getApiKey("openai"), geminiConfigured:!!getApiKey("gemini"),
+    aiProvider:provider, aiModel:model, aiDefaults:AI_DEFAULT_MODEL, enrichTtlHours:Math.round(ENRICH_TTL_MS/3600000) };
+}
+app.get("/api/settings", (req,res)=> res.json(settingsPayload()));
 app.post("/api/settings", (req,res)=>{
   try{
     const b=req.body||{}; const s=loadSettings();
     // a provided string sets/replaces the key; an explicit empty string clears it; undefined leaves it
-    if(b.abuseipdbApiKey!==undefined){ const v=String(b.abuseipdbApiKey).trim(); if(v)s.abuseipdbApiKey=v; else delete s.abuseipdbApiKey; }
-    if(b.virustotalApiKey!==undefined){ const v=String(b.virustotalApiKey).trim(); if(v)s.virustotalApiKey=v; else delete s.virustotalApiKey; }
+    for(const p of ["abuseipdb","virustotal","anthropic","openai","gemini"]){
+      const k=p+"ApiKey"; if(b[k]!==undefined){ const v=String(b[k]).trim(); if(v)s[k]=v; else delete s[k]; } }
+    if(b.aiProvider!==undefined && AI_PROVIDERS.includes(b.aiProvider)) s.aiProvider=b.aiProvider;
+    if(b.aiModel!==undefined){ const v=String(b.aiModel).trim(); if(v)s.aiModel=v; else delete s.aiModel; }
     saveSettings(s);
-    res.json({ ok:true, abuseipdbConfigured:!!getApiKey("abuseipdb"), virustotalConfigured:!!getApiKey("virustotal") });
+    res.json(settingsPayload());
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+async function callAnthropic(model,key,system,prompt,maxTokens){
+  const r=await fetchWithTimeout("https://api.anthropic.com/v1/messages",{ method:"POST",
+    headers:{ "x-api-key":key, "anthropic-version":"2023-06-01", "content-type":"application/json" },
+    body:JSON.stringify({ model, max_tokens:maxTokens||900, system, messages:[{role:"user",content:prompt}] }) }, 45000);
+  const d=await r.json().catch(()=>null);
+  if(!r.ok) throw new Error((d&&d.error&&d.error.message)||("HTTP "+r.status));
+  return (d&&Array.isArray(d.content)&&d.content.map(c=>c.text||"").join("").trim())||"";
+}
+async function callOpenAI(model,key,system,prompt,maxTokens){
+  const r=await fetchWithTimeout("https://api.openai.com/v1/chat/completions",{ method:"POST",
+    headers:{ "Authorization":"Bearer "+key, "content-type":"application/json" },
+    body:JSON.stringify({ model, temperature:0.2, max_tokens:maxTokens||900, messages:[{role:"system",content:system},{role:"user",content:prompt}] }) }, 45000);
+  const d=await r.json().catch(()=>null);
+  if(!r.ok) throw new Error((d&&d.error&&d.error.message)||("HTTP "+r.status));
+  return (d&&d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content||"").trim();
+}
+async function callGemini(model,key,system,prompt,maxTokens){
+  const url="https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(model)+":generateContent?key="+encodeURIComponent(key);
+  const r=await fetchWithTimeout(url,{ method:"POST", headers:{ "content-type":"application/json" },
+    body:JSON.stringify({ system_instruction:{ parts:[{ text:system }] }, contents:[{ parts:[{ text:prompt }] }], generationConfig:{ maxOutputTokens:maxTokens||900, temperature:0.2 } }) }, 45000);
+  const d=await r.json().catch(()=>null);
+  if(!r.ok) throw new Error((d&&d.error&&d.error.message)||("HTTP "+r.status));
+  const c=d&&d.candidates&&d.candidates[0];
+  return (c&&c.content&&c.content.parts&&c.content.parts.map(p=>p.text||"").join("").trim())||"";
+}
+app.post("/api/ai", async (req,res)=>{
+  try{
+    const b=req.body||{};
+    const system=String(b.system||"You are a senior DFIR / SOC analyst helping triage Windows event logs.").slice(0,8000);
+    const prompt=String(b.prompt||"").slice(0,80000);
+    if(!prompt) return res.status(400).json({error:"no prompt"});
+    const { provider, model, key }=aiConfig();
+    if(!key) return res.json({ ok:false, error:"No API key set for "+(AI_PROVIDER_LABEL[provider]||provider)+". Pick a model and add its key in ⚙ Settings." });
+    const maxTokens=Math.min(4000, parseInt(b.maxTokens,10)||900);
+    let text="";
+    if(provider==="anthropic") text=await callAnthropic(model,key,system,prompt,maxTokens);
+    else if(provider==="openai") text=await callOpenAI(model,key,system,prompt,maxTokens);
+    else text=await callGemini(model,key,system,prompt,maxTokens);
+    res.json({ ok:true, text, provider, model, label:AI_PROVIDER_LABEL[provider] });
+  }catch(err){ res.json({ ok:false, error:String(err.message||err) }); }
 });
 // ---- Threat-intel enrichment for a single indicator (IP -> AbuseIPDB+VT, hash -> VT) ----
 app.post("/api/enrich", async (req,res)=>{

@@ -70,6 +70,12 @@ running server-side so multi-hundred-MB logs never choke your tab.
 - **One-click IR report** — export a full triage summary — now including the **analyst
   assessment** (narrative, findings, and True-Positive / Suspicious verdicts) — as **HTML,
   PDF, or DOCX**.
+- **✦ AI Support** — bring your own model (**Claude**, **ChatGPT**, or **Gemini** — pick one in
+  ⚙ Settings and paste its key). A context-aware **AI Support** button in every section explains
+  what it's looking at; on the **Dashboard** it narrates *what happened* across the case, in
+  **Case Notes** it drafts a concise incident summary straight into the report, and in the event
+  modal it explains a single record. Calls run **server-side** (keys stay server-side, never in
+  the browser).
 
 **Performance & UX**
 - Constant-memory streaming `.evtx` parser (handles multi-GB files).
@@ -171,8 +177,11 @@ Key endpoints: `/api/upload`, `/api/search` (SQLite/FTS, paginated), `/api/bodie
 
 - The server has **no authentication** — run it on a trusted host / network only, and
   never expose it directly to the internet.
-- The optional **AI** feature sends selected event JSON to an external API — don't use it
-  on data you can't share externally.
+- The optional **AI Support** feature sends a summary of the selected data (an event, the
+  detections, or a case overview) to the AI provider you configured (**Claude / ChatGPT /
+  Gemini**). Keys live server-side in the git-ignored `data/settings.json` (or `ANTHROPIC_API_KEY`
+  / `OPENAI_API_KEY` / `GEMINI_API_KEY`) and are never returned to the browser. Don't use it on
+  data you can't share externally.
 - **Threat-intel enrichment** is opt-in and only runs when you click an indicator. It sends
   that single IP/hash to **AbuseIPDB / VirusTotal**. API keys are stored server-side in the
   git-ignored `data/settings.json` (or the `ABUSEIPDB_API_KEY` / `VIRUSTOTAL_API_KEY` env

@@ -606,6 +606,23 @@
   .ext-link{color:var(--accent);cursor:pointer} .ext-link:hover{text-decoration:underline}
   .set-acts{display:flex;gap:8px;align-items:center;margin-top:16px}
   .set-msg{font-size:11.5px;color:var(--txt-dim)}
+  .ai-prov{display:flex;gap:8px;margin:6px 0 4px;flex-wrap:wrap}
+  .ai-pbtn{flex:1;min-width:110px;font:inherit;font-size:12.5px;padding:9px 8px;border:1px solid var(--line-2);background:var(--bg-2);color:var(--txt);border-radius:8px;cursor:pointer;display:flex;flex-direction:column;gap:4px;align-items:center}
+  .ai-pbtn:hover{background:var(--sel)}
+  .ai-pbtn.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  /* AI Support drawer */
+  #aiPanel{position:fixed;right:16px;bottom:16px;width:420px;max-width:calc(100vw - 32px);max-height:70vh;z-index:45;
+    background:var(--bg);border:1px solid var(--line-2);border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.45);display:none;flex-direction:column}
+  #aiPanel.show{display:flex}
+  .aip-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+  .aip-head .aip-prov{font-weight:400;color:var(--txt-dim);font-size:11px}
+  .aip-head .aip-x{margin-left:auto;cursor:pointer;color:var(--txt-dim);font-size:15px}
+  .aip-head .aip-x:hover{color:var(--txt)}
+  .aip-body{padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.6;white-space:pre-wrap}
+  .aip-body b{color:var(--txt)} .aip-body h4{margin:10px 0 4px;font-size:12.5px;color:var(--accent)}
+  .aip-body.err{color:#ff8a8a;font-family:var(--mono);font-size:11.5px}
+  .aip-foot{padding:8px 14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .ai-supp-btn{cursor:pointer}
   body[data-mode="fw"] #fwWrap{display:block} body[data-mode="fw"] #eventsWrap{display:none} body[data-mode="fw"] aside{display:none}
   body[data-mode="vpn"] #vpnWrap{display:block} body[data-mode="vpn"] #eventsWrap{display:none} body[data-mode="vpn"] aside{display:none}
   .cat-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -678,17 +695,7 @@
       <div class="aanote" style="margin:6px 6px 2px">Open <b>.evtx</b> directly (parsed in-browser), or JSONL/NDJSON, a JSON array, or raw text logs.</div>
     </div>
   </div>
-  <div class="pop-wrap">
-    <button class="btn" id="aiBtn">✦ AI</button>
-    <div class="pop" id="aiPop" style="left:auto;right:0;width:300px">
-      <div class="pophead"><span>OpenAI analysis</span></div>
-      <label class="fld">API key<input type="password" id="aiKey" placeholder="sk-..." autocomplete="off"></label>
-      <label class="fld">Model<input type="text" id="aiModel" placeholder="gpt-4o-mini"></label>
-      <div class="aanote">Key is held in memory for this session only — never written to the file or disk; re-enter it after a page reload. Analyzing an event sends that event's JSON to OpenAI, so data leaves this machine — avoid for restricted material.</div>
-      <button class="btn primary" id="aiSave" style="margin:4px 6px">Save</button>
-      <span id="aiSaved" class="hint" style="margin-left:6px"></span>
-    </div>
-  </div>
+  <button class="btn" id="aiBtn" title="AI Support for the current section">✦ AI Support</button>
   <button class="btn" id="exportBtn" disabled>Export view</button>
   <select id="caseSel" class="btn" style="display:none;max-width:240px" title="Switch active case"></select>
   <button class="btn" id="newCaseBtn" style="display:none" title="Start a new empty case (keeps existing cases)">+ New case</button>
@@ -709,6 +716,25 @@
   <div class="modal-card">
     <div class="modal-h"><b>⚙ Settings</b><span class="modal-x" id="settingsClose">✕</span></div>
     <div class="modal-b">
+      <h4 class="set-h">✦ AI Support</h4>
+      <p class="set-note">Pick a model, paste its API key, and Save. AI Support then works from every section
+        (Dashboard, Case Notes, Detections…). Keys are stored server-side (git-ignored) and never sent to the browser.
+        Analysis sends a summary of the selected data to your chosen provider — use only on data you may share.</p>
+      <div class="ai-prov" id="aiProvPick">
+        <button class="ai-pbtn" data-aiprov="anthropic">Claude <span class="set-tag" id="aiS-anthropic">not set</span></button>
+        <button class="ai-pbtn" data-aiprov="openai">ChatGPT <span class="set-tag" id="aiS-openai">not set</span></button>
+        <button class="ai-pbtn" data-aiprov="gemini">Gemini <span class="set-tag" id="aiS-gemini">not set</span></button>
+      </div>
+      <label class="set-row"><span>Model <span class="set-hint" style="margin:0">for <b id="aiProvName">Claude</b></span></span>
+        <input type="text" id="aiModelInp" placeholder="model id" autocomplete="off"></label>
+      <label class="set-row"><span><span id="aiKeyLabel">Claude</span> API key</span>
+        <input type="password" id="aiKeyInp" placeholder="paste API key for the selected model" autocomplete="off"></label>
+      <div class="set-hint" id="aiKeyHint">Anthropic keys: <span class="ext-link" data-ext="https://console.anthropic.com/settings/keys">console.anthropic.com</span></div>
+      <div class="set-acts">
+        <button class="vbtn" id="aiSaveBtn">Save AI model</button>
+        <span id="aiSaveMsg" class="set-msg"></span>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
       <h4 class="set-h">Threat-intel enrichment</h4>
       <p class="set-note">Add API keys so the Watchlist can check IPs and file hashes against reputation services on click.
         Keys are stored server-side (in the git-ignored <code>data/settings.json</code>) and never sent to the browser.
@@ -727,6 +753,12 @@
       </div>
     </div>
   </div>
+</div>
+
+<div id="aiPanel">
+  <div class="aip-head"><span id="aiPanelTitle">✦ AI Support</span><span class="aip-prov" id="aiPanelProv"></span><span class="aip-x" id="aiPanelClose">✕</span></div>
+  <div class="aip-body" id="aiPanelBody"></div>
+  <div class="aip-foot" id="aiPanelFoot"></div>
 </div>
 
 <div id="app">
@@ -820,7 +852,7 @@
   <div class="sheet" id="sheet">
     <div class="mhead">
       <span class="t" id="modalTitle">event</span>
-      <button class="btn" id="analyzeBtn" title="Explain with OpenAI">✦ Analyze</button>
+      <button class="btn" id="analyzeBtn" title="Explain this event with AI Support">✦ AI Support</button>
       <button class="btn icon" id="maxBtn" title="Maximize">⤢</button>
       <button class="btn" id="copyBtn">Copy JSON</button>
       <button class="btn" data-close>Close</button>
@@ -6364,6 +6396,7 @@ function buildReportDocx(S, dash, ev, meta){
 }
 function dlBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
 function reportBtns(){ return '<div style="display:flex;gap:8px;justify-content:flex-end;margin:-2px 0 10px">'+
+  '<button class="btn" onclick="aiSupport(\'dash\')" title="AI Support — what happened in this case">✦ AI Support</button>'+
   '<button class="btn" onclick="generateIRReport(\'pdf\',this)">📄 PDF report</button>'+
   '<button class="btn" onclick="generateIRReport(\'docx\',this)">📝 Word (DOCX)</button></div>'; }
 async function generateIRReport(fmt, btn){
@@ -7218,7 +7251,8 @@ function paintCasework(){
       '<div class="wlpanel"><h3>Case summary / narrative</h3>'+
         '<p class="hint">Your incident narrative — exported as the analyst summary in the IR report.</p>'+
         '<textarea id="cwSummary" placeholder="What happened, scope, timeline, key evidence, conclusions…">'+esc(casework.summary||"")+'</textarea>'+
-        '<div class="anrow" style="margin-top:8px"><button class="vbtn" id="cwSaveSummary">Save summary</button><span class="anmsg" id="cwSumMsg"></span></div></div>'+
+        '<div class="anrow" style="margin-top:8px"><button class="vbtn" id="cwSaveSummary">Save summary</button>'+
+          '<button class="vbtn" id="cwAI" title="Draft a concise summary with AI Support">✦ AI draft</button><span class="anmsg" id="cwSumMsg"></span></div></div>'+
       '<div class="wlpanel"><h3>Findings</h3>'+
         '<input id="findTitle" placeholder="finding title — e.g. Webshell dropped on WS01" style="width:100%;box-sizing:border-box;margin-bottom:6px;font:inherit;font-size:12.5px;padding:7px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--bg-2);color:var(--txt)">'+
         '<div class="anrow" style="margin-bottom:6px"><select id="findSev" class="btn">'+sevOpts+'</select><button class="vbtn" id="findAdd">＋ Add finding</button></div>'+
@@ -7227,7 +7261,21 @@ function paintCasework(){
     '</div>'+
     '<div class="wlpanel" style="margin-top:16px"><h3>Event verdicts <span style="color:var(--txt-dim);font-weight:400">('+anns.length+')</span></h3>'+annTable+'</div>';
 }
+async function aiDraftSummary(btn){
+  await ensureAISettings();
+  if(!aiConfigured()){ openSettings(); return; }
+  const old=btn.textContent; btn.disabled=true; btn.textContent="Drafting…";
+  const sys="You are a senior DFIR analyst. Write a clear, concise incident summary (5–8 sentences, plain prose, no markdown headers) for a case report: what happened, scope (hosts/users), key evidence, and an assessment. Only use the data provided.";
+  const r=await callAI(sys, "Case data:\n\n"+(await gatherCaseContext())+"\n\nWrite the incident summary.", 700);
+  btn.disabled=false; btn.textContent=old;
+  const m=$("cwSumMsg");
+  if(!r.ok){ if(m){ m.textContent="AI failed: "+(r.error||"").slice(0,60); } return; }
+  const ta=$("cwSummary"); const cur=(ta.value||"").trim(); ta.value=cur? cur+"\n\n"+r.text : r.text;
+  try{ await api("/api/casework/summary",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({summary:ta.value})}); casework.summary=ta.value; }catch(_){}
+  if(m){ m.textContent="AI summary added & saved ✓ ("+(r.label||r.provider||"")+")"; setTimeout(()=>m.textContent="",3000); }
+}
 $("cwWrap").addEventListener("click",async e=>{
+  if(e.target.id==="cwAI"){ aiDraftSummary(e.target); return; }
   if(e.target.id==="cwSaveSummary"){ try{ await api("/api/casework/summary",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({summary:$("cwSummary").value})}); casework.summary=$("cwSummary").value;
     const m=$("cwSumMsg"); if(m){ m.textContent="saved ✓"; setTimeout(()=>m.textContent="",1200); } }catch(err){ alert("Save failed: "+(err.message||err)); } return; }
   if(e.target.id==="findAdd"){ const title=$("findTitle").value.trim(); if(!title)return;
@@ -7281,14 +7329,40 @@ document.addEventListener("click",e=>{ if(e.target&&e.target.id==="enrOpenSettin
 
 /* ---------- settings modal (threat-intel API keys) ---------- */
 const settingsModal=$("settingsModal");
+const AI_KEY_HINTS={ anthropic:'Anthropic keys: <span class="ext-link" data-ext="https://console.anthropic.com/settings/keys">console.anthropic.com</span>',
+  openai:'OpenAI keys: <span class="ext-link" data-ext="https://platform.openai.com/api-keys">platform.openai.com/api-keys</span>',
+  gemini:'Google AI Studio keys: <span class="ext-link" data-ext="https://aistudio.google.com/app/apikey">aistudio.google.com/app/apikey</span>' };
+const AI_PROV_LABEL={ anthropic:"Claude", openai:"ChatGPT", gemini:"Gemini" };
+function renderAISettings(){
+  const j=aiSettings||{};
+  const conf={ anthropic:j.anthropicConfigured, openai:j.openaiConfigured, gemini:j.geminiConfigured };
+  for(const p of ["anthropic","openai","gemini"]){ const s=$("aiS-"+p); if(s){ s.textContent=conf[p]?"key set":"not set"; s.classList.toggle("on",!!conf[p]); }
+    const b=document.querySelector('[data-aiprov="'+p+'"]'); if(b) b.classList.toggle("on", aiSelProv===p); }
+  $("aiProvName").textContent=AI_PROV_LABEL[aiSelProv]; $("aiKeyLabel").textContent=AI_PROV_LABEL[aiSelProv];
+  const def=(j.aiDefaults&&j.aiDefaults[aiSelProv])||"";
+  $("aiModelInp").value = (aiSelProv===j.aiProvider && j.aiModel) ? j.aiModel : def;
+  $("aiModelInp").placeholder=def;
+  $("aiKeyInp").value=""; $("aiKeyInp").placeholder=conf[aiSelProv]?"key already set — paste to replace":("paste "+AI_PROV_LABEL[aiSelProv]+" API key");
+  $("aiKeyHint").innerHTML=AI_KEY_HINTS[aiSelProv]||"";
+}
 async function openSettings(){
-  try{ const j=await (await api("/api/settings")).json();
+  try{ aiSettings=await (await api("/api/settings")).json(); const j=aiSettings;
     $("abStatus").textContent=j.abuseipdbConfigured?"configured":"not set"; $("abStatus").classList.toggle("on",!!j.abuseipdbConfigured);
     $("vtStatus").textContent=j.virustotalConfigured?"configured":"not set"; $("vtStatus").classList.toggle("on",!!j.virustotalConfigured);
+    aiSelProv=j.aiProvider||"anthropic"; renderAISettings();
   }catch(_){}
-  $("abKey").value=""; $("vtKey").value=""; $("settingsMsg").textContent="";
+  $("abKey").value=""; $("vtKey").value=""; $("settingsMsg").textContent=""; $("aiSaveMsg").textContent="";
   settingsModal.style.display="flex";
 }
+$("aiProvPick").addEventListener("click",e=>{ const b=e.target.closest("[data-aiprov]"); if(!b)return; aiSelProv=b.getAttribute("data-aiprov"); renderAISettings(); });
+$("aiSaveBtn").onclick=async()=>{
+  const body={ aiProvider:aiSelProv, aiModel:$("aiModelInp").value.trim() };
+  const key=$("aiKeyInp").value.trim(); if(key) body[aiSelProv+"ApiKey"]=key;
+  $("aiSaveMsg").textContent="Saving…";
+  try{ aiSettings=await (await api("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+    renderAISettings(); $("aiSaveMsg").textContent="Saved ✓ — active: "+AI_PROV_LABEL[aiSettings.aiProvider]+" · "+aiSettings.aiModel;
+  }catch(err){ $("aiSaveMsg").textContent="Save failed: "+(err.message||err); }
+};
 $("settingsBtn").onclick=openSettings;
 $("settingsClose").onclick=()=>settingsModal.style.display="none";
 settingsModal.addEventListener("click",e=>{
@@ -7796,48 +7870,118 @@ function addSigmaTextsList(texts,label){
 }
 
 /* =====================  OPENAI ANALYSIS  ===================== */
-let aiKey="", aiModel="gpt-4o-mini";
-const AI_SYS="You are a senior SOC / DFIR analyst. Explain ONE Windows event-log record in plain English for a triage analyst. "+
-  "Cover briefly: what happened; what this provider + Event ID means; the key fields present (user, host, process, command line, IP, file paths, service/task names); "+
-  "whether it looks routine or potentially suspicious and WHY; and one or two concrete next checks. "+
-  "Use short sentences or a few bullets. Only reference fields actually present — never invent values. Keep it under ~150 words.";
-$("aiModel").value=aiModel;
-$("aiBtn").onclick=e=>{ e.stopPropagation(); const p=$("aiPop"); p.classList.toggle("open");
-  if(p.classList.contains("open")){ $("aiKey").value=aiKey; $("aiModel").value=aiModel; setTimeout(()=>$("aiKey").focus(),0); } };
-document.addEventListener("click",e=>{ if(!e.target.closest(".pop-wrap")) $("aiPop").classList.remove("open"); });
-$("aiSave").onclick=()=>{ aiKey=$("aiKey").value.trim(); aiModel=($("aiModel").value.trim()||"gpt-4o-mini");
-  const s=$("aiSaved"); s.textContent=aiKey?"set for this session ✓":"key cleared"; setTimeout(()=>{s.textContent="";},1600); };
-
-function openAIPop(){ $("aiPop").classList.add("open"); $("aiKey").value=aiKey; $("aiModel").value=aiModel; setTimeout(()=>$("aiKey").focus(),0); }
-function mdLite(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>"); }
-
+/* ===================== AI SUPPORT (Claude / ChatGPT / Gemini, server-side) ===================== */
+function mdLite(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/^\s*[-•]\s+/gm,"• "); }
+let aiSettings=null, aiLastText="", aiSelProv="anthropic";
+async function ensureAISettings(){ if(aiSettings===null){ try{ aiSettings=await (await api("/api/settings")).json(); }catch{ aiSettings={}; } } return aiSettings; }
+function aiConfigured(){ return !!(aiSettings&&(aiSettings.anthropicConfigured||aiSettings.openaiConfigured||aiSettings.geminiConfigured)); }
+async function callAI(system, prompt, maxTokens){
+  try{ return await (await api("/api/ai",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ system, prompt, maxTokens }) })).json(); }
+  catch(err){ return { ok:false, error:err.message||String(err) }; }
+}
+/* --- context builders (client already holds the data) --- */
+function aiDetText(){
+  const S=serverDet; if(!S||!S.summary) return "No server detections computed yet.";
+  const sm=S.summary||{}, bySev=S.bySev||{};
+  let t="Detections: "+(sm.total||0)+" across "+(sm.withDetections||0)+" events. Severity — "+
+    ["critical","high","medium","low","info"].map(k=>k+":"+(bySev[k]||0)).join(", ")+".";
+  if(S.byRule&&S.byRule.length){ t+="\nTop detections:\n"+S.byRule.slice(0,15).map(g=>"- ["+g.level+"] "+g.title+" ×"+g.count+" ("+g.source+")").join("\n"); }
+  if(S.chains&&S.chains.length){ t+="\nCorrelated attack chains:\n"+S.chains.slice(0,6).map(c=>"- "+c.name+" on "+c.host+(c.users&&c.users.length?" (user "+c.users[0]+")":"")+" — "+c.count+" detections").join("\n"); }
+  if(S.attack&&S.attack.techniques&&S.attack.techniques.length){ t+="\nATT&CK techniques: "+S.attack.techniques.slice(0,15).map(x=>x.id+(x.name?" "+x.name:"")).join(", "); }
+  if(S.entities&&S.entities.length){ t+="\nHighest-risk entities: "+S.entities.slice(0,8).map(e=>e.type+":"+e.name+"(score "+e.score+")").join(", "); }
+  return t;
+}
+async function gatherCaseContext(){
+  const parts=[]; let dash=fullDash;
+  if(SERVER && !dash){ try{ dash=await (await api("/api/dashboard")).json(); }catch(_){} }
+  const m=window.__meta||{};
+  const arr0=x=>Array.isArray(x)?(Array.isArray(x[0])?x.map(e=>e[0]+"("+e[1]+")"):x):[];
+  if(dash){ parts.push("CASE OVERVIEW: "+(dash.total||m.count||0)+" events"+((dash.computers&&dash.computers.length)?", "+dash.computers.length+" host(s)":"")+
+    (m.tsMin?", "+String(m.tsMin).slice(0,19)+" → "+String(m.tsMax||"").slice(0,19)+" UTC":"")+".");
+    if(dash.failedLogons!=null) parts.push("Failed logons: "+dash.failedLogons+".");
+    if(dash.providers&&dash.providers.length) parts.push("Providers: "+arr0(dash.providers).slice(0,6).join(", "));
+    if(dash.eids&&dash.eids.length) parts.push("Top Event IDs: "+arr0(dash.eids).slice(0,8).join(", "));
+    if(dash.computers&&dash.computers.length) parts.push("Hosts: "+arr0(dash.computers).slice(0,10).join(", "));
+    if(dash.users&&dash.users.length) parts.push("Top users: "+arr0(dash.users).slice(0,10).join(", ")); }
+  else parts.push("CASE: "+(m.count||0)+" events"+(m.tsMin?", "+String(m.tsMin).slice(0,19)+" → "+String(m.tsMax||"").slice(0,19):"")+".");
+  parts.push(aiDetText());
+  try{ let ev=null; if(SERVER) ev=JSON.parse(await (await api("/api/evidence")).text(), mapSetRevive).evidence;
+    if(ev){ const c=a=>a?a.length:0; const hi=[];
+      if(c(ev.logCleared))hi.push(c(ev.logCleared)+" log-clear"); if(c(ev.lsassAccess))hi.push(c(ev.lsassAccess)+" LSASS access");
+      if(c(ev.accountsCreated))hi.push(c(ev.accountsCreated)+" accounts created"); if(c(ev.groupAdds))hi.push(c(ev.groupAdds)+" priv-group adds");
+      if(c(ev.services))hi.push(c(ev.services)+" services installed"); if(ev.extLogons&&ev.extLogons.size)hi.push(ev.extLogons.size+" external/RDP logons");
+      if(c(ev.psBlocks))hi.push(c(ev.psBlocks)+" PowerShell script blocks"); if(c(ev.tasks))hi.push(c(ev.tasks)+" scheduled tasks");
+      if(hi.length)parts.push("Forensic evidence: "+hi.join(", ")+"."); } }catch(_){}
+  const anns=[...annotations.values()].filter(a=>a.verdict);
+  if(anns.length) parts.push("Analyst verdicts so far: "+anns.map(a=>VERDICT_LABELS[a.verdict]||a.verdict).join(", ")+".");
+  return parts.join("\n");
+}
+async function aiSectionContext(mode){
+  const base="You are a senior DFIR/SOC analyst helping triage Windows event logs. Be concise, concrete and practical — short paragraphs or bullets. ONLY use the data provided; never invent hosts, users, IPs, counts or filenames. Use **bold** for key terms.";
+  if(mode==="det") return { title:"Detections — analyst read", maxTokens:900,
+    system:base+" Interpret the detections: what they collectively indicate, which are most urgent, likely false positives, and the next checks.",
+    prompt:"Detection results:\n\n"+aiDetText()+"\n\nGive a prioritised analyst interpretation." };
+  if(mode==="rar"){ let d="No rarity data loaded — open the Rarity tab first."; if(rarData){ const pick=(s,n)=>s&&s.rows?s.rows.filter(r=>r.rare||r.suspicious).slice(0,12).map(r=>"x"+r.count+(r.suspicious?" [SUSPICIOUS]":"")+" "+r.value):[];
+      d="Rare/suspicious processes:\n"+pick(rarData.processes).join("\n")+"\nRare parent→child:\n"+pick(rarData.parentChild).join("\n")+"\nRare logon origins:\n"+pick(rarData.logons).join("\n")+"\nRare services:\n"+pick(rarData.services).join("\n"); }
+    return { title:"Rarity — hunt leads", maxTokens:900, system:base+" These are long-tail (rare) values from the case. Point out which look like real anomalies worth investigating and why.", prompt:d+"\n\nWhich of these are worth investigating, and what would you check?" }; }
+  if(mode==="wl"){ let d=""; if(wlObserved){ const top=(a)=>(a||[]).slice(0,25).map(x=>x.value+" x"+x.count+(x.det?" [on detection]":"")).join(", ");
+      d="Observed IPs: "+top(wlObserved.ips)+"\nObserved hashes: "+top(wlObserved.hashes)+"\nObserved domains: "+top(wlObserved.domains); } else d="Open the Watchlist tab first.";
+    return { title:"Indicators — assessment", maxTokens:800, system:base+" These are indicators observed in the case. Flag which look suspicious and worth a reputation check.", prompt:d+"\n\nWhich indicators are most suspicious and why?" }; }
+  if(mode==="lat"){ let d="Open the Lateral tab first."; if(latData&&latData.edges){ d="Lateral-movement edges (source → target, techniques):\n"+latData.edges.slice(0,30).map(e=>e.from+" → "+e.to+" ["+Object.keys(e.kinds||{}).join(",")+"]"+(e.det>0?" (on detection)":"")).join("\n"); }
+    return { title:"Lateral movement — read", maxTokens:800, system:base+" Interpret this host↔host movement graph: likely pivot path, patient-zero, and spread.", prompt:d+"\n\nDescribe the likely lateral-movement path and priorities." }; }
+  if(mode==="cw") return { title:"Draft case summary", canInsert:true, maxTokens:800,
+    system:base+" Write a clear, concise incident summary (5–8 sentences, plain prose, no headers) for a case report: what happened, scope (hosts/users), key evidence, and an assessment.",
+    prompt:"Case data:\n\n"+(await gatherCaseContext())+"\n\nWrite the incident summary." };
+  // dash / events / evidence / timeline / proc / sess / default → case-wide "what happened"
+  return { title:"What happened in this case", canInsert:true, maxTokens:1100,
+    system:base+" Given a triage data summary, tell the story: what likely happened, the most serious findings, affected hosts/users, and the top 3 next actions.",
+    prompt:"Triage data:\n\n"+(await gatherCaseContext())+"\n\nExplain what happened and what to do next." };
+}
+/* --- panel --- */
+function aiSetTitle(t){ $("aiPanelTitle").textContent="✦ "+t; }
+function aiPanelLoading(){ $("aiPanel").classList.add("show"); const b=$("aiPanelBody"); b.classList.remove("err"); b.innerHTML='<span class="spin"></span> thinking…'; $("aiPanelFoot").innerHTML=""; $("aiPanelProv").textContent=""; }
+function aiPanelErr(m, offerSettings){ $("aiPanel").classList.add("show"); const b=$("aiPanelBody"); b.classList.add("err"); b.textContent=m; $("aiPanelProv").textContent=""; $("aiPanelFoot").innerHTML=offerSettings?'<button class="vbtn" id="aiOpenSettings">⚙ Open Settings</button>':""; }
+async function aiSupport(mode){
+  mode=mode||document.body.getAttribute("data-mode")||"dash";
+  if(!SERVER){ aiPanelErr("AI Support runs server-side — run the backend to use it."); return; }
+  await ensureAISettings();
+  if(!aiConfigured()){ aiPanelErr("No AI model configured yet. Open ⚙ Settings, choose Claude / ChatGPT / Gemini and add a key.", true); return; }
+  aiPanelLoading();
+  const ctx=await aiSectionContext(mode); aiSetTitle(ctx.title);
+  const r=await callAI(ctx.system, ctx.prompt, ctx.maxTokens);
+  if(!r.ok){ aiPanelErr(r.error||"AI request failed", /Settings/.test(r.error||"")); return; }
+  aiLastText=r.text||"";
+  $("aiPanelProv").textContent=(r.label||r.provider||"")+(r.model?" · "+r.model:"");
+  const b=$("aiPanelBody"); b.classList.remove("err"); b.innerHTML=aiLastText?mdLite(aiLastText):"(the model returned an empty response)";
+  $("aiPanelFoot").innerHTML='<button class="vbtn" id="aiCopyOut">Copy</button>'+(ctx.canInsert?'<button class="vbtn" id="aiInsertCw">＋ Add to Case Notes</button>':'');
+}
+async function aiInsertIntoCaseNotes(text){
+  if(!text) return; const cur=(casework.summary||"").trim(); const merged=cur? cur+"\n\n"+text : text;
+  try{ await api("/api/casework/summary",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({summary:merged})}); casework.summary=merged;
+    if(document.body.getAttribute("data-mode")==="cw"){ const ta=$("cwSummary"); if(ta)ta.value=merged; else paintCasework(); }
+  }catch(_){}
+}
+$("aiBtn").onclick=()=>aiSupport();
+$("aiPanelClose").onclick=()=>$("aiPanel").classList.remove("show");
+$("aiPanelFoot").addEventListener("click",e=>{
+  if(e.target.id==="aiOpenSettings"){ $("aiPanel").classList.remove("show"); openSettings(); return; }
+  if(e.target.id==="aiCopyOut"){ if(navigator.clipboard&&aiLastText)navigator.clipboard.writeText(aiLastText); e.target.textContent="copied ✓"; setTimeout(()=>e.target.textContent="Copy",1000); return; }
+  if(e.target.id==="aiInsertCw"){ aiInsertIntoCaseNotes(aiLastText); e.target.textContent="added ✓"; e.target.disabled=true; return; }
+});
+/* --- event-modal analysis (server-side, multi-provider) --- */
 $("aiClose").onclick=()=>{ $("aiBox").classList.remove("show"); };
 $("analyzeBtn").onclick=analyzeEvent;
 async function analyzeEvent(){
   const box=$("aiBox"), body=$("aiBody"), lbl=$("aiHeadLabel");
   box.classList.remove("err"); box.classList.add("show");
-  if(!aiKey){ box.classList.add("err"); lbl.textContent="AI analysis";
-    body.textContent="No OpenAI API key set. Open ✦ AI (top of the window), paste your sk-… key, and Save."; openAIPop(); return; }
-  lbl.innerHTML='<span class="spin"></span> &nbsp;analyzing with '+esc(aiModel)+'…'; body.textContent="";
-  const snapshot=modalJSON;
-  try{
-    const res=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer "+aiKey},
-      body:JSON.stringify({model:aiModel,temperature:0.2,max_tokens:600,
-        messages:[{role:"system",content:AI_SYS},
-                  {role:"user",content:"Explain this Windows event-log record:\n\n"+snapshot}]})});
-    let data; try{ data=await res.json(); }catch(_){ data=null; }
-    if(!res.ok){ throw new Error((data&&data.error&&data.error.message)||("HTTP "+res.status+" "+res.statusText)); }
-    const txt=(data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content||"").trim();
-    lbl.textContent="AI analysis · "+aiModel;
-    body.innerHTML=txt?mdLite(txt):"(model returned an empty response)";
-  }catch(err){
-    box.classList.add("err"); lbl.textContent="AI analysis — failed";
-    let m=err.message||String(err);
-    if(/Failed to fetch|NetworkError|CORS/i.test(m))
-      m+="\n\nNote: external requests are blocked in the in-chat preview. Download this file and open it locally, where the call will work.";
-    body.textContent=m;
-  }
+  await ensureAISettings();
+  if(!aiConfigured()){ box.classList.add("err"); lbl.textContent="AI Support";
+    body.innerHTML="No AI model configured. Open ⚙ Settings, pick Claude / ChatGPT / Gemini and add a key."; return; }
+  lbl.innerHTML='<span class="spin"></span> &nbsp;analyzing…'; body.textContent="";
+  const sys="You are a senior SOC/DFIR analyst. Explain ONE Windows event-log record in plain English: what happened; what this provider + Event ID means; the key fields present; whether routine or potentially suspicious and WHY; and one or two concrete next checks. Under ~150 words. Only reference fields actually present — never invent values.";
+  const r=await callAI(sys, "Explain this Windows event-log record:\n\n"+modalJSON, 550);
+  if(!r.ok){ box.classList.add("err"); lbl.textContent="AI Support — failed"; body.textContent=r.error||"request failed"; return; }
+  lbl.textContent="AI Support · "+(r.label||r.provider||"")+(r.model?" "+r.model:""); body.innerHTML=r.text?mdLite(r.text):"(empty response)";
 }
 </script>
 </body>
