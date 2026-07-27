@@ -7921,38 +7921,76 @@ async function gatherCaseContext(){
   if(anns.length) parts.push("Analyst verdicts so far: "+anns.map(a=>VERDICT_LABELS[a.verdict]||a.verdict).join(", ")+".");
   return parts.join("\n");
 }
+const AI_BASE="You are a lead DFIR/SOC analyst. Write a detailed but skimmable analyst briefing — thorough and genuinely useful, never a one-liner. "+
+  "Use markdown '## ' headers for the sections listed below, in that exact order, with 2-5 bullets under each. "+
+  "Be specific and CITE the data (exact counts, and real host / user / IP / file names). "+
+  "NEVER invent values — if a section has no supporting evidence, say so explicitly and state what data would answer it. Use **bold** for key terms. No filler.";
+function aiStruct(sections){ return AI_BASE+"\n\nSections (use these exact '## ' headers, in order):\n"+sections.map(s=>"## "+s).join("\n"); }
+async function aiProcText(){
+  let j=procTreeData; if(!j){ try{ j=await (await api("/api/proctree")).json(); }catch(_){} }
+  if(!j||!j.roots||!j.roots.length) return "No Sysmon process trees (EID 1) present in this case.";
+  const lines=[]; let n=0;
+  const walk=(node,depth)=>{ if(n>=150)return;
+    if(node.det||node.subDet){ lines.push("  ".repeat(Math.min(depth,6))+ptBase(node.image||"?")+(node.user?" ("+node.user+")":"")+(node.det?" [DETECTION]":"")+(node.cmd&&node.cmd!==node.image?" :: "+String(node.cmd).slice(0,140):"")); n++; }
+    for(const c of (node.children||[])) walk(c,depth+1); };
+  for(const r of j.roots) walk(r,0);
+  return "Process trees: "+j.count+" processes across "+((j.hosts&&j.hosts.length)||1)+" host(s). Ancestry branches that involve a detection:\n"+(lines.join("\n")||"(no detected branches — comment on overall structure)");
+}
+async function aiSessText(){
+  let s=sessData; if(!s){ try{ s=(await (await api("/api/sessions")).json()).sessions; }catch(_){} }
+  if(!s||!s.length) return "No reconstructed logon sessions (4624↔4634/4647) present.";
+  return "Logon sessions ("+s.length+"):\n"+s.slice(0,40).map(x=>x.user+" @ "+x.host+" · "+x.ltName+(x.ip?" from "+x.ip:"")+(x.rdp?" [RDP]":"")+(x.ext?" [EXTERNAL]":"")+(x.durationMs!=null?" · "+Math.round(x.durationMs/60000)+"m":" · active/no-logoff")+(x.det?" [DETECTION]":"")).join("\n");
+}
+async function aiEvidenceText(){
+  let ev=null; try{ if(SERVER) ev=JSON.parse(await (await api("/api/evidence")).text(), mapSetRevive).evidence; }catch(_){}
+  if(!ev) return "No forensic evidence extracted.";
+  const P=(label,arr,fn)=>(!arr||!arr.length)?"":"\n"+label+" ("+arr.length+"): "+arr.slice(0,15).map(fn).join("; ");
+  let t="Forensic evidence:";
+  t+=P("Accounts created",ev.accountsCreated,a=>a.user+(a.by?" by "+a.by:""));
+  t+=P("Priv-group adds",ev.groupAdds,a=>a.member+"→"+a.group);
+  t+=P("Services installed",ev.services,a=>a.name+(a.path?" ("+String(a.path).slice(0,70)+")":""));
+  t+=P("Scheduled tasks",ev.tasks,a=>a.name+(a.cmd?" ("+String(a.cmd).slice(0,60)+")":""));
+  t+=P("LSASS access",ev.lsassAccess,a=>a.src+" ["+a.ga+"]");
+  t+=P("PowerShell blocks",ev.psBlocks,a=>String(a.text).slice(0,80));
+  if(ev.logCleared&&ev.logCleared.length) t+="\nLog clears: "+ev.logCleared.length;
+  if(ev.extLogons&&ev.extLogons.size) t+="\nExternal/RDP logons: "+ev.extLogons.size;
+  if(ev.kerbRoast) t+="\nKerberoasting (RC4 tickets): "+ev.kerbRoast;
+  return t;
+}
 async function aiSectionContext(mode){
-  const base="You are a senior DFIR/SOC analyst helping triage Windows event logs. Be concise, concrete and practical — short paragraphs or bullets. ONLY use the data provided; never invent hosts, users, IPs, counts or filenames. Use **bold** for key terms.";
-  if(mode==="det") return { title:"Detections — analyst read", maxTokens:900,
-    system:base+" Interpret the detections: what they collectively indicate, which are most urgent, likely false positives, and the next checks.",
-    prompt:"Detection results:\n\n"+aiDetText()+"\n\nGive a prioritised analyst interpretation." };
-  if(mode==="rar"){ let d="No rarity data loaded — open the Rarity tab first."; if(rarData){ const pick=(s,n)=>s&&s.rows?s.rows.filter(r=>r.rare||r.suspicious).slice(0,12).map(r=>"x"+r.count+(r.suspicious?" [SUSPICIOUS]":"")+" "+r.value):[];
-      d="Rare/suspicious processes:\n"+pick(rarData.processes).join("\n")+"\nRare parent→child:\n"+pick(rarData.parentChild).join("\n")+"\nRare logon origins:\n"+pick(rarData.logons).join("\n")+"\nRare services:\n"+pick(rarData.services).join("\n"); }
-    return { title:"Rarity — hunt leads", maxTokens:900, system:base+" These are long-tail (rare) values from the case. Point out which look like real anomalies worth investigating and why.", prompt:d+"\n\nWhich of these are worth investigating, and what would you check?" }; }
-  if(mode==="wl"){ let d=""; if(wlObserved){ const top=(a)=>(a||[]).slice(0,25).map(x=>x.value+" x"+x.count+(x.det?" [on detection]":"")).join(", ");
-      d="Observed IPs: "+top(wlObserved.ips)+"\nObserved hashes: "+top(wlObserved.hashes)+"\nObserved domains: "+top(wlObserved.domains); } else d="Open the Watchlist tab first.";
-    return { title:"Indicators — assessment", maxTokens:800, system:base+" These are indicators observed in the case. Flag which look suspicious and worth a reputation check.", prompt:d+"\n\nWhich indicators are most suspicious and why?" }; }
-  if(mode==="lat"){ let d="Open the Lateral tab first."; if(latData&&latData.edges){ d="Lateral-movement edges (source → target, techniques):\n"+latData.edges.slice(0,30).map(e=>e.from+" → "+e.to+" ["+Object.keys(e.kinds||{}).join(",")+"]"+(e.det>0?" (on detection)":"")).join("\n"); }
-    return { title:"Lateral movement — read", maxTokens:800, system:base+" Interpret this host↔host movement graph: likely pivot path, patient-zero, and spread.", prompt:d+"\n\nDescribe the likely lateral-movement path and priorities." }; }
-  if(mode==="cw") return { title:"Draft case summary", canInsert:true, maxTokens:800,
-    system:base+" Write a clear, concise incident summary (5–8 sentences, plain prose, no headers) for a case report: what happened, scope (hosts/users), key evidence, and an assessment.",
+  if(mode==="det") return { title:"Detections — analyst read", maxTokens:1800,
+    system:aiStruct(["Bottom line","Most urgent detections (triage order)","What the attacker is doing (map to ATT&CK)","Correlated attack chains","Likely false positives","Next checks","Open questions to answer"]),
+    prompt:"Detection results:\n\n"+aiDetText()+"\n\nWrite the detections briefing." };
+  if(mode==="rar"){ let d="No rarity data loaded — open the Rarity tab first."; if(rarData){ const pick=s=>s&&s.rows?s.rows.filter(r=>r.rare||r.suspicious).slice(0,15).map(r=>"x"+r.count+(r.suspicious?" [SUSPICIOUS]":"")+(r.det?" [on detection]":"")+" "+r.value):[];
+      d="Rare/suspicious processes:\n"+pick(rarData.processes).join("\n")+"\nRare parent→child ancestry:\n"+pick(rarData.parentChild).join("\n")+"\nRare logon origins:\n"+pick(rarData.logons).join("\n")+"\nRare services:\n"+pick(rarData.services).join("\n"); }
+    return { title:"Rarity — hunt leads", maxTokens:1600,
+      system:aiStruct(["Bottom line","Top anomalies to investigate first","Suspicious process ancestry","Anomalous logons","Persistence / services","Recommended pivots","Open questions to answer"]),
+      prompt:"Long-tail (rare) values from the case:\n\n"+d+"\n\nWrite the hunting briefing." }; }
+  if(mode==="wl"){ let d="Open the Watchlist tab first."; if(wlObserved){ const top=a=>(a||[]).slice(0,25).map(x=>x.value+" x"+x.count+(x.det?" [on detection]":"")).join(", ");
+      d="Observed IPs: "+top(wlObserved.ips)+"\nObserved hashes: "+top(wlObserved.hashes)+"\nObserved domains: "+top(wlObserved.domains); }
+    return { title:"Indicators — assessment", maxTokens:1500,
+      system:aiStruct(["Bottom line","Suspicious IPs (and why)","Suspicious hashes / domains","Recommended reputation checks","Pivot suggestions","Open questions to answer"]),
+      prompt:"Indicators observed in this case:\n\n"+d+"\n\nWrite the indicator assessment." }; }
+  if(mode==="lat"){ let d="Open the Lateral tab first."; if(latData&&latData.edges){ d="Lateral-movement edges (source → target [techniques]):\n"+latData.edges.slice(0,40).map(e=>e.from+" → "+e.to+" ["+Object.keys(e.kinds||{}).join(",")+"]"+(e.users&&e.users.length?" users:"+e.users.slice(0,3).join(","):"")+(e.det>0?" [on detection]":"")).join("\n"); }
+    return { title:"Lateral movement — read", maxTokens:1600,
+      system:aiStruct(["Bottom line","Likely pivot path (chronological)","Patient-zero / entry point","High-value targets touched","Compromised credentials in play","Containment priorities","Open questions to answer"]),
+      prompt:"Cross-host movement in this case:\n\n"+d+"\n\nWrite the lateral-movement briefing." }; }
+  if(mode==="proc") return { title:"Process ancestry — read", maxTokens:1600,
+    system:aiStruct(["Bottom line","Suspicious execution chains","LOLBIN / abnormal parent-child use","Likely malicious commands","Next checks","Open questions to answer"]),
+    prompt:"Process-tree data:\n\n"+(await aiProcText())+"\n\nWrite the process-ancestry briefing." };
+  if(mode==="sess") return { title:"Logon sessions — read", maxTokens:1500,
+    system:aiStruct(["Bottom line","Suspicious / external logons","RDP & remote access exposure","Accounts of concern","Next checks","Open questions to answer"]),
+    prompt:"Logon-session data:\n\n"+(await aiSessText())+"\n\nWrite the logon-session briefing." };
+  if(mode==="ev") return { title:"Evidence — interpretation", maxTokens:1800,
+    system:aiStruct(["Bottom line","Persistence mechanisms","Credential access","Anti-forensics","Suspicious execution","Priorities","Open questions to answer"]),
+    prompt:"Extracted forensic evidence:\n\n"+(await aiEvidenceText())+"\n\nWrite the evidence interpretation." };
+  if(mode==="cw") return { title:"Draft case summary", canInsert:true, maxTokens:900,
+    system:"You are a senior DFIR analyst. Write a clear, substantive incident summary (a solid paragraph, ~6-9 sentences, plain prose, no headers) for a case report: what happened, scope (named hosts/users), key evidence, and an assessment with severity. Only use the data provided; never invent values.",
     prompt:"Case data:\n\n"+(await gatherCaseContext())+"\n\nWrite the incident summary." };
-  // dash / events / evidence / timeline / proc / sess / default → full case-wide DFIR briefing
-  return { title:"Case DFIR briefing", canInsert:true, maxTokens:2400,
-    system:"You are a lead DFIR analyst writing an incident triage briefing from Windows event-log analysis. "+
-      "Produce a detailed but skimmable report. Use markdown '## ' section headers EXACTLY as listed, in this order:\n"+
-      "## Summary — 2-3 sentence bottom line (what happened + severity).\n"+
-      "## What happened — the narrative / likely timeline of the intrusion.\n"+
-      "## Initial access & execution — how they likely got in and ran code (only if there's evidence).\n"+
-      "## Persistence, credential access & lateral movement — techniques seen, with the ATT&CK IDs if given.\n"+
-      "## Scope — affected hosts and accounts, named.\n"+
-      "## Impact & exfiltration risk — data/impact concerns.\n"+
-      "## Key indicators — notable IPs / hashes / domains / accounts to pivot on.\n"+
-      "## Assessment — overall severity and your confidence.\n"+
-      "## Recommended next actions — prioritised, concrete containment/investigation steps.\n"+
-      "## DFIR questions to answer — the open questions the analyst must still resolve (who, patient-zero, dwell time, blast radius, exfil, root cause).\n\n"+
-      "Be specific and cite the data (exact counts, host/user/IP names). NEVER invent hosts, users, IPs, counts or filenames — if a section lacks evidence, say so and state what data would answer it. Use bullets under headers. Keep it tight and practical.",
-    prompt:"Triage data for the case:\n\n"+(await gatherCaseContext())+"\n\nWrite the full DFIR triage briefing following the section structure." };
+  // dash / events / timeline / fw / vpn / default → full case-wide DFIR briefing
+  return { title:"Case DFIR briefing", canInsert:true, maxTokens:2600,
+    system:aiStruct(["Summary","What happened (narrative / timeline)","Initial access & execution","Persistence, credential access & lateral movement","Scope (affected hosts & accounts)","Impact & exfiltration risk","Key indicators","Assessment (severity & confidence)","Recommended next actions (prioritised)","DFIR questions to answer"]),
+    prompt:"Triage data for the whole case:\n\n"+(await gatherCaseContext())+"\n\nWrite the full DFIR triage briefing." };
 }
 /* --- panel --- */
 function aiSetTitle(t){ $("aiPanelTitle").textContent="✦ "+t; }
