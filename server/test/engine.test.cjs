@@ -294,6 +294,33 @@ function testRec(rule, rec){ if(!rule._fulltext){} rec._fulltext = Engine.buildF
   eq(m.scan("203.0.113.9 ran beacon.exe").size, 2, "two iocs in one haystack");
 })();
 
+(function testRarityStacking(){
+  eq(Engine.baseName("C:\\Windows\\System32\\cmd.exe"), "cmd.exe", "baseName strips path");
+  ok(Engine.suspiciousParentChild("C:\\Office\\WINWORD.EXE","C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"), "winword -> powershell is suspicious");
+  ok(Engine.suspiciousParentChild("w3wp.exe","cmd.exe"), "w3wp -> cmd is suspicious (webshell)");
+  ok(!Engine.suspiciousParentChild("explorer.exe","cmd.exe"), "explorer -> cmd is normal");
+  ok(!Engine.suspiciousParentChild("winword.exe","excel.exe"), "office -> office is not shell spawn");
+  const items=[
+    { key:"svchost.exe", host:"H1", idx:0, tms:100, det:0 },
+    { key:"svchost.exe", host:"H1", idx:1, tms:200, det:0 },
+    { key:"svchost.exe", host:"H2", idx:2, tms:300, det:0 },
+    { key:"rare.exe",    host:"H1", user:"bob", idx:3, tms:150, det:3 },
+    { key:"once.exe",    host:"H2", idx:4, tms:400, det:0 },
+  ];
+  const s=Engine.buildStacks(items);
+  eq(s.distinct, 3, "three distinct process names");
+  eq(s.total, 5, "five total observations");
+  eq(s.rows[0].value, "once.exe", "rarest-first: a count-1 process leads (tie broken alphabetically)");
+  eq(s.rows[0].count, 1, "rarest count is 1");
+  ok(s.rows[0].rare && s.rows[1].rare, "count<=2 flagged rare");
+  const sv=s.rows.find(r=>r.value==="svchost.exe");
+  eq(sv.count, 3, "svchost counted 3×"); ok(!sv.rare, "count 3 not rare");
+  eq(JSON.stringify(sv.hosts.sort()), JSON.stringify(["H1","H2"]), "hosts aggregated + de-duped");
+  const rare=s.rows.find(r=>r.value==="rare.exe");
+  eq(rare.det, 3, "detection severity carried onto the bucket");
+  eq(rare.firstTms, 150, "first timestamp tracked");
+})();
+
 /* =====================================================================
    3. YARA-LITE
    ===================================================================== */

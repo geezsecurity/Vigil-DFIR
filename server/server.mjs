@@ -1261,6 +1261,46 @@ app.get("/api/observed", async (req,res)=>{
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
+// ---- Rarity / stacking: frequency analysis (rarest-first) to surface long-tail anomalies ----
+app.get("/api/rarity", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, processes:null, parentChild:null, logons:null, services:null, eventCount:0 });
+    let detHits={}; try{ detHits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{}
+    const detLvl=i=>{ const h=detHits[i]; if(!h||!h.length)return 0; let m=0; for(const x of h){ const n=sevNumS(x.level); if(n>m)m=n; } return m; };
+    const procItems=[], pcItems=[], logonItems=[], svcItems=[];
+    let eventCount=0;
+    await forEachEvent((ev, i)=>{
+      eventCount++;
+      const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+      const eid=String(getEventId(sys)||""); const prov=getProvider(ev); const d=getData(ev)||{};
+      const host=getComputer(ev); const ts=getTime(ev); const tms=ts?Date.parse(ts):NaN; const T=Number.isNaN(tms)?null:tms; const det=detLvl(i);
+      const U=k=>d[k]!=null?String(d[k]):"";
+      // process creation — Sysmon EID 1 or Security 4688
+      let image="", parent="", user="";
+      if(eid==="1" && /sysmon/i.test(prov)){ image=U("Image"); parent=U("ParentImage"); user=U("User"); }
+      else if(eid==="4688"){ image=U("NewProcessName"); parent=U("ParentProcessName"); user=U("SubjectUserName"); }
+      if(image){ const bi=Engine.baseName(image).toLowerCase();
+        procItems.push({ key:bi, host, user, idx:i, tms:T, det });
+        if(parent){ const bp=Engine.baseName(parent).toLowerCase();
+          pcItems.push({ key:bp+" → "+bi, host, user, idx:i, tms:T, det,
+            extra:{ parent:bp, child:bi, suspicious:Engine.suspiciousParentChild(parent, image) } }); } }
+      // logon origin — 4624 for real (non-machine) users
+      if(eid==="4624"){ const lt=U("LogonType"); const u=U("TargetUserName");
+        if(u && !/\$$/.test(u) && !/^(SYSTEM|ANONYMOUS LOGON|LOCAL SERVICE|NETWORK SERVICE|DWM-\d|UMFD-\d)$/i.test(u)){
+          const ipv=U("IpAddress"); const src=(ipv&&ipv!=="-")?ipv:(U("WorkstationName")||"local");
+          logonItems.push({ key:u+" @ "+(host||"?")+" · type "+lt+" · from "+src, host, user:u, idx:i, tms:T, det }); } }
+      // service install — 7045 (System) / 4697 (Security)
+      if(eid==="7045"||eid==="4697"){ const n=U("ServiceName"); const p=U("ImagePath")||U("ServiceFileName");
+        if(n) svcItems.push({ key:n+(p?"  ["+p+"]":""), host, user:U("SubjectUserName"), idx:i, tms:T, det }); }
+    });
+    res.json({ ok:true, eventCount,
+      processes: Engine.buildStacks(procItems),
+      parentChild: Engine.buildStacks(pcItems),
+      logons: Engine.buildStacks(logonItems),
+      services: Engine.buildStacks(svcItems) });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
 // ---- Settings: report which intel providers are configured; save keys (never returned) ----
 app.get("/api/settings", (req,res)=>{
   res.json({ ok:true, abuseipdbConfigured:!!getApiKey("abuseipdb"), virustotalConfigured:!!getApiKey("virustotal"),

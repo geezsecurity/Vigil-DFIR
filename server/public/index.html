@@ -521,6 +521,12 @@
   /* watchlist */
   #wlWrap{display:none;flex:1;overflow:auto;padding:16px 20px}
   body[data-mode="wl"] #wlWrap{display:block} body[data-mode="wl"] #eventsWrap{display:none} body[data-mode="wl"] aside{display:none}
+  #rarWrap{display:none;flex:1;overflow:auto;padding:16px 20px}
+  body[data-mode="rar"] #rarWrap{display:block} body[data-mode="rar"] #eventsWrap{display:none} body[data-mode="rar"] aside{display:none}
+  .stag.rare-t{background:rgba(230,180,80,.16);color:#e6b450}
+  .stag.susp-t{background:rgba(255,107,107,.18);color:#ff8a8a}
+  .wlhits tr.rowsusp td{background:rgba(255,107,107,.05)}
+  .rarbar-desc{color:var(--txt-dim);font-size:11px;margin:0 0 10px;line-height:1.5}
   .wlgrid{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start}
   @media(max-width:900px){ .wlgrid{grid-template-columns:1fr} }
   .wlpanel{border:1px solid var(--line-2);border-radius:10px;padding:14px;background:var(--bg-2)}
@@ -715,6 +721,7 @@
       <button class="tab" data-tab="sess">🔑 Sessions</button>
       <button class="tab" data-tab="lat">🕸 Lateral</button>
       <button class="tab" data-tab="wl">🎯 Watchlist</button>
+      <button class="tab" data-tab="rar">📊 Rarity</button>
       <button class="tab" data-tab="ev">🔎 Evidence</button>
       <button class="tab" data-tab="fw">🔥 Firewall</button>
       <button class="tab" data-tab="vpn">🔒 VPN</button>
@@ -769,6 +776,7 @@
     <div id="sessWrap"></div>
     <div id="latWrap"></div>
     <div id="wlWrap"></div>
+    <div id="rarWrap"></div>
     <div id="evWrap"></div>
     <div id="fwWrap"></div>
     <div id="vpnWrap"></div>
@@ -5333,6 +5341,7 @@ function setTab(t){
   else if(t==="sess"){ renderSessions(); }
   else if(t==="lat"){ renderLateral(); }
   else if(t==="wl"){ renderWatchlist(); }
+  else if(t==="rar"){ renderRarity(); }
   else if(t==="ev"){ if(SCROLL){ renderEvidenceScroll(); } else { if(evDirty){ EVID=buildEvidence(); evDirty=false; } renderEvidence(); } }
   else if(t==="fw"){ renderCatSection("firewall"); }
   else if(t==="vpn"){ renderCatSection("vpn"); }
@@ -5489,7 +5498,7 @@ async function streamEventsInto(url, cap){
 async function loadSessionFromServer(meta, offset){
   window.__meta = meta || window.__meta;
   window.__caseId = (meta && meta.caseId) || window.__caseId || "local";
-  wlObserved=null; wlHits=null; enrichMap={};        // per-case watchlist state is stale on a new load
+  wlObserved=null; wlHits=null; enrichMap={}; rarData=null;   // per-case watchlist/rarity state is stale on a new load
   const cap=Math.min(window.__browseCap||200000, BROWSER_WINDOW_MAX);
   serverWindowCap=cap;
   const big = !!(meta && meta.count > cap);
@@ -6987,6 +6996,72 @@ $("wlWrap").addEventListener("change",async e=>{
   let text=""; for(const f of files){ try{ text+="\n"+await f.text(); }catch{} }
   if(text.trim()){ await wlPost({ text }); wlHits=null; paintManual(); }
   e.target.value="";
+});
+
+/* ---------- rarity / stacking (long-tail hunting) ---------- */
+let rarData=null, rarView="processes", rarRareOnly=false, rarQ="";
+const RAR_VIEWS=[
+  { k:"processes",  label:"Processes",     desc:"Distinct process images, rarest first. A binary seen once across the case is the classic outlier — look for odd paths (Temp, ProgramData) and unfamiliar names." },
+  { k:"parentChild",label:"Parent → Child",desc:"Process-ancestry pairs. Rare or flagged combinations expose abnormal execution — e.g. an Office or web-server process spawning a shell (highlighted)." },
+  { k:"logons",     label:"Logon origins", desc:"Distinct user × host × logon-type × source. A rare origin is an account authenticating from somewhere it normally doesn't." },
+  { k:"services",   label:"Services",      desc:"Installed services (7045 / 4697). New/rare service names and Temp-path binaries are common persistence." },
+];
+async function renderRarity(){
+  const w=$("rarWrap");
+  if(!SERVER){ w.innerHTML=ptNote("Rarity analysis runs server-side — run the backend to use this view."); return; }
+  if(rarData===null){ w.innerHTML=ptNote("Computing frequency stacks across the case…");
+    try{ rarData=await (await api("/api/rarity")).json(); }catch(err){ w.innerHTML='<div class="dash-note err">'+esc(err.message||err)+'</div>'; return; } }
+  paintRarity();
+}
+function rarPivotTarget(view,r){
+  if(view==="parentChild") return r.child||r.value;
+  if(view==="logons") return (r.users&&r.users[0])||String(r.value).split(" @ ")[0];
+  if(view==="services") return String(r.value).split("  [")[0];
+  return r.value;
+}
+function paintRarity(){
+  const w=$("rarWrap"); const stack=rarData[rarView];
+  const meta=RAR_VIEWS.find(v=>v.k===rarView)||RAR_VIEWS[0];
+  let bar='<div class="vtoolbar">';
+  for(const v of RAR_VIEWS){ const s=rarData[v.k]; const n=s&&s.distinct!=null?s.distinct:0;
+    bar+='<button class="vbtn'+(rarView===v.k?" on":"")+'" data-rarview="'+v.k+'">'+v.label+' ('+n+')</button>'; }
+  bar+='<button class="vbtn'+(rarRareOnly?" on":"")+'" data-rarrare title="show only values seen ≤2 times">◆ Rare only</button>'+
+    '<input class="vsearch" id="rarSearch" placeholder="filter…" value="'+esc(rarQ)+'">'+
+    '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0">'+
+    (stack?'<b>'+stack.distinct.toLocaleString()+'</b> distinct · '+stack.total.toLocaleString()+' observations':'')+
+    ' · from '+(rarData.eventCount||0).toLocaleString()+' events</span></div>';
+  if(!stack || !stack.rows.length){ w.innerHTML=bar+'<p class="rarbar-desc">'+esc(meta.desc)+'</p>'+'<div class="hint" style="padding:16px">No '+meta.label.toLowerCase()+' data in this case (needs Sysmon EID 1 / 4688 for processes, 4624 for logons, 7045/4697 for services).</div>'; return; }
+  let list=stack.rows;
+  if(rarRareOnly) list=list.filter(r=>r.rare);
+  if(rarQ){ const q=rarQ; list=list.filter(r=>((r.value||"")+" "+(r.hosts||[]).join(" ")+" "+(r.users||[]).join(" ")).toLowerCase().indexOf(q)>=0); }
+  const RENDER=2000; const shown=list.slice(0,RENDER);
+  let rows2="";
+  for(const r of shown){
+    const hosts=r.hosts.map(x=>'<span class="shost">'+esc(x)+'</span>').join(" ");
+    const when=r.firstTms?fmtTime(r.firstTms)+(r.lastTms&&r.lastTms!==r.firstTms?" → "+fmtTime(r.lastTms):""):"";
+    const target=rarPivotTarget(rarView,r);
+    rows2+='<tr'+(r.suspicious?' class="rowsusp"':'')+'>'+
+      '<td>'+(r.det?'<span class="ptdet" style="display:inline-block;background:'+numColor(r.det)+'" title="on a detected event"></span> ':'')+
+        '<b>'+r.count.toLocaleString()+'</b>'+(r.rare?' <span class="stag rare-t">rare</span>':'')+(r.suspicious?' <span class="stag susp-t">suspicious</span>':'')+'</td>'+
+      '<td class="mono">'+esc(r.value)+'</td>'+
+      '<td>'+hosts+'</td>'+
+      '<td class="mono" style="font-size:10.5px;color:var(--txt-dim)">'+esc(when)+'</td>'+
+      '<td><span class="wlpivot" data-rarpivot="'+esc(target)+'">grid ↗</span>'+
+        (r.samples&&r.samples.length?' · <span class="wlpivot" data-raropen="'+r.samples[0]+'">event ↗</span>':'')+'</td>'+
+      '</tr>';
+  }
+  const table='<div style="overflow:auto"><table class="wlhits"><thead><tr><th>Count</th><th>'+esc(meta.label)+'</th><th>Hosts</th><th>First → last seen</th><th></th></tr></thead><tbody>'+rows2+'</tbody></table></div>'+
+    (list.length>RENDER?'<div class="hint" style="padding:8px 14px">Showing the first '+RENDER.toLocaleString()+' of '+list.length.toLocaleString()+' — narrow with search or Rare only.</div>':'');
+  w.innerHTML=bar+'<p class="rarbar-desc">'+esc(meta.desc)+'</p><div class="wlpanel" style="padding:0;overflow:hidden">'+table+'</div>';
+}
+let _rarSearchT=null;
+$("rarWrap").addEventListener("input",e=>{ if(e.target.id!=="rarSearch")return;
+  rarQ=e.target.value.trim().toLowerCase(); clearTimeout(_rarSearchT); _rarSearchT=setTimeout(()=>{ paintRarity(); const s=$("rarSearch"); if(s){ s.focus(); s.setSelectionRange(s.value.length,s.value.length);} },130); });
+$("rarWrap").addEventListener("click",e=>{
+  const rv=e.target.closest("[data-rarview]"); if(rv){ rarView=rv.getAttribute("data-rarview"); paintRarity(); return; }
+  const rr=e.target.closest("[data-rarrare]"); if(rr){ rarRareOnly=!rarRareOnly; paintRarity(); return; }
+  const pv=e.target.closest("[data-rarpivot]"); if(pv){ latPivot(pv.getAttribute("data-rarpivot")); return; }
+  const op=e.target.closest("[data-raropen]"); if(op){ const i=+op.getAttribute("data-raropen"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
 });
 
 /* ---------- threat-intel enrichment (AbuseIPDB / VirusTotal) ---------- */

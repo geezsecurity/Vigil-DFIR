@@ -834,6 +834,42 @@ function buildIocMatcher(iocs){
   };
 }
 
+/* ----------------- RARITY / STACKING (long-tail hunting) ------------------- */
+function baseName(p){ const s=String(p||""); const i=Math.max(s.lastIndexOf("\\"),s.lastIndexOf("/")); return i>=0?s.slice(i+1):s; }
+// Flag classic "abnormal ancestry": an office / web-server / WMI process spawning a shell or LOLBIN.
+function suspiciousParentChild(parentImage, childImage){
+  const p=baseName(parentImage).toLowerCase(), c=baseName(childImage).toLowerCase();
+  const shellChild=/^(powershell|pwsh|cmd|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|schtasks|nltest|whoami|net|net1|installutil|msbuild|hh|forfiles|curl|wget)\.exe$/;
+  const spawnParent=/^(winword|excel|powerpnt|outlook|onenote|mspub|visio|w3wp|httpd|nginx|tomcat\d*|java|sqlservr|wmiprvse|mysqld|php-cgi|spoolsv)\.exe$/;
+  return spawnParent.test(p) && shellChild.test(c);
+}
+// Group items by key and return buckets sorted RAREST-FIRST (ascending count) — the long tail
+// is where the anomalies hide. items: [{ key, host, user, idx, tms, det, extra? }].
+function buildStacks(items, opts){
+  opts=opts||{}; const cap=opts.cap||6000; const rareThreshold=opts.rareThreshold||2;
+  const m=new Map();
+  for(const it of (items||[])){
+    const k=it&&it.key; if(k==null||k==="") continue;
+    let a=m.get(k);
+    if(!a){ if(m.size>=cap) continue; a={ value:k, count:0, hosts:new Set(), users:new Set(), samples:[], firstTms:null, lastTms:null, det:0, ...(it.extra||{}) }; m.set(k,a); }
+    a.count++;
+    if(it.host)a.hosts.add(it.host);
+    if(it.user)a.users.add(it.user);
+    if(a.samples.length<10 && it.idx!=null)a.samples.push(it.idx);
+    if((it.det||0)>a.det)a.det=it.det;
+    const t=Number.isFinite(it.tms)?it.tms:null;
+    if(t!=null){ if(a.firstTms==null||t<a.firstTms)a.firstTms=t; if(a.lastTms==null||t>a.lastTms)a.lastTms=t; }
+  }
+  const arr=[...m.values()];
+  const total=arr.reduce((s,a)=>s+a.count,0);
+  arr.sort((x,y)=>(x.count-y.count)||(String(x.value)<String(y.value)?-1:1));
+  return { total, distinct:arr.length, rows:arr.map(a=>({
+    value:a.value, count:a.count, rare:a.count<=rareThreshold, pct:total?a.count/total:0,
+    hosts:[...a.hosts].slice(0,20), users:[...a.users].slice(0,20), samples:a.samples,
+    firstTms:a.firstTms, lastTms:a.lastTms, det:a.det,
+    parent:a.parent, child:a.child, suspicious:!!a.suspicious })) };
+}
+
 /* ----------------- HEURISTICS ---------------------------------------------- */
 function isPrivateIp(ip){
   if(!ip||ip==="-"||ip==="::1")return true;
@@ -961,7 +997,7 @@ const Engine={
   parseAttack, techniqueFromTag, tacticFromTag,
   attack:{ tactics:ATTACK_TACTIC_NAMES, tacticOrder:ATTACK_TACTIC_ORDER, techniques:ATTACK_TECHNIQUES },
   extractEntities, makeEntityScorer, buildAttackChains, buildProcessTree, buildLateralGraph,
-  iocType, buildIocMatcher, parseProcessArtifacts,
+  iocType, buildIocMatcher, buildStacks, suspiciousParentChild, baseName, parseProcessArtifacts,
   parseSigmaDocs(yamlText, yamlLoadAll){
     const docs=yamlLoadAll(yamlText)||[]; const rules=[], aggRules=[], skipped=[], errors=[];
     for (const doc of docs){

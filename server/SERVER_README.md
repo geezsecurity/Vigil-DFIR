@@ -148,6 +148,7 @@ mapped to events tagged by source with the original line preserved as the messag
 | POST   | `/api/watchlist`      | `{text}` bulk-add / `{add:[]}` / `{remove:[]}` / `{clear:true}` |
 | GET    | `/api/watchlist/scan` | scan the active case for watchlist matches |
 | GET    | `/api/observed`       | IPs / hashes / domains carved from the active case |
+| GET    | `/api/rarity`         | frequency stacks (processes / parent→child / logons / services), rarest-first |
 | GET    | `/api/settings`       | which intel providers are configured (booleans; never the keys) |
 | POST   | `/api/settings`       | `{abuseipdbApiKey?, virustotalApiKey?}` — save/clear keys (server-side) |
 | POST   | `/api/enrich`         | `{value,type}` → AbuseIPDB (IP) + VirusTotal (IP/hash) reputation, 24h cache |
