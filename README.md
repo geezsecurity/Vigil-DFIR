@@ -63,7 +63,13 @@ running server-side so multi-hundred-MB logs never choke your tab.
   feed (detections, logons, RDP, lateral movement …) with click-to-zoom time windows.
 - **Evidence** — mined forensic artifacts (accounts, services, tasks, LSASS access, share
   access, Defender hits, **paired logon sessions**, **auto-decoded PowerShell `-enc`**, IOCs).
-- **One-click IR report** — export a full triage summary as **HTML, PDF, or DOCX**.
+- **Casework** — turn triage into a case file: tag any event with a **verdict** (True /
+  False Positive, Suspicious, Benign, Reviewed) plus **tags** and a **note** (a colored edge
+  marks annotated rows in the grid), and keep a **case narrative** + **findings** list in the
+  📝 Case Notes tab. All persisted per-case and folded into the IR report.
+- **One-click IR report** — export a full triage summary — now including the **analyst
+  assessment** (narrative, findings, and True-Positive / Suspicious verdicts) — as **HTML,
+  PDF, or DOCX**.
 
 **Performance & UX**
 - Constant-memory streaming `.evtx` parser (handles multi-GB files).
@@ -180,4 +186,4 @@ Key endpoints: `/api/upload`, `/api/search` (SQLite/FTS, paginated), `/api/bodie
 
 Actively developed. Detection engine, ATT&CK, correlation, entity profiles, super-timeline,
 evidence, and reporting are implemented and covered by the test harness. Firewall/VPN
-analytics and analyst notes are on the roadmap.
+analytics are on the roadmap.

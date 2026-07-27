@@ -1357,11 +1357,42 @@ app.post("/api/flags", (req,res)=>{
   res.json({ ok:true, count:a.length });
 });
 
+// ---- Casework: per-case analyst verdicts, tags, notes + case findings/narrative ----
+function caseworkFile(){ return CASE_DIR ? path.join(CASE_DIR, "casework.json") : null; }
+function loadCasework(){ const f=caseworkFile();
+  if(f){ try{ const o=JSON.parse(fs.readFileSync(f,"utf8")); return { summary:o.summary||"", findings:Array.isArray(o.findings)?o.findings:[], annotations:o.annotations||{} }; }catch{} }
+  return { summary:"", findings:[], annotations:{} }; }
+function saveCasework(cw){ const f=caseworkFile(); if(!f)return; try{ fs.writeFileSync(f, JSON.stringify(cw)); }catch(e){ console.error(e); } }
+const VERDICTS=new Set(["tp","fp","suspicious","benign","reviewed"]);
+app.get("/api/casework", (req,res)=> res.json({ ok:true, casework:loadCasework() }));
+app.post("/api/casework/summary", (req,res)=>{ const cw=loadCasework(); cw.summary=String((req.body&&req.body.summary)||"").slice(0,20000); saveCasework(cw); res.json({ ok:true }); });
+app.post("/api/casework/annotate", (req,res)=>{
+  const b=req.body||{}; const idx=parseInt(b.idx,10);
+  if(!Number.isInteger(idx)||idx<0) return res.status(400).json({error:"idx required"});
+  const cw=loadCasework();
+  const verdict=VERDICTS.has(String(b.verdict))?String(b.verdict):"";
+  const tags=Array.isArray(b.tags)?[...new Set(b.tags.map(t=>String(t).trim()).filter(Boolean))].slice(0,20):[];
+  const note=String(b.note||"").slice(0,4000);
+  if(b.clear || (!verdict && !note && !tags.length)) delete cw.annotations[idx];
+  else cw.annotations[idx]={ verdict, tags, note, at:new Date().toISOString() };
+  saveCasework(cw); res.json({ ok:true, annotation:cw.annotations[idx]||null, count:Object.keys(cw.annotations).length });
+});
+app.post("/api/casework/finding", (req,res)=>{
+  const b=req.body||{}; const cw=loadCasework();
+  if(b.remove){ cw.findings=cw.findings.filter(f=>f.id!==b.id); }
+  else { const f={ id:b.id||("f"+Date.now().toString(36)+Math.random().toString(36).slice(2,5)),
+      title:String(b.title||"").slice(0,300), severity:["critical","high","medium","low","info"].includes(b.severity)?b.severity:"medium",
+      note:String(b.note||"").slice(0,8000), at:new Date().toISOString() };
+    if(!f.title) return res.status(400).json({error:"title required"});
+    const i=cw.findings.findIndex(x=>x.id===f.id); if(i>=0){ f.at=cw.findings[i].at; cw.findings[i]=f; } else cw.findings.push(f); }
+  saveCasework(cw); res.json({ ok:true, findings:cw.findings });
+});
+
 // "Remove Current Log" — wipe the active case's log + detections + flags + index, keep saved rules
 app.post("/api/reset", (req,res)=>{
   if(!ACTIVE) return res.json({ ok:true });
   if(_caseIndex){ _caseIndex.close(); _caseIndex=null; }
-  for(const f of [EVENTS,META,DETS,FLAGS,EVENTS_IDX,CASE_DB]){ try{ fs.unlinkSync(f); }catch{} }
+  for(const f of [EVENTS,META,DETS,FLAGS,EVENTS_IDX,CASE_DB,caseworkFile()]){ try{ if(f)fs.unlinkSync(f); }catch{} }
   try{ fs.unlinkSync(CASE_DB+"-wal"); }catch{} try{ fs.unlinkSync(CASE_DB+"-shm"); }catch{}
   catalog.clearCustody(ACTIVE);
   catalog.upsertCase({ id:ACTIVE, name:(catalog.getCase(ACTIVE)||{}).name, createdAt:(catalog.getCase(ACTIVE)||{}).createdAt, count:0, tsMin:null, tsMax:null });

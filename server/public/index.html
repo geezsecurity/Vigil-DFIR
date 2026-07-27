@@ -527,6 +527,36 @@
   .stag.susp-t{background:rgba(255,107,107,.18);color:#ff8a8a}
   .wlhits tr.rowsusp td{background:rgba(255,107,107,.05)}
   .rarbar-desc{color:var(--txt-dim);font-size:11px;margin:0 0 10px;line-height:1.5}
+  /* casework: notes tab + event annotations */
+  #cwWrap{display:none;flex:1;overflow:auto;padding:16px 20px}
+  body[data-mode="cw"] #cwWrap{display:block} body[data-mode="cw"] #eventsWrap{display:none} body[data-mode="cw"] aside{display:none}
+  #modalAnnot{flex:0 0 auto;padding:10px 16px;border-bottom:1px solid var(--line)}
+  .anh{font-size:11px;font-weight:600;color:var(--txt-dim);text-transform:uppercase;letter-spacing:.03em;margin-bottom:7px}
+  .vbtns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .vpick{font:inherit;font-size:11.5px;padding:3px 11px;border:1px solid var(--line-2);background:var(--bg-2);color:var(--txt);border-radius:14px;cursor:pointer}
+  .vpick:hover{background:var(--sel)}
+  .vpick.on.tp{background:#ff6b6b;border-color:#ff6b6b;color:#fff}
+  .vpick.on.fp{background:#5ac77a;border-color:#5ac77a;color:#fff}
+  .vpick.on.suspicious{background:#e6b450;border-color:#e6b450;color:#20242b}
+  .vpick.on.benign{background:#6c8a99;border-color:#6c8a99;color:#fff}
+  .vpick.on.reviewed{background:#6cb6ff;border-color:#6cb6ff;color:#20242b}
+  #annTags,#annNote{width:100%;box-sizing:border-box;font-family:var(--sans);font-size:12px;padding:6px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--bg-2);color:var(--txt);margin-bottom:6px}
+  #annNote{font-family:var(--mono);min-height:46px;resize:vertical}
+  .anrow{display:flex;gap:8px;align-items:center}
+  .anmsg{font-size:11px;color:var(--txt-dim)}
+  /* verdict marker on grid rows */
+  .r.av-tp{box-shadow:inset 3px 0 0 #ff6b6b} .r.av-fp{box-shadow:inset 3px 0 0 #5ac77a}
+  .r.av-suspicious{box-shadow:inset 3px 0 0 #e6b450} .r.av-benign{box-shadow:inset 3px 0 0 #6c8a99} .r.av-reviewed{box-shadow:inset 3px 0 0 #6cb6ff}
+  .vchip{display:inline-block;font-size:10px;padding:1px 7px;border-radius:9px;text-transform:uppercase;letter-spacing:.02em;font-weight:600}
+  .vchip.tp{background:rgba(255,107,107,.18);color:#ff8a8a} .vchip.fp{background:rgba(90,199,122,.18);color:#5ac77a}
+  .vchip.suspicious{background:rgba(230,180,80,.18);color:#e6b450} .vchip.benign{background:rgba(108,138,153,.2);color:#9fb3c0} .vchip.reviewed{background:rgba(108,182,255,.18);color:#6cb6ff}
+  .cwtag{display:inline-block;font-size:10px;padding:0 6px;border-radius:8px;background:var(--line);color:var(--txt-dim);margin:0 2px 2px 0}
+  .find-item{border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--bg-2)}
+  .find-item .fi-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .find-item .fi-t{font-weight:600;flex:1}
+  .find-item .fi-note{color:var(--txt-dim);font-size:12px;white-space:pre-wrap;line-height:1.5}
+  .find-x{cursor:pointer;color:var(--txt-dim)} .find-x:hover{color:#ff6b6b}
+  #cwSummary{width:100%;box-sizing:border-box;min-height:110px;font-family:var(--sans);font-size:13px;line-height:1.6;padding:10px;border:1px solid var(--line-2);border-radius:8px;background:var(--bg-2);color:var(--txt);resize:vertical}
   .wlgrid{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start}
   @media(max-width:900px){ .wlgrid{grid-template-columns:1fr} }
   .wlpanel{border:1px solid var(--line-2);border-radius:10px;padding:14px;background:var(--bg-2)}
@@ -722,6 +752,7 @@
       <button class="tab" data-tab="lat">🕸 Lateral</button>
       <button class="tab" data-tab="wl">🎯 Watchlist</button>
       <button class="tab" data-tab="rar">📊 Rarity</button>
+      <button class="tab" data-tab="cw">📝 Case Notes</button>
       <button class="tab" data-tab="ev">🔎 Evidence</button>
       <button class="tab" data-tab="fw">🔥 Firewall</button>
       <button class="tab" data-tab="vpn">🔒 VPN</button>
@@ -777,6 +808,7 @@
     <div id="latWrap"></div>
     <div id="wlWrap"></div>
     <div id="rarWrap"></div>
+    <div id="cwWrap"></div>
     <div id="evWrap"></div>
     <div id="fwWrap"></div>
     <div id="vpnWrap"></div>
@@ -799,6 +831,7 @@
       <div class="aibody" id="aiBody"></div>
     </div>
     <div id="modalDet"></div>
+    <div id="modalAnnot"></div>
     <div id="modalScript"></div>
     <pre id="modalBody"></pre>
   </div>
@@ -4714,7 +4747,8 @@ function render(){
   const SK='<span style="display:inline-block;height:8px;width:55%;border-radius:3px;background:var(--line-2);opacity:.45"></span>';
   for(let i=start;i<end;i++){
     const fi=filtered[i], r=getRow(fi), gid=fi+rowBase, top=HEADH+i*ROWH, fl=flagged.has(gid);
-    html+='<div class="r'+(i&1?" odd":"")+(fl?" flagged":"")+'" data-i="'+i+'" style="top:'+top+'px;width:'+W+'px">';
+    const ann=annotations.get(gid);
+    html+='<div class="r'+(i&1?" odd":"")+(fl?" flagged":"")+(ann&&ann.verdict?" av-"+ann.verdict:"")+'" data-i="'+i+'" style="top:'+top+'px;width:'+W+'px" title="'+(ann?"analyst: "+esc(ann.verdict||"noted")+(ann.note?" — "+esc(ann.note):""):"")+'">';
     html+='<div class="c star'+(fl?" on":"")+'" style="width:'+STARW+'px">'+(fl?"★":"☆")+'</div>';
     for(const id of view){
       if(id==="det"){ const dc=getDef("det"); let inner="",ttl="";
@@ -4783,7 +4817,7 @@ function trimBodyCache(){ if(bodyCache.size<=BODY_CACHE_MAX)return; let over=bod
 rowsLayer.addEventListener("click",e=>{
   const row=e.target.closest(".r"); if(!row)return; const i=+row.dataset.i, g=filtered[i];
   if(e.target.closest(".star")){ toggleFlag(g); return; }
-  const r=getRow(g);
+  const r=getRow(g); MODAL_IDX=g;
   if(r) openDetail(r); else if(SCROLL) openServerEvent(g);   // body not cached yet -> fetch it
 });
 function toggleFlag(g){
@@ -4865,6 +4899,7 @@ function openDetail(r){
       (h.why?'<div class="mdet-why">'+esc(h.why)+'</div>':'')+'</div>'; }
     dh+='</div>'; }
   $("modalDet").innerHTML=dh;
+  renderAnnot(MODAL_IDX);
   $("modalScript").innerHTML=readablePanels(r.data);
   $("modalBody").innerHTML=syntaxHighlight(modalJSON);
   const box=$("aiBox"); box.classList.remove("show","err"); $("aiBody").innerHTML="";
@@ -5342,6 +5377,7 @@ function setTab(t){
   else if(t==="lat"){ renderLateral(); }
   else if(t==="wl"){ renderWatchlist(); }
   else if(t==="rar"){ renderRarity(); }
+  else if(t==="cw"){ renderCasework(); }
   else if(t==="ev"){ if(SCROLL){ renderEvidenceScroll(); } else { if(evDirty){ EVID=buildEvidence(); evDirty=false; } renderEvidence(); } }
   else if(t==="fw"){ renderCatSection("firewall"); }
   else if(t==="vpn"){ renderCatSection("vpn"); }
@@ -5499,6 +5535,7 @@ async function loadSessionFromServer(meta, offset){
   window.__meta = meta || window.__meta;
   window.__caseId = (meta && meta.caseId) || window.__caseId || "local";
   wlObserved=null; wlHits=null; enrichMap={}; rarData=null;   // per-case watchlist/rarity state is stale on a new load
+  await loadCaseworkState();                                  // per-case verdicts/notes align with event indices
   const cap=Math.min(window.__browseCap||200000, BROWSER_WINDOW_MAX);
   serverWindowCap=cap;
   const big = !!(meta && meta.count > cap);
@@ -5634,7 +5671,7 @@ function renderCatSection(cat){
   }
   w.innerHTML=h;
   $("add"+cat+"Btn").onclick=()=>$(info.addId).click();
-  w.querySelectorAll("tr[data-idx]").forEach(tr=>tr.onclick=()=>{ const r=rows[+tr.getAttribute("data-idx")]; if(r)openDetail(r); });
+  w.querySelectorAll("tr[data-idx]").forEach(tr=>tr.onclick=()=>{ const gi=+tr.getAttribute("data-idx"); MODAL_IDX=gi; const r=rows[gi]; if(r)openDetail(r); });
 }
 let catCache={};                                   // {firewall|vpn: {caseId, total, rows}}
 async function renderCatSectionScroll(cat){
@@ -5953,7 +5990,7 @@ function openEntityProfile(type,name){
       const ep=e.target.closest("[data-eprof]"); if(ep){ openEntityProfile(ep.getAttribute("data-eptype"),ep.getAttribute("data-eprof")); return; }
       const pv=e.target.closest("[data-entpivot]"); if(pv){ ov.style.display="none"; entityGridPivot(pv.getAttribute("data-entpivot")); return; }
       const rr=e.target.closest("tr[data-rule]"); if(rr){ ov.style.display="none"; entityRulePivot(rr.getAttribute("data-entname"),rr.getAttribute("data-rule"),rr.getAttribute("data-label")); return; }
-      const evr=e.target.closest("[data-idx]"); if(evr){ const i=+evr.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
+      const evr=e.target.closest("[data-idx]"); if(evr){ const i=+evr.getAttribute("data-idx"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
     });
     document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&ov.style.display!=="none")ov.style.display="none"; });
   }
@@ -6127,7 +6164,7 @@ $("tlWrap").addEventListener("click",e=>{
     paintTimeline(); return; }
   const sc=e.target.closest("[data-sev]"); if(sc){ tlFilters.sevMin=+sc.getAttribute("data-sev"); paintTimeline(); return; }
   if(e.target.closest("[data-tlsort]")){ tlFilters.sortAsc=!tlFilters.sortAsc; paintTimeline(); return; }
-  const row=e.target.closest(".tl-row[data-idx]"); if(row){ const i=+row.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
+  const row=e.target.closest(".tl-row[data-idx]"); if(row){ const i=+row.getAttribute("data-idx"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
 });
 /* ===================== ONE-CLICK IR REPORT ===================== */
 function repEsc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -6166,8 +6203,12 @@ function reportData(S, dash, ev, meta){
   }
   rec.push("Contain affected hosts (network isolation), preserve volatile data, and eradicate identified persistence mechanisms before restoring systems from a known-good state; then monitor closely for recurrence.");
   rec.push("This report is an automated triage aid — corroborate all findings with full forensic analysis before reaching conclusions or taking irreversible action.");
+  const cw=casework||{ summary:"", findings:[], annotations:{} };
+  const cwAnns=Object.entries(cw.annotations||{}).map(([idx,a])=>({ idx:+idx, ...a }));
+  const vcount={}; for(const a of cwAnns){ if(a.verdict) vcount[a.verdict]=(vcount[a.verdict]||0)+1; }
   return { caseId, generated:new Date().toISOString().slice(0,19).replace("T"," ")+" UTC", span, totalEvents, hosts, sources, posture,
-    sm, bySev:{crit,high,med,low}, A, chains, entities, byRule, ev, ips, hashes, domains, exec, rec, cnt };
+    sm, bySev:{crit,high,med,low}, A, chains, entities, byRule, ev, ips, hashes, domains, exec, rec, cnt,
+    cw, cwAnns, vcount };
 }
 function buildReportHTML(S, dash, ev, meta){
   const d=reportData(S,dash,ev,meta), A=d.A;
@@ -6203,6 +6244,21 @@ function buildReportHTML(S, dash, ev, meta){
   h+='<div class="cards">'+card(d.totalEvents.toLocaleString(),"events analysed")+card((d.sm.withDetections||0).toLocaleString(),"flagged events")+
      card((d.sm.total||0).toLocaleString(),"total detections")+card((d.bySev.crit+d.bySev.high).toLocaleString(),"critical + high")+
      card(String(A.techniqueCount||0),"ATT&CK techniques")+card(String(d.chains.length),"attack chains")+'</div>';
+  // Analyst assessment (verdicts / findings / narrative)
+  if(d.cw && (d.cw.summary || (d.cw.findings&&d.cw.findings.length) || d.cwAnns.length)){
+    h+=sec("Analyst Assessment");
+    if(d.cw.summary) h+='<p>'+repEsc(d.cw.summary).replace(/\n/g,"<br>")+'</p>';
+    if(d.cw.findings&&d.cw.findings.length)
+      h+='<table><tr><th style="width:80px">Severity</th><th>Finding</th></tr>'+
+        d.cw.findings.map(f=>'<tr><td>'+svpill(f.severity)+'</td><td><b>'+repEsc(f.title)+'</b>'+(f.note?'<br><span class="muted">'+repEsc(f.note).replace(/\n/g,"<br>")+'</span>':'')+'</td></tr>').join("")+'</table>';
+    if(d.cwAnns.length){
+      const vsum=Object.keys(d.vcount).map(k=>(VERDICT_LABELS[k]||k)+": "+d.vcount[k]).join(" · ");
+      h+='<p class="muted">Event verdicts recorded — '+repEsc(vsum||(d.cwAnns.length+" annotated"))+'.</p>';
+      const notable=d.cwAnns.filter(a=>a.verdict==="tp"||a.verdict==="suspicious").slice(0,40);
+      if(notable.length) h+='<table><tr><th style="width:110px">Verdict</th><th style="width:70px">Event #</th><th>Tags</th><th>Analyst note</th></tr>'+
+        notable.map(a=>'<tr><td>'+repEsc(VERDICT_LABELS[a.verdict]||a.verdict)+'</td><td>'+a.idx+'</td><td>'+repEsc((a.tags||[]).join(", "))+'</td><td>'+repEsc(a.note||"")+'</td></tr>').join("")+'</table>';
+    }
+  }
   // 2. incident overview
   h+=sec("Incident Overview")+'<p>Detections by severity:</p>'+
      '<table><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low / Info</th></tr>'+
@@ -6271,6 +6327,16 @@ function buildReportDocx(S, dash, ev, meta){
   b+=wtable(["Field","Value"],[["Case reference",d.caseId],["Report generated",d.generated],["Analysis window",d.span],["Scope",d.totalEvents.toLocaleString()+" events · "+d.hosts+" host(s) · "+d.sources],["Assessed posture",d.posture],["Prepared by","EVTX Triage (automated analysis)"]]);
   b+=H1("Executive Summary")+wp(d.exec,{})+
      wtable(["Metric","Value"],[["Events analysed",d.totalEvents.toLocaleString()],["Flagged events",(d.sm.withDetections||0).toLocaleString()],["Total detections",(d.sm.total||0).toLocaleString()],["Critical + high",(d.bySev.crit+d.bySev.high).toLocaleString()],["ATT&CK techniques",String(A.techniqueCount||0)],["Attack chains",String(d.chains.length)]]);
+  if(d.cw && (d.cw.summary || (d.cw.findings&&d.cw.findings.length) || d.cwAnns.length)){
+    b+=H1("Analyst Assessment");
+    if(d.cw.summary) for(const line of String(d.cw.summary).split(/\n{2,}/)) if(line.trim()) b+=wp(line.trim(),{});
+    if(d.cw.findings&&d.cw.findings.length){ b+=wp("Key findings:",{b:true});
+      for(const f of d.cw.findings) b+=wp("["+f.severity.toUpperCase()+"]  "+f.title,{b:true})+(f.note?wp(f.note,{gray:true,sz:18}):""); }
+    if(d.cwAnns.length){ const vsum=Object.keys(d.vcount).map(k=>(VERDICT_LABELS[k]||k)+": "+d.vcount[k]).join(" · ");
+      b+=wp("Event verdicts recorded — "+(vsum||(d.cwAnns.length+" annotated"))+".",{gray:true,sz:18});
+      const notable=d.cwAnns.filter(a=>a.verdict==="tp"||a.verdict==="suspicious").slice(0,40);
+      if(notable.length) b+=wtable(["Verdict","Event #","Tags","Note"], notable.map(a=>[VERDICT_LABELS[a.verdict]||a.verdict, String(a.idx), (a.tags||[]).join(", "), a.note||""])); }
+  }
   b+=H1("Incident Overview")+wtable(["Critical","High","Medium","Low / Info"],[[String(d.bySev.crit),String(d.bySev.high),String(d.bySev.med),String(d.bySev.low)]]);
   if(A.tactics&&A.tactics.length){ b+=H1("MITRE ATT&CK Coverage")+wp("Tactics observed: "+A.tactics.map(t=>t.name+" ("+t.techniques+")").join(" · "),{gray:true,sz:18})+wtable(["Technique","Name","Events"],(A.techniques||[]).slice(0,25).map(t=>[t.id,t.name,String(t.count)])); }
   if(d.chains.length){ b+=H1("Attack Narrative");
@@ -6309,6 +6375,8 @@ async function generateIRReport(fmt, btn){
     let ev=null;
     if(SERVER){ try{ ev=JSON.parse(await (await api("/api/evidence")).text(), mapSetRevive).evidence; }catch(_){} }
     else { try{ ev=EVID||buildEvidence(); }catch(_){} }
+    if(SERVER){ try{ const cj=await (await api("/api/casework")).json(); casework=cj.casework||casework;   // include analyst verdicts/findings
+      annotations=new Map(); for(const k in (casework.annotations||{})) annotations.set(+k, casework.annotations[k]); }catch(_){} }
     const S = serverDet || { summary:{withDetections:detections.size,total:detTotalHits(),scanned:rows.length},
       bySev:(function(){const b={critical:0,high:0,medium:0,low:0,info:0};for(const[,a]of detections)for(const h of a)b[String(h.level).toLowerCase()]=(b[String(h.level).toLowerCase()]||0)+1;return b;})(),
       attack:clientAttack||computeAttackFromDetections(), chains:clientChains||computeChainsFromDetections(),
@@ -6543,7 +6611,7 @@ $("procWrap").addEventListener("click",e=>{
   const tog=e.target.closest("[data-tog]");
   if(tog){ const ptn=tog.closest(".ptn"); if(ptn) ptn.classList.toggle("collapsed"); return; }
   const row=e.target.closest(".ptrow[data-idx]");
-  if(row){ const i=+row.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); }
+  if(row){ const i=+row.getAttribute("data-idx"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); }
 });
 
 /* ---------- logon-session reconstruction ---------- */
@@ -6611,7 +6679,7 @@ $("sessWrap").addEventListener("click",e=>{
   const th=e.target.closest("th[data-sk]");
   if(th){ const key=th.getAttribute("data-sk"); if(sessSort.key===key)sessSort.dir*=-1; else { sessSort.key=key; sessSort.dir=(key==="user"||key==="host"||key==="ip"||key==="ltName")?1:-1; } paintSessions(); return; }
   const tr=e.target.closest("tr[data-idx]");
-  if(tr){ const i=+tr.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); }
+  if(tr){ const i=+tr.getAttribute("data-idx"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); }
 });
 
 /* ---------- cross-host lateral-movement graph ---------- */
@@ -6765,7 +6833,7 @@ function latBind(svg, nodes, edges, W, H){
   svg.addEventListener("pointerleave",()=>{ tip.style.display="none"; });
   svg.addEventListener("wheel",ev=>{ ev.preventDefault(); zoomAt(svgPt(ev), ev.deltaY<0?1.15:1/1.15); }, { passive:false });
   svg.addEventListener("click",ev=>{ const l=ev.target.closest(".ledge"); if(l && !moved){ const e=edges[+l.getAttribute("data-ei")];
-    if(e.samples&&e.samples.length){ const i=e.samples[0]; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); } } });
+    if(e.samples&&e.samples.length){ const i=e.samples[0]; MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); } } });
   fit();
 }
 function latPivot(id){ clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
@@ -6981,7 +7049,7 @@ $("wlWrap").addEventListener("click",async e=>{
   const pv=e.target.closest("[data-wlpivot]");
   if(pv){ latPivot(pv.getAttribute("data-wlpivot")); return; }
   const op=e.target.closest("[data-wlopen]");
-  if(op){ const i=+op.getAttribute("data-wlopen"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
+  if(op){ const i=+op.getAttribute("data-wlopen"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
   const ck=e.target.closest("[data-wlcheck]");
   if(ck){ enrichIoc(ck.getAttribute("data-wlcheck"), ck.getAttribute("data-wltype"), ck); return; }
   const rm=e.target.closest("[data-wlrm]");
@@ -7068,7 +7136,108 @@ $("rarWrap").addEventListener("click",e=>{
   const rv=e.target.closest("[data-rarview]"); if(rv){ rarView=rv.getAttribute("data-rarview"); paintRarity(); return; }
   const rr=e.target.closest("[data-rarrare]"); if(rr){ rarRareOnly=!rarRareOnly; paintRarity(); return; }
   const pv=e.target.closest("[data-rarpivot]"); if(pv){ latPivot(pv.getAttribute("data-rarpivot")); return; }
-  const op=e.target.closest("[data-raropen]"); if(op){ const i=+op.getAttribute("data-raropen"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
+  const op=e.target.closest("[data-raropen]"); if(op){ const i=+op.getAttribute("data-raropen"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
+});
+
+/* ---------- casework: per-event verdicts/tags/notes + case findings/narrative ---------- */
+let MODAL_IDX=-1;
+let annotations=new Map();                    // gid(Number) -> {verdict,tags,note,at}
+let casework={ summary:"", findings:[], annotations:{} };
+const VERDICT_LABELS={ tp:"True Positive", fp:"False Positive", suspicious:"Suspicious", benign:"Benign", reviewed:"Reviewed" };
+async function loadCaseworkState(){
+  annotations=new Map(); casework={ summary:"", findings:[], annotations:{} };
+  if(!SERVER) return;
+  try{ const j=await (await api("/api/casework")).json(); casework=j.casework||casework;
+    for(const k in (casework.annotations||{})) annotations.set(+k, casework.annotations[k]);
+  }catch(_){}
+}
+function renderAnnot(idx){
+  const box=$("modalAnnot"); if(!box) return;
+  if(!SERVER || idx==null || idx<0){ box.innerHTML=""; box.style.display="none"; return; }
+  box.style.display="block";
+  const a=annotations.get(idx)||{ verdict:"", tags:[], note:"" };
+  let vb=""; for(const k in VERDICT_LABELS){ vb+='<button class="vpick '+k+(a.verdict===k?" on":"")+'" data-verdict="'+k+'">'+VERDICT_LABELS[k]+'</button>'; }
+  box.innerHTML='<div class="anh">Analyst verdict — event #'+idx+'</div>'+
+    '<div class="vbtns">'+vb+'</div>'+
+    '<input id="annTags" placeholder="tags (comma-separated) — e.g. lateral-movement, host:WS01" value="'+esc((a.tags||[]).join(", "))+'">'+
+    '<textarea id="annNote" placeholder="analyst note for this event…">'+esc(a.note||"")+'</textarea>'+
+    '<div class="anrow"><button class="vbtn" id="annSave">Save note</button>'+
+      ((a.verdict||a.note||(a.tags&&a.tags.length))?'<button class="vbtn" id="annClear">Clear</button>':'')+
+      '<span class="anmsg" id="annMsg"></span></div>';
+}
+async function annotate(idx, partial){
+  if(idx==null||idx<0) return;
+  const cur=annotations.get(idx)||{ verdict:"", tags:[], note:"" };
+  const body={ idx,
+    verdict: partial.verdict!==undefined?partial.verdict:cur.verdict,
+    tags: partial.tags!==undefined?partial.tags:(cur.tags||[]),
+    note: partial.note!==undefined?partial.note:(cur.note||"") };
+  if(partial.clear) body.clear=true;
+  try{ const j=await (await api("/api/casework/annotate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+    if(j.annotation) annotations.set(idx, j.annotation); else annotations.delete(idx);
+    casework.annotations=Object.fromEntries([...annotations.entries()].map(([k,v])=>[k,v]));
+  }catch(_){}
+  if(document.body.getAttribute("data-mode")==="events") render();          // refresh grid marker
+}
+$("modalAnnot").addEventListener("click",async e=>{
+  const vp=e.target.closest("[data-verdict]");
+  if(vp){ const v=vp.getAttribute("data-verdict"); const cur=annotations.get(MODAL_IDX);
+    await annotate(MODAL_IDX,{ verdict:(cur&&cur.verdict===v)?"":v }); renderAnnot(MODAL_IDX); return; }
+  if(e.target.id==="annSave"){ const tags=$("annTags").value.split(",").map(s=>s.trim()).filter(Boolean);
+    await annotate(MODAL_IDX,{ tags, note:$("annNote").value }); const m=$("annMsg"); if(m){ m.textContent="saved ✓"; setTimeout(()=>m.textContent="",1200); } return; }
+  if(e.target.id==="annClear"){ await annotate(MODAL_IDX,{ clear:true }); renderAnnot(MODAL_IDX); return; }
+});
+/* --- Case Notes tab --- */
+async function renderCasework(){
+  const w=$("cwWrap");
+  if(!SERVER){ w.innerHTML=ptNote("Case notes run server-side — run the backend to use this view."); return; }
+  try{ const j=await (await api("/api/casework")).json(); casework=j.casework||casework;
+    annotations=new Map(); for(const k in (casework.annotations||{})) annotations.set(+k, casework.annotations[k]);
+  }catch(_){}
+  paintCasework();
+}
+function paintCasework(){
+  const w=$("cwWrap");
+  let fh=""; for(const f of (casework.findings||[])){
+    fh+='<div class="find-item"><div class="fi-h"><span class="sev" style="background:'+numColor(sevNum(f.severity))+'"></span>'+
+      '<span class="fi-t">'+esc(f.title)+'</span><span class="lvl">'+esc(f.severity)+'</span><span class="find-x" data-findrm="'+esc(f.id)+'" title="remove">✕</span></div>'+
+      (f.note?'<div class="fi-note">'+esc(f.note)+'</div>':'')+'</div>'; }
+  if(!fh) fh='<div class="hint">No findings yet — add your key conclusions above.</div>';
+  const anns=[...annotations.entries()].sort((a,b)=>a[0]-b[0]);
+  let ah=""; for(const [idx,a] of anns){
+    ah+='<tr data-cwopen="'+idx+'"><td><span class="vchip '+esc(a.verdict||"reviewed")+'">'+esc(VERDICT_LABELS[a.verdict]||a.verdict||"noted")+'</span></td>'+
+      '<td class="mono">#'+idx+'</td>'+
+      '<td>'+(a.tags||[]).map(t=>'<span class="cwtag">'+esc(t)+'</span>').join("")+'</td>'+
+      '<td class="mono" style="font-size:11px;color:var(--txt-dim)">'+esc(a.note||"")+'</td></tr>'; }
+  const annTable = anns.length
+    ? '<div style="overflow:auto"><table class="wlhits"><thead><tr><th>Verdict</th><th>Event</th><th>Tags</th><th>Note</th></tr></thead><tbody>'+ah+'</tbody></table></div>'
+    : '<div class="hint">No event verdicts yet. Open any event (grid, detections, timeline…) and set a verdict — they collect here and export into the IR report.</div>';
+  const sevOpts=["critical","high","medium","low","info"].map(s=>'<option value="'+s+'"'+(s==="medium"?" selected":"")+'>'+s+'</option>').join("");
+  w.innerHTML=
+    '<div class="wlgrid" style="grid-template-columns:1fr 1fr">'+
+      '<div class="wlpanel"><h3>Case summary / narrative</h3>'+
+        '<p class="hint">Your incident narrative — exported as the analyst summary in the IR report.</p>'+
+        '<textarea id="cwSummary" placeholder="What happened, scope, timeline, key evidence, conclusions…">'+esc(casework.summary||"")+'</textarea>'+
+        '<div class="anrow" style="margin-top:8px"><button class="vbtn" id="cwSaveSummary">Save summary</button><span class="anmsg" id="cwSumMsg"></span></div></div>'+
+      '<div class="wlpanel"><h3>Findings</h3>'+
+        '<input id="findTitle" placeholder="finding title — e.g. Webshell dropped on WS01" style="width:100%;box-sizing:border-box;margin-bottom:6px;font:inherit;font-size:12.5px;padding:7px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--bg-2);color:var(--txt)">'+
+        '<div class="anrow" style="margin-bottom:6px"><select id="findSev" class="btn">'+sevOpts+'</select><button class="vbtn" id="findAdd">＋ Add finding</button></div>'+
+        '<textarea id="findNote" placeholder="finding details (optional)" style="width:100%;box-sizing:border-box;min-height:52px;font-family:var(--mono);font-size:12px;padding:7px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--bg-2);color:var(--txt);margin-bottom:10px;resize:vertical"></textarea>'+
+        '<div id="findList">'+fh+'</div></div>'+
+    '</div>'+
+    '<div class="wlpanel" style="margin-top:16px"><h3>Event verdicts <span style="color:var(--txt-dim);font-weight:400">('+anns.length+')</span></h3>'+annTable+'</div>';
+}
+$("cwWrap").addEventListener("click",async e=>{
+  if(e.target.id==="cwSaveSummary"){ try{ await api("/api/casework/summary",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({summary:$("cwSummary").value})}); casework.summary=$("cwSummary").value;
+    const m=$("cwSumMsg"); if(m){ m.textContent="saved ✓"; setTimeout(()=>m.textContent="",1200); } }catch(err){ alert("Save failed: "+(err.message||err)); } return; }
+  if(e.target.id==="findAdd"){ const title=$("findTitle").value.trim(); if(!title)return;
+    try{ const j=await (await api("/api/casework/finding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,severity:$("findSev").value,note:$("findNote").value})})).json();
+      casework.findings=j.findings||[]; $("findTitle").value=""; $("findNote").value=""; paintCasework(); }catch(err){ alert("Add failed: "+(err.message||err)); } return; }
+  const rm=e.target.closest("[data-findrm]");
+  if(rm){ const j=await (await api("/api/casework/finding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:rm.getAttribute("data-findrm"),remove:true})})).json();
+    casework.findings=j.findings||[]; paintCasework(); return; }
+  const op=e.target.closest("[data-cwopen]");
+  if(op){ const i=+op.getAttribute("data-cwopen"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
 });
 
 /* ---------- threat-intel enrichment (AbuseIPDB / VirusTotal) ---------- */
@@ -7164,9 +7333,9 @@ $("detWrap").addEventListener("click",e=>{
     if(host){ query=host.toLowerCase(); escQ=esc(query); $("q").value=host; }
     view=defaultView(); buildProviderList(); buildColPicker(); applyFilter(); setTab("events"); return; }
   const cst=e.target.closest(".chain-step");
-  if(cst){ const i=+cst.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
+  if(cst){ const i=+cst.getAttribute("data-idx"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
   const td=e.target.closest("tr[data-idx]");
-  if(td){ const i=+td.getAttribute("data-idx");
+  if(td){ const i=+td.getAttribute("data-idx"); MODAL_IDX=i;
     if(rows[i]){ openDetail(rows[i]); }
     else if(SERVER){ openServerEvent(i); }
     return; }
@@ -7188,6 +7357,7 @@ $("detWrap").addEventListener("click",e=>{
   view=defaultView(); buildProviderList(); buildColPicker(); applyFilter(); setTab("events");
 });
 async function openServerEvent(idx){
+  MODAL_IDX=idx;
   try{ const r=await api("/api/event/"+idx); const ev=await r.json();
     const sys=(ev.Event&&ev.Event.System)||ev.System||{};
     const ts=getTime(ev);

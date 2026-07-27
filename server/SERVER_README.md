@@ -149,6 +149,10 @@ mapped to events tagged by source with the original line preserved as the messag
 | GET    | `/api/watchlist/scan` | scan the active case for watchlist matches |
 | GET    | `/api/observed`       | IPs / hashes / domains carved from the active case |
 | GET    | `/api/rarity`         | frequency stacks (processes / parent→child / logons / services), rarest-first |
+| GET    | `/api/casework`       | per-case analyst verdicts, tags, notes, findings + narrative |
+| POST   | `/api/casework/annotate` | `{idx, verdict, tags[], note}` set/clear an event verdict |
+| POST   | `/api/casework/finding`  | `{title, severity, note}` add / `{id, remove:true}` a finding |
+| POST   | `/api/casework/summary`  | `{summary}` save the case narrative       |
 | GET    | `/api/settings`       | which intel providers are configured (booleans; never the keys) |
 | POST   | `/api/settings`       | `{abuseipdbApiKey?, virustotalApiKey?}` — save/clear keys (server-side) |
 | POST   | `/api/enrich`         | `{value,type}` → AbuseIPDB (IP) + VirusTotal (IP/hash) reputation, 24h cache |
