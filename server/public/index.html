@@ -611,18 +611,19 @@
   .ai-pbtn:hover{background:var(--sel)}
   .ai-pbtn.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
   /* AI Support drawer */
-  #aiPanel{position:fixed;right:16px;bottom:16px;width:420px;max-width:calc(100vw - 32px);max-height:70vh;z-index:45;
-    background:var(--bg);border:1px solid var(--line-2);border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.45);display:none;flex-direction:column}
+  #aiPanel{position:fixed;right:16px;bottom:16px;width:480px;height:78vh;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);min-width:320px;min-height:220px;z-index:45;
+    background:var(--bg);border:1px solid var(--line-2);border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.45);display:none;flex-direction:column;overflow:hidden}
   #aiPanel.show{display:flex}
-  .aip-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
-  .aip-head .aip-prov{font-weight:400;color:var(--txt-dim);font-size:11px}
-  .aip-head .aip-x{margin-left:auto;cursor:pointer;color:var(--txt-dim);font-size:15px}
+  .aip-head{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+  .aip-head .aip-prov{font-weight:400;color:var(--txt-dim);font-size:11px;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  .aip-head .aip-x{cursor:pointer;color:var(--txt-dim);font-size:15px;flex:0 0 auto}
   .aip-head .aip-x:hover{color:var(--txt)}
-  .aip-body{padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.6;white-space:pre-wrap}
-  .aip-body b{color:var(--txt)} .aip-body h4{margin:10px 0 4px;font-size:12.5px;color:var(--accent)}
+  .aip-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:12px 16px;font-size:12.5px;line-height:1.62;white-space:pre-wrap;word-break:break-word}
+  .aip-body b{color:var(--txt)}
+  .aip-body .aih2{display:block;color:var(--accent);font-weight:700;font-size:12px;letter-spacing:.02em;text-transform:uppercase;margin:14px 0 3px;padding-bottom:2px;border-bottom:1px solid var(--line)}
+  .aip-body .aih2:first-child{margin-top:0}
   .aip-body.err{color:#ff8a8a;font-family:var(--mono);font-size:11.5px}
-  .aip-foot{padding:8px 14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .ai-supp-btn{cursor:pointer}
+  .aip-foot{flex:0 0 auto;padding:8px 14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   body[data-mode="fw"] #fwWrap{display:block} body[data-mode="fw"] #eventsWrap{display:none} body[data-mode="fw"] aside{display:none}
   body[data-mode="vpn"] #vpnWrap{display:block} body[data-mode="vpn"] #eventsWrap{display:none} body[data-mode="vpn"] aside{display:none}
   .cat-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -7871,7 +7872,11 @@ function addSigmaTextsList(texts,label){
 
 /* =====================  OPENAI ANALYSIS  ===================== */
 /* ===================== AI SUPPORT (Claude / ChatGPT / Gemini, server-side) ===================== */
-function mdLite(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/^\s*[-•]\s+/gm,"• "); }
+function mdLite(t){ return esc(t)
+  .replace(/^\s{0,3}#{1,6}\s*(.+?)\s*#*$/gm,'<span class="aih2">$1</span>')   // ## headings
+  .replace(/^\s*\*\*(.+?)\*\*\s*:?\s*$/gm,'<span class="aih2">$1</span>')     // **Bold heading** on its own line
+  .replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")
+  .replace(/^\s*[-*]\s+/gm,"• "); }
 let aiSettings=null, aiLastText="", aiSelProv="anthropic";
 async function ensureAISettings(){ if(aiSettings===null){ try{ aiSettings=await (await api("/api/settings")).json(); }catch{ aiSettings={}; } } return aiSettings; }
 function aiConfigured(){ return !!(aiSettings&&(aiSettings.anthropicConfigured||aiSettings.openaiConfigured||aiSettings.geminiConfigured)); }
@@ -7932,10 +7937,22 @@ async function aiSectionContext(mode){
   if(mode==="cw") return { title:"Draft case summary", canInsert:true, maxTokens:800,
     system:base+" Write a clear, concise incident summary (5–8 sentences, plain prose, no headers) for a case report: what happened, scope (hosts/users), key evidence, and an assessment.",
     prompt:"Case data:\n\n"+(await gatherCaseContext())+"\n\nWrite the incident summary." };
-  // dash / events / evidence / timeline / proc / sess / default → case-wide "what happened"
-  return { title:"What happened in this case", canInsert:true, maxTokens:1100,
-    system:base+" Given a triage data summary, tell the story: what likely happened, the most serious findings, affected hosts/users, and the top 3 next actions.",
-    prompt:"Triage data:\n\n"+(await gatherCaseContext())+"\n\nExplain what happened and what to do next." };
+  // dash / events / evidence / timeline / proc / sess / default → full case-wide DFIR briefing
+  return { title:"Case DFIR briefing", canInsert:true, maxTokens:2400,
+    system:"You are a lead DFIR analyst writing an incident triage briefing from Windows event-log analysis. "+
+      "Produce a detailed but skimmable report. Use markdown '## ' section headers EXACTLY as listed, in this order:\n"+
+      "## Summary — 2-3 sentence bottom line (what happened + severity).\n"+
+      "## What happened — the narrative / likely timeline of the intrusion.\n"+
+      "## Initial access & execution — how they likely got in and ran code (only if there's evidence).\n"+
+      "## Persistence, credential access & lateral movement — techniques seen, with the ATT&CK IDs if given.\n"+
+      "## Scope — affected hosts and accounts, named.\n"+
+      "## Impact & exfiltration risk — data/impact concerns.\n"+
+      "## Key indicators — notable IPs / hashes / domains / accounts to pivot on.\n"+
+      "## Assessment — overall severity and your confidence.\n"+
+      "## Recommended next actions — prioritised, concrete containment/investigation steps.\n"+
+      "## DFIR questions to answer — the open questions the analyst must still resolve (who, patient-zero, dwell time, blast radius, exfil, root cause).\n\n"+
+      "Be specific and cite the data (exact counts, host/user/IP names). NEVER invent hosts, users, IPs, counts or filenames — if a section lacks evidence, say so and state what data would answer it. Use bullets under headers. Keep it tight and practical.",
+    prompt:"Triage data for the case:\n\n"+(await gatherCaseContext())+"\n\nWrite the full DFIR triage briefing following the section structure." };
 }
 /* --- panel --- */
 function aiSetTitle(t){ $("aiPanelTitle").textContent="✦ "+t; }
