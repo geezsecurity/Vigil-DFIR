@@ -44,6 +44,11 @@ running server-side so multi-hundred-MB logs never choke your tab.
   movement derived from remote logons (4624 type 3/10), explicit credentials (4648), NTLM
   (4776), RDP (1149) and share access (5140/5145); edges are colored by technique, detection
   paths are highlighted, and clicking a node pivots the grid.
+- **IOC watchlists** — paste or upload known-bad **IPs / domains / hashes / filenames /
+  usernames** (reused across cases) and scan the whole case for matches. Type is auto-detected;
+  IPs/hashes/domains match on exact tokens (no substring false positives), files/users via an
+  Aho-Corasick pass. Matches show hit counts, affected hosts, first/last seen, and pivot to the
+  grid or the event.
 - **Super-timeline** — full-log activity histogram + a merged, filterable notable-event
   feed (detections, logons, RDP, lateral movement …) with click-to-zoom time windows.
 - **Evidence** — mined forensic artifacts (accounts, services, tasks, LSASS access, share
@@ -161,4 +166,4 @@ Key endpoints: `/api/upload`, `/api/search` (SQLite/FTS, paginated), `/api/bodie
 
 Actively developed. Detection engine, ATT&CK, correlation, entity profiles, super-timeline,
 evidence, and reporting are implemented and covered by the test harness. Firewall/VPN
-analytics, IOC watchlists, and analyst notes are on the roadmap.
+analytics and analyst notes are on the roadmap.

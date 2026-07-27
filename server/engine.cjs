@@ -767,6 +767,73 @@ function buildLateralGraph(raw, opts){
   return { nodes:nodeArr, edges:edgeArr };
 }
 
+/* ----------------- IOC WATCHLIST MATCHING ---------------------------------- */
+// Guess an IOC's type from its value so the matcher can pick exact-token vs substring matching.
+function iocType(v){
+  v=String(v||"").trim();
+  if(/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) return "ip";
+  if(/^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/.test(v)) return "hash";
+  if(/[\\/]/.test(v) || /\.(exe|dll|ps1|bat|vbs|scr|js|hta|cmd|sys|tmp|dat|bin|jar|lnk|docm|xlsm|iso|img|reg)$/i.test(v)) return "file";
+  if(/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(v)) return "domain";
+  return "string";
+}
+// Aho-Corasick multi-string matcher — one pass finds all substring needles in a haystack.
+function buildAho(needles){
+  const goto=[{}], out=[[]], fail=[0];
+  for(const w of needles){ if(!w) continue; let s=0;
+    for(const ch of w){ if(goto[s][ch]==null){ goto.push({}); out.push([]); fail.push(0); goto[s][ch]=goto.length-1; } s=goto[s][ch]; }
+    out[s].push(w); }
+  const q=[];
+  for(const ch in goto[0]){ const s=goto[0][ch]; fail[s]=0; q.push(s); }
+  while(q.length){ const r=q.shift();
+    for(const ch in goto[r]){ const s=goto[r][ch]; q.push(s);
+      let f=fail[r]; while(f && goto[f][ch]==null) f=fail[f];
+      fail[s]=(goto[f][ch]!=null && goto[f][ch]!==s)?goto[f][ch]:0;
+      if(out[fail[s]].length) out[s]=out[s].concat(out[fail[s]]); } }
+  return { goto, out, fail };
+}
+function ahoSearch(ac, text){
+  let s=0; const found=new Set();
+  for(let i=0;i<text.length;i++){ const ch=text[i];
+    while(s && ac.goto[s][ch]==null) s=ac.fail[s];
+    s=ac.goto[s][ch]!=null?ac.goto[s][ch]:0;
+    if(ac.out[s].length) for(const w of ac.out[s]) found.add(w); }
+  return found;
+}
+// Build a scanner over a list of IOCs ({value,type}). scan(lowercasedText) -> Set of matched
+// (lowercased) IOC values. IPs/hashes/domains use exact-token intersection (no substring false
+// positives); files/users/generic strings use Aho-Corasick substring search.
+function buildIocMatcher(iocs){
+  const ipSet=new Set(), hashSet=new Set(), domainSet=new Set(), strNeedles=[];
+  const meta=new Map();
+  for(const it of (iocs||[])){
+    const v=String((it&&it.value)!=null?it.value:it||"").trim(); if(!v) continue;
+    const lv=v.toLowerCase(); if(meta.has(lv)) continue;
+    const type=(it&&it.type)||iocType(v); meta.set(lv,{ value:v, type });
+    if(type==="ip") ipSet.add(lv);
+    else if(type==="hash") hashSet.add(lv);
+    else if(type==="domain") domainSet.add(lv);
+    else strNeedles.push(lv);
+  }
+  const ac = strNeedles.length ? buildAho(strNeedles) : null;
+  const IPRE=/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g, HEXRE=/[a-f0-9]{32,64}/g, DOMRE=/[a-z0-9][a-z0-9.-]*\.[a-z]{2,}/g;
+  return {
+    count: meta.size, meta,
+    scan(text){
+      text=String(text||"");
+      const hits=new Set();
+      if(ipSet.size){ const m=text.match(IPRE); if(m) for(const t of m) if(ipSet.has(t)) hits.add(t); }
+      if(hashSet.size){ const m=text.match(HEXRE); if(m) for(const t of m) if(hashSet.has(t)) hits.add(t); }
+      if(domainSet.size){ const m=text.match(DOMRE); if(m) for(let t of m){
+        let d=t; let guard=0;
+        while(d.indexOf(".")>=0 && guard++<8){ if(domainSet.has(d)) hits.add(d); d=d.slice(d.indexOf(".")+1); }
+      } }
+      if(ac) for(const w of ahoSearch(ac, text)) hits.add(w);
+      return hits;
+    }
+  };
+}
+
 /* ----------------- HEURISTICS ---------------------------------------------- */
 function isPrivateIp(ip){
   if(!ip||ip==="-"||ip==="::1")return true;
@@ -893,7 +960,8 @@ const Engine={
   resolveField, compileSigmaRule, compileYaraRules, runHeuristics, buildFulltext, base64OffsetVariants, compileCondition,
   parseAttack, techniqueFromTag, tacticFromTag,
   attack:{ tactics:ATTACK_TACTIC_NAMES, tacticOrder:ATTACK_TACTIC_ORDER, techniques:ATTACK_TECHNIQUES },
-  extractEntities, makeEntityScorer, buildAttackChains, buildProcessTree, buildLateralGraph, parseProcessArtifacts,
+  extractEntities, makeEntityScorer, buildAttackChains, buildProcessTree, buildLateralGraph,
+  iocType, buildIocMatcher, parseProcessArtifacts,
   parseSigmaDocs(yamlText, yamlLoadAll){
     const docs=yamlLoadAll(yamlText)||[]; const rules=[], aggRules=[], skipped=[], errors=[];
     for (const doc of docs){

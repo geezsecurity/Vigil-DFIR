@@ -538,6 +538,34 @@ const SUPPRESS_FILE = path.join(DATA, "suppressions.json");
 function loadSuppressed(){ try{ return new Set(JSON.parse(fs.readFileSync(SUPPRESS_FILE,"utf8")).suppressed||[]); }catch{ return new Set(); } }
 function saveSuppressed(set){ try{ fs.writeFileSync(SUPPRESS_FILE, JSON.stringify({ suppressed:[...set] })); }catch(e){ console.error(e); } }
 
+// ---- IOC watchlist (global, reusable across cases; matched against the active case) ----
+const WATCHLIST_FILE = path.join(DATA, "watchlist.json");
+const IOC_CAP = 20000;
+function loadWatchlist(){ try{ const a=JSON.parse(fs.readFileSync(WATCHLIST_FILE,"utf8")).iocs; return Array.isArray(a)?a:[]; }catch{ return []; } }
+function saveWatchlist(list){ try{ fs.writeFileSync(WATCHLIST_FILE, JSON.stringify({ iocs:list.slice(0,IOC_CAP) })); }catch(e){ console.error(e); } }
+// Parse free-text IOC input into typed records. One indicator per line; blank lines and lines
+// starting with # are ignored. Optional "type:value" or "value,label" (CSV) forms are accepted.
+function parseIocInput(text){
+  const out=[]; const TYPES=new Set(["ip","hash","domain","file","user","string"]);
+  for(let line of String(text||"").split(/\r?\n/)){
+    line=line.trim(); if(!line||line[0]==="#") continue;
+    let label=""; const comma=line.indexOf(",");
+    if(comma>=0){ label=line.slice(comma+1).trim(); line=line.slice(0,comma).trim(); }
+    let type=""; const colon=line.indexOf(":");
+    if(colon>0 && TYPES.has(line.slice(0,colon).toLowerCase())){ type=line.slice(0,colon).toLowerCase(); line=line.slice(colon+1).trim(); }
+    if(!line) continue;
+    out.push({ value:line, type:type||Engine.iocType(line), label });
+  }
+  return out;
+}
+function mergeIocs(existing, add){
+  const byVal=new Map(existing.map(x=>[String(x.value).toLowerCase(), x]));
+  for(const it of add){ const k=String(it.value).toLowerCase();
+    if(byVal.has(k)){ const cur=byVal.get(k); if(it.label&&!cur.label)cur.label=it.label; if(it.type)cur.type=it.type; }
+    else if(byVal.size<IOC_CAP){ byVal.set(k, { value:it.value, type:it.type, label:it.label||"", added:new Date().toISOString() }); } }
+  return [...byVal.values()];
+}
+
 // Assemble the full detection payload (timeline + ATT&CK + entities + chains + aggregates)
 // from a per-event hit map. Shared by /api/detect (fresh scan) and suppression re-filtering.
 function assembleDetections(byIdx, rows, meta, ruleStats){
@@ -1079,6 +1107,57 @@ app.get("/api/lateral", async (req,res)=>{
     });
     const g=Engine.buildLateralGraph(raw);
     res.json({ ok:true, nodes:g.nodes, edges:g.edges, count:g.nodes.length, edgeCount:g.edges.length, truncated });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
+// ---- IOC watchlist: manage the indicator list + scan the active case for matches ----
+app.get("/api/watchlist", (req,res)=> res.json({ ok:true, iocs:loadWatchlist() }));
+app.post("/api/watchlist", (req,res)=>{
+  try{
+    const b=req.body||{};
+    if(b.clear){ saveWatchlist([]); return res.json({ ok:true, iocs:[] }); }
+    let list=loadWatchlist();
+    if(b.text!=null || Array.isArray(b.add)){
+      const add = b.text!=null ? parseIocInput(b.text)
+        : b.add.map(x=> typeof x==="string" ? { value:x, type:Engine.iocType(x), label:"" } : { value:x.value, type:x.type||Engine.iocType(x.value), label:x.label||"" });
+      list=mergeIocs(list, add);
+    }
+    if(Array.isArray(b.remove) && b.remove.length){ const rm=new Set(b.remove.map(v=>String(v).toLowerCase())); list=list.filter(x=>!rm.has(String(x.value).toLowerCase())); }
+    saveWatchlist(list);
+    res.json({ ok:true, iocs:list });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+app.get("/api/watchlist/scan", async (req,res)=>{
+  try{
+    const iocs=loadWatchlist();
+    if(!iocs.length) return res.json({ ok:true, hits:[], iocCount:0, eventCount:0, matchedEvents:0 });
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, hits:[], iocCount:iocs.length, eventCount:0, matchedEvents:0 });
+    let detHits={}; try{ detHits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{}
+    const matcher=Engine.buildIocMatcher(iocs);
+    const metaByLower=matcher.meta;                          // lower -> {value,type}
+    const agg=new Map();                                     // lower -> {value,type,count,hosts:Set,samples:[],det,firstTms,lastTms}
+    let eventCount=0, matchedEvents=0;
+    await forEachEvent((ev, i)=>{
+      eventCount++;
+      const found=matcher.scan(bodyText(ev));                // bodyText is already lowercased
+      if(!found.size) return;
+      matchedEvents++;
+      const host=getComputer(ev), ts=getTime(ev), tms=ts?Date.parse(ts):NaN;
+      const dh=detHits[i]; let det=0; if(dh&&dh.length){ for(const h of dh){ const n=sevNumS(h.level); if(n>det)det=n; } }
+      for(const lv of found){
+        let a=agg.get(lv);
+        if(!a){ const md=metaByLower.get(lv)||{ value:lv, type:"string" }; a={ value:md.value, type:md.type, count:0, hosts:new Set(), samples:[], det:0, firstTms:null, lastTms:null }; agg.set(lv,a); }
+        a.count++;
+        if(host) a.hosts.add(host);
+        if(a.samples.length<12) a.samples.push(i);
+        if(det>a.det) a.det=det;
+        if(!Number.isNaN(tms)){ if(a.firstTms==null||tms<a.firstTms)a.firstTms=tms; if(a.lastTms==null||tms>a.lastTms)a.lastTms=tms; }
+      }
+    });
+    const hits=[...agg.values()].map(a=>({ value:a.value, type:a.type, count:a.count, det:a.det,
+      hosts:[...a.hosts].slice(0,20), samples:a.samples, firstTms:a.firstTms, lastTms:a.lastTms }))
+      .sort((x,y)=>(y.det-x.det)||(y.count-x.count));
+    res.json({ ok:true, hits, iocCount:iocs.length, matched:hits.length, eventCount, matchedEvents });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 

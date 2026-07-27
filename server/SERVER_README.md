@@ -144,6 +144,9 @@ mapped to events tagged by source with the original line preserved as the messag
 | GET    | `/api/proctree`       | Sysmon process-ancestry forest (EID 1/5)  |
 | GET    | `/api/sessions`       | reconstructed logon sessions (4624↔4634/4647, durations, RDP/ext flags) |
 | GET    | `/api/lateral`        | cross-host lateral-movement node-link graph (nodes + edges) |
+| GET    | `/api/watchlist`      | list IOC indicators                        |
+| POST   | `/api/watchlist`      | `{text}` bulk-add / `{add:[]}` / `{remove:[]}` / `{clear:true}` |
+| GET    | `/api/watchlist/scan` | scan the active case for watchlist matches |
 | GET    | `/api/suppressions`   | list suppressed rule IDs                  |
 | POST   | `/api/suppressions`   | `{ruleId,suppress}` toggle (or `{suppressed:[]}`) — re-filters detections |
 | GET    | `/api/cases`          | list cases (id, name, count, active)      |

@@ -267,6 +267,33 @@ function testRec(rule, rec){ if(!rule._fulltext){} rec._fulltext = Engine.buildF
   eq(g.nodes[0].det, 3, "nodes sorted with highest-detection nodes first");
 })();
 
+(function testIocMatcher(){
+  eq(Engine.iocType("203.0.113.9"), "ip", "ipv4 -> ip");
+  eq(Engine.iocType("44d88612fea8a8f36de82e1278abb02f"), "hash", "md5 -> hash");
+  eq(Engine.iocType("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"), "hash", "sha256 -> hash");
+  eq(Engine.iocType("evil.example.com"), "domain", "fqdn -> domain");
+  eq(Engine.iocType("C:\\temp\\beacon.exe"), "file", "path -> file");
+  eq(Engine.iocType("mimikatz.exe"), "file", "exe -> file");
+  eq(Engine.iocType("APT-operator"), "string", "freeform -> string");
+  const m=Engine.buildIocMatcher([
+    { value:"203.0.113.9" }, { value:"evil.example.com" }, { value:"beacon.exe" },
+    { value:"44d88612fea8a8f36de82e1278abb02f" }, { value:"badguy", type:"user" },
+  ]);
+  eq(m.count, 5, "five distinct iocs registered");
+  // exact ip token — must NOT match a longer ip that contains it as a substring
+  eq([...m.scan("logon from 203.0.113.90 failed")].length, 0, "203.0.113.9 does not match 203.0.113.90 (exact token)");
+  ok(m.scan("connection to 203.0.113.9 established").has("203.0.113.9"), "exact ip token matches");
+  // subdomain walk: an IOC domain matches within a subdomain
+  ok(m.scan("beacon phoned c2.evil.example.com over 443").has("evil.example.com"), "domain matches inside subdomain");
+  ok(!m.scan("visited notevil.example.org").has("evil.example.com"), "domain does not false-match unrelated host");
+  ok(m.scan("commandline: c:\\windows\\temp\\beacon.exe -k").has("beacon.exe"), "filename substring via aho-corasick");
+  ok(m.scan("hash=44D88612FEA8A8F36DE82E1278ABB02F".toLowerCase()).has("44d88612fea8a8f36de82e1278abb02f"), "hash matches case-insensitively");
+  ok(m.scan("targetusername: badguy logon").has("badguy"), "user string matches");
+  eq(m.scan("nothing to see here").size, 0, "clean text yields no hits");
+  // multiple hits in one event
+  eq(m.scan("203.0.113.9 ran beacon.exe").size, 2, "two iocs in one haystack");
+})();
+
 /* =====================================================================
    3. YARA-LITE
    ===================================================================== */
