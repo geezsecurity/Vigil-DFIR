@@ -44,15 +44,17 @@ running server-side so multi-hundred-MB logs never choke your tab.
   movement derived from remote logons (4624 type 3/10), explicit credentials (4648), NTLM
   (4776), RDP (1149) and share access (5140/5145); edges are colored by technique, detection
   paths are highlighted, and clicking a node pivots the grid.
-- **IOC watchlists** — paste or upload known-bad **IPs / domains / hashes / filenames /
-  usernames** (reused across cases) and scan the whole case for matches. Type is auto-detected;
+- **Watchlist** — two modes. **Observed in case** auto-carves every **IP / hash / domain**
+  present in the logs (IPs from address fields, hashes from Sysmon `Hashes`, domains from DNS
+  queries), filterable by type with counts, hosts and first/last seen. **My indicators** lets
+  you paste or upload known-bad IOCs (reused across cases) and scan the case for matches —
   IPs/hashes/domains match on exact tokens (no substring false positives), files/users via an
-  Aho-Corasick pass. Matches show hit counts, affected hosts, first/last seen, and pivot to the
-  grid or the event.
-- **Threat-intel enrichment** — with an API key configured in **⚙ Settings**, click a matched
-  IP or hash in the Watchlist to check it against **AbuseIPDB** (abuse score, ISP, Tor) and
-  **VirusTotal** (malicious-engine ratio, file name/type). Keys live server-side (git-ignored);
-  results are cached for 24h. Fully opt-in.
+  Aho-Corasick pass.
+- **Threat-intel enrichment** — with an API key configured in **⚙ Settings**, check any
+  observed or matched IP/hash against **AbuseIPDB** (abuse score, ISP, Tor) and **VirusTotal**
+  (malicious-engine ratio, file name/type) — one click per row, or "Check all shown" (throttled
+  for free tiers). A malicious/suspicious/clean verdict is shown inline. Keys live server-side
+  (git-ignored); results cache for 24h. Fully opt-in.
 - **Super-timeline** — full-log activity histogram + a merged, filterable notable-event
   feed (detections, logons, RDP, lateral movement …) with click-to-zoom time windows.
 - **Evidence** — mined forensic artifacts (accounts, services, tasks, LSASS access, share

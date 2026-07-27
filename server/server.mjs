@@ -1212,6 +1212,55 @@ app.get("/api/watchlist/scan", async (req,res)=>{
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
+// ---- Observed indicators: carve the IPs / hashes / domains actually present in the case,
+//      so an analyst can see them and check each against threat intel. ----
+app.get("/api/observed", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, ips:[], hashes:[], domains:[], eventCount:0 });
+    let detHits={}; try{ detHits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{}
+    const detLvl=i=>{ const h=detHits[i]; if(!h||!h.length)return 0; let m=0; for(const x of h){ const n=sevNumS(x.level); if(n>m)m=n; } return m; };
+    const CAP=8000;
+    const ips=new Map(), hashes=new Map(), domains=new Map();
+    const add=(map, key, extra, host, i, tms, det)=>{
+      let a=map.get(key);
+      if(!a){ if(map.size>=CAP) return; a={ value:key, count:0, hosts:new Set(), samples:[], firstTms:null, lastTms:null, det:0, ...extra }; map.set(key, a); }
+      a.count++; if(host)a.hosts.add(host); if(a.samples.length<12)a.samples.push(i); if(det>a.det)a.det=det;
+      if(tms!=null){ if(a.firstTms==null||tms<a.firstTms)a.firstTms=tms; if(a.lastTms==null||tms>a.lastTms)a.lastTms=tms; }
+    };
+    const IP_FIELDS=["IpAddress","DestinationIp","SourceIp","DestAddress","SourceAddress","ClientAddress","Address","DestinationAddress"];
+    const HASH_ALGO=/^(md5|sha1|sha256)$/i;
+    let eventCount=0;
+    await forEachEvent((ev, i)=>{
+      eventCount++;
+      const d=getData(ev)||{}; const host=getComputer(ev); const ts=getTime(ev); const tms=ts?Date.parse(ts):NaN; const T=Number.isNaN(tms)?null:tms;
+      const det=detLvl(i);
+      // IPs — from known address fields (reliable; avoids body-scan noise)
+      const seenIp=new Set();
+      for(const k of IP_FIELDS){ const v=d[k]; if(v==null) continue;
+        const m=String(v).match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/); if(!m) continue;
+        const ip=m[0]; if(ip==="0.0.0.0"||ip==="255.255.255.255"||seenIp.has(ip)) continue; seenIp.add(ip);
+        add(ips, ip, { type:"ip", external:isExtIp(ip) }, host, i, T, det); }
+      // Hashes — from Sysmon "Hashes"/"Hash" fields ("SHA256=..,MD5=..,IMPHASH=..") + explicit algo fields
+      const hraw=[]; if(d.Hashes)hraw.push(String(d.Hashes)); if(d.Hash)hraw.push(String(d.Hash));
+      for(const algo of ["SHA256","SHA1","MD5"]){ if(d[algo])hraw.push(algo+"="+d[algo]); }
+      for(const blob of hraw){ for(const part of blob.split(",")){ const p=part.trim(); if(!p) continue;
+        const eq=p.indexOf("="); let algo="", hv=p;
+        if(eq>0){ algo=p.slice(0,eq); hv=p.slice(eq+1); if(!HASH_ALGO.test(algo)) continue; }   // skip IMPHASH etc.
+        hv=hv.trim().toLowerCase();
+        if(/^[a-f0-9]{32}$|^[a-f0-9]{40}$|^[a-f0-9]{64}$/.test(hv)) add(hashes, hv, { type:"hash", algo:(algo||({32:"MD5",40:"SHA1",64:"SHA256"}[hv.length])||"").toUpperCase() }, host, i, T, det);
+      } }
+      // Domains — from Sysmon DNS queries (EID 22)
+      const q=d.QueryName; if(q){ const dn=String(q).trim().toLowerCase().replace(/\.$/,"");
+        if(/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(dn) && !/\.(arpa|local)$/.test(dn)) add(domains, dn, { type:"domain" }, host, i, T, det); }
+    });
+    const pack=map=>[...map.values()].map(a=>({ value:a.value, type:a.type, algo:a.algo, external:a.external,
+      count:a.count, det:a.det, hosts:[...a.hosts].slice(0,20), samples:a.samples, firstTms:a.firstTms, lastTms:a.lastTms }))
+      .sort((x,y)=>(y.det-x.det)||(y.count-x.count));
+    res.json({ ok:true, ips:pack(ips), hashes:pack(hashes), domains:pack(domains), eventCount,
+      capped:{ ips:ips.size>=CAP, hashes:hashes.size>=CAP, domains:domains.size>=CAP } });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
 // ---- Settings: report which intel providers are configured; save keys (never returned) ----
 app.get("/api/settings", (req,res)=>{
   res.json({ ok:true, abuseipdbConfigured:!!getApiKey("abuseipdb"), virustotalConfigured:!!getApiKey("virustotal"),
