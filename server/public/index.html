@@ -614,6 +614,10 @@
   #aiPanel{position:fixed;right:16px;bottom:16px;width:480px;height:78vh;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);min-width:320px;min-height:220px;z-index:45;
     background:var(--bg);border:1px solid var(--line-2);border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.45);display:none;flex-direction:column;overflow:hidden}
   #aiPanel.show{display:flex}
+  #aiFab{position:fixed;right:18px;bottom:18px;z-index:44;padding:10px 16px;border:none;border-radius:22px;
+    background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35);letter-spacing:.02em}
+  #aiFab:hover{filter:brightness(1.08)}
+  #aiFab.hide{display:none}
   .aip-head{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
   .aip-head .aip-prov{font-weight:400;color:var(--txt-dim);font-size:11px;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
   .aip-head .aip-x{cursor:pointer;color:var(--txt-dim);font-size:15px;flex:0 0 auto}
@@ -756,6 +760,7 @@
   </div>
 </div>
 
+<button id="aiFab" class="hide" title="AI Support — analyse this section">✦ AI Support</button>
 <div id="aiPanel">
   <div class="aip-head"><span id="aiPanelTitle">✦ AI Support</span><span class="aip-prov" id="aiPanelProv"></span><span class="aip-x" id="aiPanelClose">✕</span></div>
   <div class="aip-body" id="aiPanelBody"></div>
@@ -5837,6 +5842,7 @@ async function serverInit(){
   catch(_){ return; }                          // opened as a static file -> client mode
   if(!j||!j.ok)return;
   SERVER=true; document.title="Vigil (server)";
+  $("aiFab").classList.remove("hide");           // AI Support is available on every section in server mode
   window.__browseCap=j.browseCap||200000;
   renderCaseSwitcher(j.cases||[], j.activeCase||null);
   loadSuppressions();
@@ -7988,7 +7994,17 @@ async function aiSectionContext(mode){
   if(mode==="cw") return { title:"Draft case summary", canInsert:true, maxTokens:1400,
     system:"You are a senior DFIR analyst. Write a clear, substantive incident summary (a solid paragraph, ~6-9 sentences, plain prose, no headers) for a case report: what happened, scope (named hosts/users), key evidence, and an assessment with severity. Only use the data provided; never invent values.",
     prompt:"Case data:\n\n"+(await gatherCaseContext())+"\n\nWrite the incident summary." };
-  // dash / events / timeline / fw / vpn / default → full case-wide DFIR briefing
+  if(mode==="timeline") return { title:"Timeline — chronology read", maxTokens:2600,
+    system:aiStruct(["Bottom line","Likely sequence of events","Notable time clusters / spikes","What to zoom into first","Open questions to answer"]),
+    prompt:"Case triage data (chronological view):\n\n"+(await gatherCaseContext())+"\n\nWrite the timeline / chronology briefing." };
+  if(mode==="fw"||mode==="vpn"){ const kind=mode==="fw"?"firewall":"VPN"; let d="";
+    try{ const j=await (await api("/api/cat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cat:mode})})).json();
+      if(j&&j.rows&&j.rows.length) d=kind+" log lines ("+j.rows.length+" shown):\n"+j.rows.slice(0,60).map(r=>(r.ts||"")+" "+(r.src||"")+" "+(r.msg||"").slice(0,140)).join("\n"); }catch(_){}
+    if(!d) d="No "+kind+" log lines loaded (add a "+kind+" log in the "+(mode==="fw"?"🔥 Firewall":"🔒 VPN")+" tab).";
+    return { title:kind.toUpperCase()+" — network read", maxTokens:2400,
+      system:aiStruct(["Bottom line","Suspicious connections / sources","Blocked vs allowed patterns","Indicators to pivot on","Recommended checks","Open questions to answer"]),
+      prompt:kind+" data:\n\n"+d+"\n\nWrite the network-log briefing." }; }
+  // dash / events / default → full case-wide DFIR briefing
   return { title:"Case DFIR briefing", canInsert:true, maxTokens:5000,
     system:aiStruct(["Summary","What happened (narrative / timeline)","Initial access & execution","Persistence, credential access & lateral movement","Scope (affected hosts & accounts)","Impact & exfiltration risk","Key indicators","Assessment (severity & confidence)","Recommended next actions (prioritised)","DFIR questions to answer"])+
       " IMPORTANT: keep each section to 2-4 tight bullets so the WHOLE briefing (all 10 sections) fits — do not run out of space before the final sections. Never stop mid-section.",
@@ -7996,8 +8012,9 @@ async function aiSectionContext(mode){
 }
 /* --- panel --- */
 function aiSetTitle(t){ $("aiPanelTitle").textContent="✦ "+t; }
-function aiPanelLoading(){ $("aiPanel").classList.add("show"); const b=$("aiPanelBody"); b.classList.remove("err"); b.innerHTML='<span class="spin"></span> thinking…'; $("aiPanelFoot").innerHTML=""; $("aiPanelProv").textContent=""; }
-function aiPanelErr(m, offerSettings){ $("aiPanel").classList.add("show"); const b=$("aiPanelBody"); b.classList.add("err"); b.textContent=m; $("aiPanelProv").textContent=""; $("aiPanelFoot").innerHTML=offerSettings?'<button class="vbtn" id="aiOpenSettings">⚙ Open Settings</button>':""; }
+function aiShowPanel(){ $("aiPanel").classList.add("show"); $("aiFab").classList.add("hide"); }
+function aiPanelLoading(){ aiShowPanel(); const b=$("aiPanelBody"); b.classList.remove("err"); b.innerHTML='<span class="spin"></span> thinking…'; $("aiPanelFoot").innerHTML=""; $("aiPanelProv").textContent=""; }
+function aiPanelErr(m, offerSettings){ aiShowPanel(); const b=$("aiPanelBody"); b.classList.add("err"); b.textContent=m; $("aiPanelProv").textContent=""; $("aiPanelFoot").innerHTML=offerSettings?'<button class="vbtn" id="aiOpenSettings">⚙ Open Settings</button>':""; }
 async function aiSupport(mode){
   mode=mode||document.body.getAttribute("data-mode")||"dash";
   if(!SERVER){ aiPanelErr("AI Support runs server-side — run the backend to use it."); return; }
@@ -8019,7 +8036,8 @@ async function aiInsertIntoCaseNotes(text){
   }catch(_){}
 }
 $("aiBtn").onclick=()=>aiSupport();
-$("aiPanelClose").onclick=()=>$("aiPanel").classList.remove("show");
+$("aiFab").onclick=()=>aiSupport();
+$("aiPanelClose").onclick=()=>{ $("aiPanel").classList.remove("show"); $("aiFab").classList.remove("hide"); };
 $("aiPanelFoot").addEventListener("click",e=>{
   if(e.target.id==="aiOpenSettings"){ $("aiPanel").classList.remove("show"); openSettings(); return; }
   if(e.target.id==="aiCopyOut"){ if(navigator.clipboard&&aiLastText)navigator.clipboard.writeText(aiLastText); e.target.textContent="copied ✓"; setTimeout(()=>e.target.textContent="Copy",1000); return; }
