@@ -32,6 +32,18 @@ running server-side so multi-hundred-MB logs never choke your tab.
 - **Entity risk scoring** — ranks users / hosts / IPs by severity + technique diversity
   (with noise dampening), each opening a full **profile dossier** (related entities you
   can walk, logon stats, techniques, timeline).
+- **Process-tree reconstruction** — rebuilds process ancestry from Sysmon `ProcessGuid` /
+  `ParentProcessGuid` (EID 1, end times from EID 5) into an interactive collapsible tree with
+  expand/collapse-all, live image/command/PID search, a *detections-only* filter, per-process
+  run-time and PID, and uncaptured-parent hints; branches with a detection are highlighted and
+  each node opens its event.
+- **Logon-session reconstruction** — pairs 4624 logons with their 4634/4647 logoff by
+  `LogonId` into a sortable, filterable session table (decoded logon type, source IP /
+  workstation, duration, RDP + external-source flags, still-active sessions).
+- **Lateral-movement graph** — an interactive, draggable node-link map of host↔host / IP→host
+  movement derived from remote logons (4624 type 3/10), explicit credentials (4648), NTLM
+  (4776), RDP (1149) and share access (5140/5145); edges are colored by technique, detection
+  paths are highlighted, and clicking a node pivots the grid.
 - **Super-timeline** — full-log activity histogram + a merged, filterable notable-event
   feed (detections, logons, RDP, lateral movement …) with click-to-zoom time windows.
 - **Evidence** — mined forensic artifacts (accounts, services, tasks, LSASS access, share

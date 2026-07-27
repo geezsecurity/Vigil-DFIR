@@ -454,6 +454,70 @@
   body[data-mode="ev"] aside{display:none}
   #fwWrap,#vpnWrap,#tlWrap{display:none;flex:1;overflow:auto;padding:18px 22px}
   body[data-mode="timeline"] #tlWrap{display:block} body[data-mode="timeline"] #eventsWrap{display:none} body[data-mode="timeline"] aside{display:none}
+  #procWrap{display:none;flex:1;overflow:auto;padding:16px 20px}
+  body[data-mode="proc"] #procWrap{display:block} body[data-mode="proc"] #eventsWrap{display:none} body[data-mode="proc"] aside{display:none}
+  #sessWrap{display:none;flex:1;overflow:auto;padding:16px 20px}
+  body[data-mode="sess"] #sessWrap{display:block} body[data-mode="sess"] #eventsWrap{display:none} body[data-mode="sess"] aside{display:none}
+  #latWrap{display:none;flex:1;overflow:hidden;padding:0;flex-direction:column}
+  body[data-mode="lat"] #latWrap{display:flex} body[data-mode="lat"] #eventsWrap{display:none} body[data-mode="lat"] aside{display:none}
+  /* shared view toolbar */
+  .vtoolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 12px}
+  .vtoolbar .vbtn{font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--line-2);background:var(--bg-2);color:var(--txt);border-radius:6px;cursor:pointer}
+  .vtoolbar .vbtn:hover{background:var(--sel)}
+  .vtoolbar .vbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .vtoolbar input.vsearch{font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--line-2);background:var(--bg-2);color:var(--txt);border-radius:6px;min-width:180px}
+  .vtoolbar .vsp{flex:1 1 auto}
+  /* process tree */
+  .pttree{font-family:var(--mono);font-size:12px;margin-top:8px}
+  .pthost{font-family:var(--sans);font-weight:600;color:var(--txt);margin:14px 0 4px;font-size:13px;display:flex;align-items:center;gap:8px}
+  .pthost .pthc{font-weight:400;color:var(--txt-dim);font-size:11px;font-family:var(--mono)}
+  .ptkids{margin-left:15px;border-left:1px solid var(--line-2);padding-left:9px}
+  .ptn.collapsed>.ptkids{display:none}
+  .ptrow{display:flex;gap:9px;align-items:center;padding:2px 6px;border-radius:5px;cursor:pointer;white-space:nowrap}
+  .ptrow:hover{background:var(--sel)}
+  .pttog{cursor:pointer;width:12px;flex:0 0 auto;color:var(--txt-dim);transition:transform .1s;text-align:center}
+  .ptn.collapsed>.ptrow .pttog{transform:rotate(-90deg)}
+  .ptlead{width:12px;flex:0 0 auto;color:var(--line-2);text-align:center}
+  .ptimg{color:var(--accent);flex:0 0 auto;font-weight:600}
+  .ptpid{color:var(--txt-dim);font-size:10.5px;flex:0 0 auto;opacity:.75}
+  .ptcmd{color:var(--txt-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto}
+  .ptcmd mark{background:var(--accent);color:#fff;border-radius:2px;padding:0 1px}
+  .ptkc{flex:0 0 auto;font-size:10px;color:var(--txt-dim);background:var(--bg-2);border:1px solid var(--line-2);border-radius:8px;padding:0 6px}
+  .ptuser{color:var(--blue);flex:0 0 auto;font-size:11px}
+  .pttime{color:var(--txt-dim);font-size:10.5px;flex:0 0 auto;margin-left:8px}
+  .ptdur{color:var(--txt-dim);font-size:10px;flex:0 0 auto;opacity:.7}
+  .ptdet{width:8px;height:8px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+  .ptorph{color:var(--txt-dim);font-size:10.5px;font-style:italic;opacity:.7;flex:0 0 auto}
+  .ptn.sd3>.ptrow,.ptn.sd4>.ptrow{box-shadow:inset 2px 0 0 #e5736a}   /* branch contains a detection */
+  .pttree.detonly .ptn.nodet{display:none}
+  /* sessions table */
+  .sesstbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+  .sesstbl th{text-align:left;font-weight:600;color:var(--txt-dim);font-size:11px;text-transform:uppercase;letter-spacing:.03em;padding:6px 10px;border-bottom:1px solid var(--line-2);position:sticky;top:0;background:var(--bg);cursor:pointer;white-space:nowrap}
+  .sesstbl th:hover{color:var(--txt)}
+  .sesstbl td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .sesstbl tr[data-idx]{cursor:pointer}
+  .sesstbl tr[data-idx]:hover{background:var(--sel)}
+  .sesstbl td.mono{font-family:var(--mono);font-size:11.5px}
+  .stag{display:inline-block;font-size:10px;padding:1px 7px;border-radius:9px;border:1px solid var(--line-2);color:var(--txt-dim)}
+  .stag.rdp{background:rgba(230,180,80,.16);border-color:transparent;color:var(--yellow,#e6b450)}
+  .stag.ext{background:rgba(255,107,107,.16);border-color:transparent;color:#ff8a8a}
+  .stag.net{background:rgba(108,182,255,.14);border-color:transparent;color:#6cb6ff}
+  .sess-open{color:#5ac77a} .sess-closed{color:var(--txt-dim)}
+  /* lateral graph */
+  .latbar{padding:12px 20px 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  #latSvgWrap{flex:1;overflow:hidden;position:relative;min-height:0}
+  #latSvg{width:100%;height:100%;display:block;cursor:grab}
+  #latSvg.grabbing{cursor:grabbing}
+  #latSvg .ledge{stroke-linecap:round}
+  #latSvg .ledge:hover{stroke-opacity:1!important}
+  #latSvg .lnode circle{cursor:pointer;stroke:var(--bg);stroke-width:1.5}
+  #latSvg .lnode text{font-family:var(--sans);font-size:11px;fill:var(--txt);pointer-events:none;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+  #latSvg .lnode:hover circle{stroke:var(--accent);stroke-width:2.5}
+  .latleg{position:absolute;right:14px;top:10px;background:var(--bg-2);border:1px solid var(--line-2);border-radius:8px;padding:9px 12px;font-size:11px;color:var(--txt-dim);max-width:240px}
+  .latleg b{color:var(--txt)} .latleg .lk{display:flex;align-items:center;gap:6px;margin:2px 0}
+  .latleg .sw{width:16px;height:3px;border-radius:2px;flex:0 0 auto}
+  .lattip{position:absolute;pointer-events:none;background:var(--bg-2);border:1px solid var(--line-2);border-radius:7px;padding:7px 10px;font-size:11.5px;color:var(--txt);box-shadow:0 4px 16px rgba(0,0,0,.3);max-width:320px;display:none;z-index:5}
+  .lattip b{color:var(--accent)} .lattip .tk{color:var(--txt-dim);font-size:10.5px}
   body[data-mode="fw"] #fwWrap{display:block} body[data-mode="fw"] #eventsWrap{display:none} body[data-mode="fw"] aside{display:none}
   body[data-mode="vpn"] #vpnWrap{display:block} body[data-mode="vpn"] #eventsWrap{display:none} body[data-mode="vpn"] aside{display:none}
   .cat-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -570,6 +634,9 @@
       <button class="tab active" data-tab="events">▤ Events</button>
       <button class="tab" data-tab="det">⚑ Detections</button>
       <button class="tab" data-tab="timeline">🕒 Timeline</button>
+      <button class="tab" data-tab="proc">🌳 Processes</button>
+      <button class="tab" data-tab="sess">🔑 Sessions</button>
+      <button class="tab" data-tab="lat">🕸 Lateral</button>
       <button class="tab" data-tab="ev">🔎 Evidence</button>
       <button class="tab" data-tab="fw">🔥 Firewall</button>
       <button class="tab" data-tab="vpn">🔒 VPN</button>
@@ -620,6 +687,9 @@
     <div id="dashWrap"></div>
     <div id="detWrap"></div>
     <div id="tlWrap"></div>
+    <div id="procWrap"></div>
+    <div id="sessWrap"></div>
+    <div id="latWrap"></div>
     <div id="evWrap"></div>
     <div id="fwWrap"></div>
     <div id="vpnWrap"></div>
@@ -5179,6 +5249,9 @@ function setTab(t){
   if(t==="dash"){ if(dashDirty && !SCROLL){ DASH=computeDashboard(); dashDirty=false; } renderDashboard(); }
   else if(t==="det"){ renderDetections(); }
   else if(t==="timeline"){ renderTimeline(); }
+  else if(t==="proc"){ renderProcTree(); }
+  else if(t==="sess"){ renderSessions(); }
+  else if(t==="lat"){ renderLateral(); }
   else if(t==="ev"){ if(SCROLL){ renderEvidenceScroll(); } else { if(evDirty){ EVID=buildEvidence(); evDirty=false; } renderEvidence(); } }
   else if(t==="fw"){ renderCatSection("firewall"); }
   else if(t==="vpn"){ renderCatSection("vpn"); }
@@ -6280,6 +6353,314 @@ function renderDetections(){
   h+='</tbody></table></div></div>';
   w.innerHTML=h;
 }
+/* ---------- process tree (Sysmon ancestry reconstruction) ---------- */
+function ptBase(p){ const s=String(p||""); const i=Math.max(s.lastIndexOf("\\"),s.lastIndexOf("/")); return i>=0?s.slice(i+1):s; }
+function ptNote(msg){ return '<div class="dash-note">'+msg+'</div>'; }
+let procTreeData=null; let procState={ detonly:false, q:"" };
+function ptMatch(n,q){ return ((ptBase(n.image)||"")+" "+(n.cmd||"")+" "+(n.user||"")+" "+(n.pid||"")).toLowerCase().indexOf(q)>=0; }
+function ptVis(n){                                   // annotate n._vis / n._self for current filters
+  const q=procState.q;
+  const passSelf = (!q || ptMatch(n,q));
+  let kidVis=false;
+  for(const c of (n.children||[])){ if(ptVis(c)) kidVis=true; }
+  const passDet = !procState.detonly || (n.subDet||0)>0;
+  n._self = passSelf; n._vis = passDet && (passSelf || kidVis);
+  return n._vis;
+}
+function ptHL(s,q){ const es=esc(s||""); if(!q)return es; const eq=esc(q); const i=es.toLowerCase().indexOf(eq.toLowerCase());
+  return i<0?es:es.slice(0,i)+'<mark>'+es.slice(i,i+eq.length)+'</mark>'+es.slice(i+eq.length); }
+function ptDesc(n){ let c=0; for(const k of (n.children||[])) c+=1+ptDesc(k); n._desc=c; return c; }
+async function renderProcTree(){
+  const w=$("procWrap");
+  if(!SERVER){ w.innerHTML=ptNote("Process trees are reconstructed server-side from Sysmon events — run the backend to use this view."); return; }
+  w.innerHTML=ptNote("Reconstructing process trees…");
+  try{
+    const j=await (await api("/api/proctree")).json();
+    procTreeData=j;
+    if(!j.roots||!j.roots.length){ w.innerHTML=ptNote("No Sysmon process-creation events (EID 1) in this case. Add a Sysmon operational log to see process trees."); return; }
+    for(const r of j.roots) ptDesc(r);
+    paintProcTree();
+  }catch(err){ w.innerHTML='<div class="dash-note err">Could not build process trees: '+esc(err&&err.message||err)+'</div>'; }
+}
+function paintProcTree(){
+  const w=$("procWrap"), j=procTreeData; if(!j) return;
+  const q=procState.q;
+  for(const r of j.roots) ptVis(r);
+  let rendered=0; const MAX=6000;
+  function node(n,isRoot){
+    if(rendered>=MAX) return "";
+    if(!n._vis) return "";
+    rendered++;
+    const kids=(n.children||[]).filter(c=>c._vis);
+    const hasKids=kids.length>0;
+    const cls="ptn"+(n.subDet?(" sd"+n.subDet):" nodet");
+    const cmd = n.cmd && n.cmd!==n.image ? n.cmd : "";
+    const durMs = n.end ? (Date.parse(n.end)-(n.tms||Date.parse(n.ts))) : null;
+    let h='<div class="'+cls+'"><div class="ptrow" data-idx="'+n.idx+'">'+
+      (hasKids?'<span class="pttog" data-tog>▾</span>':'<span class="ptlead">·</span>')+
+      '<span class="ptimg">'+ptHL(ptBase(n.image)||"?",q)+'</span>'+
+      (n.pid?'<span class="ptpid">#'+esc(n.pid)+'</span>':'')+
+      (cmd?'<span class="ptcmd">'+ptHL(cmd.slice(0,240),q)+'</span>':'<span class="ptcmd"></span>')+
+      (hasKids?'<span class="ptkc" title="processes in this branch">'+n._desc+'</span>':'')+
+      (isRoot&&n.pimage?'<span class="ptorph" title="parent process not captured in this log">⤷ '+esc(ptBase(n.pimage))+'</span>':'')+
+      (n.user?'<span class="ptuser">'+esc(n.user)+'</span>':'')+
+      '<span class="pttime" title="'+esc(n.ts||"")+'">'+esc((n.ts||"").slice(11,19))+'</span>'+
+      (durMs!=null&&durMs>=0?'<span class="ptdur" title="run time">⏱ '+esc(fmtDur(durMs))+'</span>':'')+
+      (n.det?'<span class="ptdet" title="detection on this process" style="background:'+numColor(n.det)+'"></span>':'')+
+      '</div>';
+    if(hasKids){ h+='<div class="ptkids">'; for(const c of kids) h+=node(c,false); h+='</div>'; }
+    return h+'</div>';
+  }
+  const hostSet=new Set(); let body="", curHost=null;
+  for(const r of j.roots){ if(!r._vis) continue;
+    if(r.host!==curHost){ curHost=r.host; hostSet.add(curHost); body+='<div class="pthost">🖥 '+esc(curHost||"(unknown host)")+'</div>'; }
+    body+=node(r,true); }
+  if(rendered>=MAX) body+=ptNote("Showing the first "+MAX.toLocaleString()+" matching nodes.");
+  if(!body) body=ptNote("No processes match the current filter.");
+  const filtered = q||procState.detonly;
+  const count='<b>'+j.count.toLocaleString()+'</b> processes across <b>'+(j.hosts.length||1)+'</b> host(s)'+
+    (filtered?' · showing <b>'+rendered.toLocaleString()+'</b>':'')+
+    (j.truncated?' · <span class="warn-text">capped at 30,000</span>':'')+
+    ' · <span style="color:#e5736a">red edge</span> = detection in branch';
+  const bar='<div class="vtoolbar">'+
+    '<button class="vbtn" data-pt="expand">⊕ Expand all</button>'+
+    '<button class="vbtn" data-pt="collapse">⊖ Collapse all</button>'+
+    '<button class="vbtn'+(procState.detonly?' on':'')+'" data-pt="detonly">◆ Detections only</button>'+
+    '<input class="vsearch" id="ptSearch" placeholder="filter image / command / user / pid…" value="'+esc(procState.q)+'">'+
+    '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0">'+count+'</span></div>';
+  w.innerHTML=bar+'<div class="pttree'+(procState.detonly?' detonly':'')+'">'+body+'</div>';
+  const si=$("ptSearch"); if(si && procState._focus){ si.focus(); si.setSelectionRange(si.value.length,si.value.length); }
+  procState._focus=false;
+}
+let _ptSearchT=null;
+$("procWrap").addEventListener("input",e=>{
+  if(e.target.id!=="ptSearch") return;
+  procState.q=e.target.value.trim().toLowerCase(); procState._focus=true;
+  clearTimeout(_ptSearchT); _ptSearchT=setTimeout(paintProcTree,130);
+});
+$("procWrap").addEventListener("click",e=>{
+  const pt=e.target.closest("[data-pt]");
+  if(pt){ const a=pt.getAttribute("data-pt");
+    if(a==="detonly"){ procState.detonly=!procState.detonly; paintProcTree(); }
+    else if(a==="expand"){ $("procWrap").querySelectorAll(".ptn.collapsed").forEach(n=>n.classList.remove("collapsed")); }
+    else if(a==="collapse"){ $("procWrap").querySelectorAll(".ptn").forEach(n=>{ if(n.querySelector(":scope > .ptrow > .pttog")) n.classList.add("collapsed"); }); }
+    return; }
+  const tog=e.target.closest("[data-tog]");
+  if(tog){ const ptn=tog.closest(".ptn"); if(ptn) ptn.classList.toggle("collapsed"); return; }
+  const row=e.target.closest(".ptrow[data-idx]");
+  if(row){ const i=+row.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); }
+});
+
+/* ---------- logon-session reconstruction ---------- */
+let sessData=null; let sessSort={ key:"onTms", dir:-1 }; let sessState={ q:"", rdp:false, ext:false };
+async function renderSessions(){
+  const w=$("sessWrap");
+  if(!SERVER){ w.innerHTML=ptNote("Logon-session reconstruction runs server-side — run the backend to use this view."); return; }
+  w.innerHTML=ptNote("Reconstructing logon sessions…");
+  try{
+    const j=await (await api("/api/sessions")).json();
+    sessData=j.sessions||[];
+    paintSessions();
+  }catch(err){ w.innerHTML='<div class="dash-note err">Could not build sessions: '+esc(err&&err.message||err)+'</div>'; }
+}
+function paintSessions(){
+  const w=$("sessWrap"); if(!sessData) return;
+  if(!sessData.length){ w.innerHTML=ptNote("No interactive / network / RDP logon sessions (4624 paired with 4634/4647) in this case."); return; }
+  const q=sessState.q;
+  let list=sessData.filter(s=>{
+    if(sessState.rdp && !s.rdp) return false;
+    if(sessState.ext && !s.ext) return false;
+    if(q){ const hay=(s.user+" "+s.domain+" "+s.ip+" "+s.ws+" "+s.host+" "+s.ltName).toLowerCase(); if(hay.indexOf(q)<0) return false; }
+    return true;
+  });
+  const k=sessSort.key, dir=sessSort.dir;
+  list=list.slice().sort((a,b)=>{ let av=a[k], bv=b[k];
+    if(k==="onTms"||k==="durationMs"||k==="det"){ av=av==null?-Infinity:av; bv=bv==null?-Infinity:bv; return (av-bv)*dir; }
+    return String(av||"").localeCompare(String(bv||""))*dir; });
+  const rdpN=sessData.filter(s=>s.rdp).length, extN=sessData.filter(s=>s.ext).length;
+  const bar='<div class="vtoolbar">'+
+    '<button class="vbtn'+(sessState.rdp?' on':'')+'" data-ss="rdp">🖥 RDP only ('+rdpN+')</button>'+
+    '<button class="vbtn'+(sessState.ext?' on':'')+'" data-ss="ext">🌐 External source ('+extN+')</button>'+
+    '<input class="vsearch" id="ssSearch" placeholder="filter user / host / source IP…" value="'+esc(sessState.q)+'">'+
+    '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0"><b>'+list.length.toLocaleString()+'</b> of '+sessData.length.toLocaleString()+' sessions</span></div>';
+  const arrow=key=> key===sessSort.key ? (sessSort.dir<0?" ▾":" ▴") : "";
+  const th=(key,label)=>'<th data-sk="'+key+'">'+label+arrow(key)+'</th>';
+  let h=bar+'<table class="sesstbl"><thead><tr>'+
+    th("user","User")+th("ltName","Logon type")+th("ip","Source")+th("host","Host")+
+    th("onTms","Start")+th("durationMs","Duration")+th("det","")+'</tr></thead><tbody>';
+  for(const s of list){
+    const src = s.ip || s.ws || "—";
+    const tags = (s.rdp?'<span class="stag rdp">RDP</span> ':'')+(s.ext?'<span class="stag ext">EXT</span> ':'')+
+      (!s.rdp&&s.lt==="3"?'<span class="stag net">NET</span> ':'');
+    const dur = s.offTms!=null ? '<span class="sess-closed">'+esc(fmtDur(s.durationMs))+'</span>'
+      : '<span class="sess-open">● active / no logoff</span>';
+    h+='<tr data-idx="'+s.idx+'">'+
+      '<td>'+esc(s.user)+(s.domain?' <span class="ptpid">'+esc(s.domain)+'</span>':'')+'</td>'+
+      '<td>'+esc(s.ltName)+' '+tags+'</td>'+
+      '<td class="mono">'+esc(src)+'</td>'+
+      '<td class="mono">'+esc(s.host||"—")+'</td>'+
+      '<td class="mono">'+esc(s.onTs||"")+'</td>'+
+      '<td>'+dur+'</td>'+
+      '<td>'+(s.det?'<span class="ptdet" style="display:inline-block;background:'+numColor(s.det)+'"></span>':'')+'</td>'+
+      '</tr>';
+  }
+  h+='</tbody></table>';
+  w.innerHTML=h;
+}
+let _ssSearchT=null;
+$("sessWrap").addEventListener("input",e=>{ if(e.target.id!=="ssSearch")return;
+  sessState.q=e.target.value.trim().toLowerCase(); clearTimeout(_ssSearchT); _ssSearchT=setTimeout(paintSessions,130); });
+$("sessWrap").addEventListener("click",e=>{
+  const b=e.target.closest("[data-ss]");
+  if(b){ const a=b.getAttribute("data-ss"); sessState[a]=!sessState[a]; paintSessions(); return; }
+  const th=e.target.closest("th[data-sk]");
+  if(th){ const key=th.getAttribute("data-sk"); if(sessSort.key===key)sessSort.dir*=-1; else { sessSort.key=key; sessSort.dir=(key==="user"||key==="host"||key==="ip"||key==="ltName")?1:-1; } paintSessions(); return; }
+  const tr=e.target.closest("tr[data-idx]");
+  if(tr){ const i=+tr.getAttribute("data-idx"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); }
+});
+
+/* ---------- cross-host lateral-movement graph ---------- */
+const LAT_KIND={ rdp:{c:"#e6b450",l:"RDP (type 10 / 1149)"}, network:{c:"#6cb6ff",l:"Network logon (type 3)"},
+  "explicit-cred":{c:"#c07cff",l:"Explicit creds (4648)"}, ntlm:{c:"#5ac77a",l:"NTLM auth (4776)"},
+  share:{c:"#8aa0b4",l:"Share access (5140/5145)"}, "admin-share":{c:"#ff8a8a",l:"Admin$ / C$ share"} };
+let latData=null, latState={ detonly:false, seed:1 };
+function latDominantKind(kinds){ let best="", n=-1; for(const k in kinds){ if(kinds[k]>n){ n=kinds[k]; best=k; } } return best; }
+async function renderLateral(){
+  const w=$("latWrap");
+  if(!SERVER){ w.innerHTML=ptNote("The lateral-movement graph is built server-side — run the backend to use this view."); return; }
+  w.innerHTML=ptNote("Building lateral-movement graph…");
+  try{
+    const j=await (await api("/api/lateral")).json();
+    latData=j;
+    paintLateral();
+  }catch(err){ w.innerHTML='<div class="dash-note err">Could not build the lateral graph: '+esc(err&&err.message||err)+'</div>'; }
+}
+function paintLateral(){
+  const w=$("latWrap"); if(!latData) return;
+  let nodes=latData.nodes||[], edges=latData.edges||[];
+  if(!nodes.length){ w.innerHTML=ptNote("No cross-host movement found. Lateral movement is derived from remote logons (4624 type 3/10), explicit credentials (4648), NTLM (4776), RDP (1149) and share access (5140/5145)."); return; }
+  if(latState.detonly){
+    edges=edges.filter(e=>e.det>0);
+    const keep=new Set(); edges.forEach(e=>{ keep.add(e.from); keep.add(e.to); });
+    nodes=nodes.filter(n=>keep.has(n.id));
+  }
+  // cap for rendering: keep the busiest nodes and edges among them
+  const NCAP=200, ECAP=600;
+  let capped=false;
+  if(nodes.length>NCAP){ capped=true; nodes=nodes.slice(0,NCAP); }
+  const nset=new Set(nodes.map(n=>n.id));
+  edges=edges.filter(e=>nset.has(e.from)&&nset.has(e.to));
+  if(edges.length>ECAP){ capped=true; edges=edges.slice(0,ECAP); }
+  // toolbar + canvas
+  const detN=latData.nodes.filter(n=>n.det>0).length;
+  const bar='<div class="latbar">'+
+    '<button class="vbtn'+(latState.detonly?' on':'')+'" data-lt="detonly">◆ Detection paths ('+detN+')</button>'+
+    '<button class="vbtn" data-lt="relayout">↻ Re-layout</button>'+
+    '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0"><b>'+nodes.length+
+      '</b> hosts/IPs · <b>'+edges.length+'</b> paths'+(capped?' · <span class="warn-text">capped</span>':'')+
+      ' · click a node to pivot the grid · drag to arrange</span></div>';
+  w.innerHTML=bar+'<div id="latSvgWrap"><svg id="latSvg"></svg><div class="lattip" id="latTip"></div></div>';
+  const wrap=$("latSvgWrap"); const W=wrap.clientWidth||900, H=wrap.clientHeight||600;
+  // ---- force layout ----
+  const idx=new Map(nodes.map((n,i)=>[n.id,i]));
+  let s=latState.seed*9301+49297; const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
+  nodes.forEach((n,i)=>{ const a=i/nodes.length*Math.PI*2; const R=Math.min(W,H)*0.36;
+    n.x=W/2+Math.cos(a)*R*(0.6+0.4*rnd()); n.y=H/2+Math.sin(a)*R*(0.6+0.4*rnd()); n.vx=0; n.vy=0; });
+  const links=edges.map(e=>({s:idx.get(e.from),t:idx.get(e.to),w:e.count})).filter(l=>l.s!=null&&l.t!=null);
+  const k=Math.max(40,Math.sqrt((W*H)/Math.max(1,nodes.length))*0.8);
+  const ITER=nodes.length>120?140:190;
+  for(let it=0; it<ITER; it++){
+    const cool=1-it/ITER;
+    for(let i=0;i<nodes.length;i++){ let fx=0,fy=0; const A=nodes[i];
+      for(let jn=0;jn<nodes.length;jn++){ if(i===jn)continue; const B=nodes[jn];
+        let dx=A.x-B.x, dy=A.y-B.y, d2=dx*dx+dy*dy||0.01; const f=k*k/d2; fx+=dx*f; fy+=dy*f; }
+      A.vx=(A.vx+fx*0.9)*0.85; A.vy=(A.vy+fy*0.9)*0.85; }
+    for(const l of links){ const A=nodes[l.s], B=nodes[l.t];
+      let dx=B.x-A.x, dy=B.y-A.y, d=Math.sqrt(dx*dx+dy*dy)||0.01; const f=(d*d)/k*0.018*Math.log(l.w+1);
+      const ux=dx/d, uy=dy/d; A.vx+=ux*f; A.vy+=uy*f; B.vx-=ux*f; B.vy-=uy*f; }
+    for(const A of nodes){ A.vx+=(W/2-A.x)*0.004; A.vy+=(H/2-A.y)*0.004;
+      const mx=k*0.6*cool+2, sp=Math.hypot(A.vx,A.vy); if(sp>mx){ A.vx=A.vx/sp*mx; A.vy=A.vy/sp*mx; }
+      A.x+=A.vx; A.y+=A.vy; A.x=Math.max(24,Math.min(W-24,A.x)); A.y=Math.max(24,Math.min(H-24,A.y)); }
+  }
+  // ---- render svg ----
+  const svg=$("latSvg"); svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  const nrad=n=>4.5+Math.log((n.count||1)+1)*2.6;
+  const ncolor=n=> n.det>0 ? numColor(n.det) : (n.type==="ip"?"#e6b450":"#5aa0ff");
+  let sv='<defs><marker id="latArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8aa0b4"/></marker>'+
+    '<marker id="latArrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e5736a"/></marker></defs>';
+  sv+='<g id="latEdges">';
+  edges.forEach((e,i)=>{ const A=nodes[idx.get(e.from)], B=nodes[idx.get(e.to)]; if(!A||!B)return;
+    const kind=latDominantKind(e.kinds); const col=e.det>0?numColor(e.det):(LAT_KIND[kind]?LAT_KIND[kind].c:"#8aa0b4");
+    const wdt=Math.min(6,1+Math.log(e.count+1)); const op=e.det>0?0.85:0.42;
+    sv+='<line class="ledge" data-ei="'+i+'" x1="'+A.x.toFixed(1)+'" y1="'+A.y.toFixed(1)+'" x2="'+B.x.toFixed(1)+'" y2="'+B.y.toFixed(1)+
+      '" stroke="'+col+'" stroke-width="'+wdt.toFixed(1)+'" stroke-opacity="'+op+'" marker-end="url(#'+(e.det>0?"latArrowD":"latArrow")+')"/>'; });
+  sv+='</g><g id="latNodes">';
+  nodes.forEach((n,i)=>{ const r=nrad(n); const lab=n.type==="ip"?n.id:ptBase(n.id);
+    sv+='<g class="lnode" data-ni="'+i+'" data-id="'+esc(n.id)+'"><circle cx="'+n.x.toFixed(1)+'" cy="'+n.y.toFixed(1)+'" r="'+r.toFixed(1)+
+      '" fill="'+ncolor(n)+'"/><text x="'+n.x.toFixed(1)+'" y="'+(n.y-r-4).toFixed(1)+'" text-anchor="middle">'+esc(lab.slice(0,26))+'</text></g>'; });
+  sv+='</g>';
+  svg.innerHTML=sv;
+  // legend
+  const kinds=new Set(); edges.forEach(e=>kinds.add(latDominantKind(e.kinds)));
+  let leg='<div class="latleg"><b>Movement</b>';
+  ["rdp","network","explicit-cred","ntlm","admin-share","share"].forEach(kk=>{ if(!kinds.has(kk))return;
+    leg+='<div class="lk"><span class="sw" style="background:'+LAT_KIND[kk].c+'"></span>'+esc(LAT_KIND[kk].l)+'</div>'; });
+  leg+='<div class="lk"><span class="sw" style="background:#e5736a"></span>detection on path</div>'+
+    '<div class="lk" style="margin-top:5px"><span class="sw" style="background:#5aa0ff;height:10px;width:10px;border-radius:50%"></span>host &nbsp;<span class="sw" style="background:#e6b450;height:10px;width:10px;border-radius:50%"></span>IP</div></div>';
+  wrap.insertAdjacentHTML("beforeend",leg);
+  latBind(svg, nodes, edges, idx);
+}
+function latBind(svg, nodes, edges, idx){
+  const tip=$("latTip"); let drag=null, moved=false;
+  const nodeEls=[...svg.querySelectorAll(".lnode")], edgeEls=[...svg.querySelectorAll(".ledge")];
+  const apply=n=>{ const g=nodeEls[nodes.indexOf(n)]; if(!g)return;
+    g.querySelector("circle").setAttribute("cx",n.x.toFixed(1)); g.querySelector("circle").setAttribute("cy",n.y.toFixed(1));
+    const t=g.querySelector("text"); const r=+g.querySelector("circle").getAttribute("r");
+    t.setAttribute("x",n.x.toFixed(1)); t.setAttribute("y",(n.y-r-4).toFixed(1));
+    edges.forEach((e,i)=>{ const el=edgeEls[i]; if(!el)return;
+      if(e.from===n.id){ el.setAttribute("x1",n.x.toFixed(1)); el.setAttribute("y1",n.y.toFixed(1)); }
+      if(e.to===n.id){ el.setAttribute("x2",n.x.toFixed(1)); el.setAttribute("y2",n.y.toFixed(1)); } }); };
+  const svgPt=ev=>{ const b=svg.getBoundingClientRect(); const vb=svg.viewBox.baseVal;
+    return { x:(ev.clientX-b.left)/b.width*vb.width, y:(ev.clientY-b.top)/b.height*vb.height }; };
+  svg.addEventListener("pointerdown",ev=>{ const g=ev.target.closest(".lnode"); if(!g)return;
+    drag=nodes[+g.getAttribute("data-ni")]; moved=false; svg.classList.add("grabbing"); svg.setPointerCapture(ev.pointerId); });
+  svg.addEventListener("pointermove",ev=>{
+    if(drag){ const p=svgPt(ev); drag.x=p.x; drag.y=p.y; moved=true; apply(drag); return; }
+    const g=ev.target.closest(".lnode"), l=ev.target.closest(".ledge");
+    if(g){ const n=nodes[+g.getAttribute("data-ni")];
+      tip.innerHTML='<b>'+esc(n.id)+'</b> <span class="tk">'+(n.type==="ip"?"IP":"host")+'</span><br><span class="tk">'+n.out+' outbound · '+n.in+' inbound movement</span>';
+      showTip(ev); }
+    else if(l){ const e=edges[+l.getAttribute("data-ei")]; const ks=Object.keys(e.kinds).map(x=>(LAT_KIND[x]?LAT_KIND[x].l:x)+" ×"+e.kinds[x]).join(", ");
+      tip.innerHTML='<b>'+esc(e.from)+'</b> → <b>'+esc(e.to)+'</b><br><span class="tk">'+esc(ks)+'</span>'+
+        (e.users&&e.users.length?'<br><span class="tk">users: '+esc(e.users.slice(0,6).join(", "))+'</span>':'')+
+        (e.firstTms?'<br><span class="tk">'+esc(fmtTime(e.firstTms))+(e.lastTms&&e.lastTms!==e.firstTms?" → "+esc(fmtTime(e.lastTms)):"")+'</span>':'');
+      showTip(ev); }
+    else tip.style.display="none";
+  });
+  const showTip=ev=>{ const wrap=$("latSvgWrap").getBoundingClientRect();
+    tip.style.display="block"; let x=ev.clientX-wrap.left+14, y=ev.clientY-wrap.top+14;
+    if(x+tip.offsetWidth>wrap.width) x=ev.clientX-wrap.left-tip.offsetWidth-14;
+    tip.style.left=x+"px"; tip.style.top=y+"px"; };
+  const endDrag=ev=>{ if(drag){ svg.classList.remove("grabbing"); try{svg.releasePointerCapture(ev.pointerId);}catch{} }
+    const g=ev.target.closest && ev.target.closest(".lnode");
+    if(drag && !moved && g){ const n=nodes[+g.getAttribute("data-ni")]; latPivot(n.id); }
+    drag=null; };
+  svg.addEventListener("pointerup",endDrag);
+  svg.addEventListener("pointerleave",()=>{ tip.style.display="none"; });
+  svg.addEventListener("click",ev=>{ const l=ev.target.closest(".ledge"); if(l && !moved){ const e=edges[+l.getAttribute("data-ei")];
+    if(e.samples&&e.samples.length){ const i=e.samples[0]; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); } } });
+}
+function latPivot(id){ clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
+  showDetOnly=false; $("detBtn").classList.remove("on"); ruleFilter=""; techniqueFilter=""; renderDetChip&&renderDetChip();
+  query=String(id).toLowerCase(); escQ=esc(query); $("q").value=id;
+  view=defaultView(); buildProviderList(); buildColPicker(); applyFilter(); setTab("events"); }
+$("latWrap").addEventListener("click",e=>{
+  const b=e.target.closest("[data-lt]"); if(!b) return;
+  const a=b.getAttribute("data-lt");
+  if(a==="detonly"){ latState.detonly=!latState.detonly; paintLateral(); }
+  else if(a==="relayout"){ latState.seed=(latState.seed*7+3)%9973||1; paintLateral(); }
+});
+
 $("detWrap").addEventListener("click",e=>{
   const sup=e.target.closest("[data-suppress]");
   if(sup){ e.stopPropagation(); toggleSuppress(sup.getAttribute("data-suppress"), true); return; }

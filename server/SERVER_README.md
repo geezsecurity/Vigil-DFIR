@@ -141,6 +141,9 @@ mapped to events tagged by source with the original line preserved as the messag
 | POST   | `/api/detect`         | scan stored log with stored rules         |
 | GET    | `/api/detections`     | stored detection results                  |
 | POST   | `/api/reset`          | remove current log + detections           |
+| GET    | `/api/proctree`       | Sysmon process-ancestry forest (EID 1/5)  |
+| GET    | `/api/sessions`       | reconstructed logon sessions (4624↔4634/4647, durations, RDP/ext flags) |
+| GET    | `/api/lateral`        | cross-host lateral-movement node-link graph (nodes + edges) |
 | GET    | `/api/suppressions`   | list suppressed rule IDs                  |
 | POST   | `/api/suppressions`   | `{ruleId,suppress}` toggle (or `{suppressed:[]}`) — re-filters detections |
 | GET    | `/api/cases`          | list cases (id, name, count, active)      |

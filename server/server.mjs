@@ -975,6 +975,113 @@ app.get("/api/timeline", async (req,res)=>{
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
+// Process-tree reconstruction — build ancestry forests from Sysmon EID 1 (ProcessGuid/
+// ParentProcessGuid), enriched with detection severity per process. EID 5 supplies end times.
+app.get("/api/proctree", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, roots:[], count:0, hosts:[] });
+    let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{}
+    const CAP=30000; const procs=[]; const ends=new Map(); let truncated=false;
+    await forEachEvent((ev, i)=>{
+      const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+      if(!/sysmon/i.test(getProvider(ev))) return;              // ProcessGuid trees come from Sysmon
+      const eid=String(getEventId(sys)||""); const d=getData(ev)||{};
+      if(eid==="1"){
+        if(procs.length>=CAP){ truncated=true; return; }
+        const hit=hits[i]; let det=0; if(hit&&hit.length){ for(const h of hit){ const n=sevNumS(h.level); if(n>det)det=n; } }
+        const ts=getTime(ev);
+        procs.push({ idx:i, guid:d.ProcessGuid||"", pid:d.ProcessId||"", image:d.Image||"", cmd:d.CommandLine||"",
+          pguid:d.ParentProcessGuid||"", pimage:d.ParentImage||"", user:d.User||"", ts, tms:ts?Date.parse(ts):NaN,
+          host:getComputer(ev), det });
+      } else if(eid==="5"){ const g=d.ProcessGuid; if(g) ends.set(g, getTime(ev)); }
+    });
+    for(const p of procs){ if(ends.has(p.guid)) p.end=ends.get(p.guid); }
+    const tree=Engine.buildProcessTree(procs);
+    res.json({ ok:true, roots:tree.roots, count:tree.count, hosts:tree.hosts, truncated });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
+// Logon-session reconstruction: pair 4624 logon with its 4634/4647 logoff by LogonId,
+// compute duration, decode logon type, flag RDP / external-source sessions.
+const LOGON_TYPE_NAME={ "2":"Interactive","3":"Network","4":"Batch","5":"Service","7":"Unlock",
+  "8":"NetworkCleartext","9":"NewCredentials","10":"RemoteInteractive (RDP)","11":"CachedInteractive" };
+app.get("/api/sessions", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, sessions:[], count:0 });
+    let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{}
+    const detLvl=i=>{ const h=hits[i]; if(!h||!h.length)return 0; let m=0; for(const x of h){ const n=sevNumS(x.level); if(n>m)m=n; } return m; };
+    const CAP=20000; const byId=new Map(); const open=[]; let truncated=false;
+    await forEachEvent((ev, i)=>{
+      const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+      const eid=String(getEventId(sys)||""); if(eid!=="4624"&&eid!=="4634"&&eid!=="4647") return;
+      const d=getData(ev)||{}; const U=k=>d[k]!=null?String(d[k]):"";
+      const lid=U("TargetLogonId")||U("LogonId"); if(!lid||lid==="0x0"||lid==="0x3e7") return;   // skip SYSTEM
+      const ts=getTime(ev), tms=ts?Date.parse(ts):NaN;
+      if(eid==="4624"){
+        const u=U("TargetUserName"); const lt=U("LogonType");
+        if(!u||/\$$/.test(u)||/^(ANONYMOUS LOGON|SYSTEM|LOCAL SERVICE|NETWORK SERVICE|DWM-\d|UMFD-\d)$/i.test(u)) return;
+        if(byId.has(lid)) return;
+        if(byId.size>=CAP){ truncated=true; return; }
+        const ip=U("IpAddress"); const proc=U("LogonProcessName");
+        byId.set(lid,{ idx:i, id:lid, user:u, domain:U("TargetDomainName"), lt, ltName:LOGON_TYPE_NAME[lt]||("Type "+lt),
+          ip:(ip&&ip!=="-")?ip:"", ws:U("WorkstationName"), host:getComputer(ev), proc,
+          onTs:ts, onTms:Number.isNaN(tms)?null:tms, offTs:null, offTms:null,
+          rdp:lt==="10", ext:isExtIp(ip), det:detLvl(i) });
+      } else {
+        const s=byId.get(lid);
+        if(s && s.offTms==null){ s.offTs=ts; s.offTms=Number.isNaN(tms)?null:tms; }
+      }
+    });
+    const sessions=[...byId.values()].map(s=>({ ...s,
+      durationMs:(s.onTms!=null&&s.offTms!=null&&s.offTms>=s.onTms)?(s.offTms-s.onTms):null }))
+      .sort((a,b)=>(b.det-a.det)||((b.onTms||0)-(a.onTms||0))).slice(0,CAP);
+    res.json({ ok:true, sessions, count:sessions.length, truncated });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
+// Cross-host lateral-movement graph: derive host<->host / IP->host movement from auth,
+// explicit-credential, RDP, NTLM and share-access events, then aggregate into a node-link graph.
+app.get("/api/lateral", async (req,res)=>{
+  try{
+    if(!fs.existsSync(EVENTS)) return res.json({ ok:true, nodes:[], edges:[] });
+    let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{}
+    const detLvl=i=>{ const h=hits[i]; if(!h||!h.length)return 0; let m=0; for(const x of h){ const n=sevNumS(x.level); if(n>m)m=n; } return m; };
+    const ip4=/^\d+\.\d+\.\d+\.\d+$/;
+    const clean=s=>{ s=String(s||"").trim(); if(!s||s==="-"||s==="::1"||/^127\./.test(s)||/^ANONYMOUS/i.test(s))return ""; return s; };
+    const bare=h=>String(h||"").toUpperCase().split(".")[0];
+    const raw=[]; const CAP=300000; let truncated=false;
+    await forEachEvent((ev, i)=>{
+      if(raw.length>=CAP){ truncated=true; return; }
+      const sys=(ev.Event&&ev.Event.System)||ev.System||{};
+      const eid=String(getEventId(sys)||"");
+      if(!(eid==="4624"||eid==="4648"||eid==="4776"||eid==="1149"||eid==="5140"||eid==="5145")) return;
+      const provider=getProvider(ev), host=getComputer(ev), d=getData(ev)||{};
+      const U=k=>d[k]!=null?String(d[k]):"";
+      const ts=getTime(ev), tms=ts?Date.parse(ts):NaN;
+      const det=detLvl(i);
+      const push=(from,ftype,to,ttype,kind,user)=>{ from=clean(from); to=clean(to);
+        if(!from||!to||bare(from)===bare(to)) return;
+        raw.push({ from, ftype, to, ttype, kind, user:clean(user), idx:i, tms:Number.isNaN(tms)?null:tms, det }); };
+      switch(eid){
+        case "4624":{ const lt=U("LogonType"); if(lt!=="3"&&lt!=="10") break;
+          const u=U("TargetUserName"); if(!u||/\$$/.test(u)) break;
+          let src=clean(U("IpAddress")), stype="ip";
+          if(!src){ src=clean(U("WorkstationName")); stype="host"; }
+          if(!src) break;
+          push(src, ip4.test(src)?"ip":"host", host, "host", lt==="10"?"rdp":"network", u); break; }
+        case "4648":{ push(host, "host", U("TargetServerName")||U("TargetInfo"), "host", "explicit-cred", U("TargetUserName")); break; }
+        case "4776":{ const u=U("TargetUserName")||U("UserName"); if(u&&/\$$/.test(u)) break;
+          push(U("Workstation")||U("WorkstationName"), "host", host, "host", "ntlm", u); break; }
+        case "1149":{ push(U("Address")||U("Param3")||U("SourceNetworkAddress"), "ip", host, "host", "rdp", U("User")||U("Param1")); break; }
+        case "5140": case "5145":{ const share=U("ShareName"); const k=/\$$/.test(share||"")?"admin-share":"share";
+          push(U("IpAddress"), "ip", host, "host", k, U("SubjectUserName")); break; }
+      }
+    });
+    const g=Engine.buildLateralGraph(raw);
+    res.json({ ok:true, nodes:g.nodes, edges:g.edges, count:g.nodes.length, edgeCount:g.edges.length, truncated });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
 // flagged events (★) — persisted so they survive a refresh; indices align with the stored log
 app.get("/api/flags", (req,res)=>{ let a=[]; try{ a=JSON.parse(fs.readFileSync(FLAGS,"utf8")); }catch{} res.json({ ok:true, indices:a }); });
 app.post("/api/flags", (req,res)=>{

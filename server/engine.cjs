@@ -695,6 +695,78 @@ function buildAttackChains(items, opts){
   }
 }
 
+/* ----------------- PROCESS-TREE RECONSTRUCTION ----------------------------------
+   Rebuild process ancestry from Sysmon EID 1 records via ProcessGuid/ParentProcessGuid
+   (globally unique, so links are reliable across PID reuse). Returns a forest: roots are
+   processes whose parent wasn't captured. subDet carries the max detection severity in a
+   node's subtree so the UI can highlight branches that contain detections.               */
+function buildProcessTree(procs, opts){
+  opts=opts||{};
+  const byGuid=new Map(); const nodes=[];
+  for(const p of procs){
+    if(!p.guid || byGuid.has(p.guid)) continue;          // one node per ProcessGuid (creation event)
+    const node={ idx:p.idx, guid:p.guid, pid:p.pid||"", image:p.image||"", cmd:p.cmd||"",
+      pguid:p.pguid||"", pimage:p.pimage||"", user:p.user||"", ts:p.ts||"", tms:Number.isFinite(p.tms)?p.tms:null,
+      host:p.host||"", end:p.end||null, det:p.det||0, children:[] };
+    byGuid.set(p.guid, node); nodes.push(node);
+  }
+  const roots=[];
+  for(const n of nodes){
+    const parent = n.pguid && byGuid.get(n.pguid);
+    // link to parent only if it was created no later than the child (prevents guid-reuse cycles)
+    if(parent && parent!==n && (parent.tms==null || n.tms==null || parent.tms<=n.tms)) parent.children.push(n);
+    else roots.push(n);
+  }
+  const byTime=(a,b)=>((a.tms==null?Infinity:a.tms)-(b.tms==null?Infinity:b.tms));
+  for(const n of nodes) n.children.sort(byTime);
+  roots.sort((a,b)=> String(a.host||"").localeCompare(String(b.host||"")) || byTime(a,b));
+  const markDet=(n,seen)=>{ if(seen.has(n))return n.subDet||0; seen.add(n);
+    let m=n.det||0; for(const c of n.children){ const cm=markDet(c,seen); if(cm>m)m=cm; } n.subDet=m; return m; };
+  for(const r of roots) markDet(r, new Set());
+  const hosts=[...new Set(nodes.map(n=>n.host||"").filter(Boolean))].sort();
+  return { roots, count:nodes.length, hosts };
+}
+
+/* Lateral-movement graph: aggregate raw movement edges (one per relevant auth/share/RDP
+   event) into a de-duplicated node-link graph. Each raw edge is
+   { from, ftype, to, ttype, kind, user, idx, tms, det }. Nodes are hosts / source IPs,
+   edges collapse repeats and keep per-technique counts, involved users, sample event
+   indices and a first/last timestamp. Pure + deterministic so it's unit-testable. */
+function buildLateralGraph(raw, opts){
+  opts=opts||{};
+  const nodes=new Map(), edges=new Map();
+  const touch=(id,type)=>{
+    if(!id) return null;
+    let n=nodes.get(id);
+    if(!n){ n={ id, type:type||"host", label:id, count:0, out:0, in:0, det:0 }; nodes.set(id,n); }
+    else if(type==="ip") n.type="ip";                    // an id seen as an IP anywhere is an IP
+    return n;
+  };
+  for(const e of (raw||[])){
+    if(!e || !e.from || !e.to || e.from===e.to) continue;
+    const a=touch(e.from, e.ftype), b=touch(e.to, e.ttype);
+    if(!a||!b) continue;
+    a.count++; a.out++; b.count++; b.in++;
+    const lvl=e.det||0; if(lvl>a.det)a.det=lvl; if(lvl>b.det)b.det=lvl;
+    const key=e.from+" "+e.to;
+    let ed=edges.get(key);
+    if(!ed){ ed={ from:e.from, to:e.to, count:0, det:0, kinds:{}, users:new Set(), samples:[], firstTms:null, lastTms:null }; edges.set(key,ed); }
+    ed.count++;
+    if(lvl>ed.det) ed.det=lvl;
+    if(e.kind) ed.kinds[e.kind]=(ed.kinds[e.kind]||0)+1;
+    if(e.user) ed.users.add(e.user);
+    if(ed.samples.length<8 && e.idx!=null) ed.samples.push(e.idx);
+    const t=Number.isFinite(e.tms)?e.tms:null;
+    if(t!=null){ if(ed.firstTms==null||t<ed.firstTms)ed.firstTms=t; if(ed.lastTms==null||t>ed.lastTms)ed.lastTms=t; }
+  }
+  const nodeArr=[...nodes.values()].sort((x,y)=>(y.det-x.det)||(y.count-x.count)||String(x.id).localeCompare(String(y.id)));
+  const edgeArr=[...edges.values()].map(ed=>({
+    from:ed.from, to:ed.to, count:ed.count, det:ed.det, kinds:ed.kinds,
+    users:[...ed.users].slice(0,12), samples:ed.samples, firstTms:ed.firstTms, lastTms:ed.lastTms
+  })).sort((x,y)=>(y.det-x.det)||(y.count-x.count));
+  return { nodes:nodeArr, edges:edgeArr };
+}
+
 /* ----------------- HEURISTICS ---------------------------------------------- */
 function isPrivateIp(ip){
   if(!ip||ip==="-"||ip==="::1")return true;
@@ -821,7 +893,7 @@ const Engine={
   resolveField, compileSigmaRule, compileYaraRules, runHeuristics, buildFulltext, base64OffsetVariants, compileCondition,
   parseAttack, techniqueFromTag, tacticFromTag,
   attack:{ tactics:ATTACK_TACTIC_NAMES, tacticOrder:ATTACK_TACTIC_ORDER, techniques:ATTACK_TECHNIQUES },
-  extractEntities, makeEntityScorer, buildAttackChains, parseProcessArtifacts,
+  extractEntities, makeEntityScorer, buildAttackChains, buildProcessTree, buildLateralGraph, parseProcessArtifacts,
   parseSigmaDocs(yamlText, yamlLoadAll){
     const docs=yamlLoadAll(yamlText)||[]; const rules=[], aggRules=[], skipped=[], errors=[];
     for (const doc of docs){

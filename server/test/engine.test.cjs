@@ -213,6 +213,61 @@ function testRec(rule, rec){ if(!rule._fulltext){} rec._fulltext = Engine.buildF
 })();
 
 /* =====================================================================
+   2b. PROCESS-TREE RECONSTRUCTION
+   ===================================================================== */
+(function testProcTree(){
+  // explorer -> cmd -> powershell(detected) ; explorer -> notepad ; orphan on host B
+  const procs=[
+    { idx:0, guid:"G-EXP", pguid:"", image:"explorer.exe", tms:100, host:"WS01", user:"bob" },
+    { idx:1, guid:"G-CMD", pguid:"G-EXP", image:"cmd.exe", tms:200, host:"WS01", user:"bob" },
+    { idx:2, guid:"G-PS",  pguid:"G-CMD", image:"powershell.exe", tms:300, host:"WS01", user:"bob", det:3 },
+    { idx:3, guid:"G-NP",  pguid:"G-EXP", image:"notepad.exe", tms:150, host:"WS01", user:"bob" },
+    { idx:4, guid:"G-ORP", pguid:"G-MISSING", pimage:"services.exe", image:"svchost.exe", tms:50, host:"DC01" },
+  ];
+  const t=Engine.buildProcessTree(procs);
+  eq(t.count, 5, "all processes become nodes");
+  eq(t.roots.length, 2, "two roots (explorer + orphaned svchost)");
+  eq(JSON.stringify(t.hosts), JSON.stringify(["DC01","WS01"]), "hosts listed sorted");
+  const exp=t.roots.find(r=>r.guid==="G-EXP");
+  eq(exp.children.length, 2, "explorer has two children");
+  eq(exp.children[0].image, "notepad.exe", "children sorted by time (notepad@150 before cmd@200)");
+  const cmd=exp.children.find(c=>c.guid==="G-CMD");
+  eq(cmd.children[0].image, "powershell.exe", "grandchild linked under cmd");
+  eq(exp.subDet, 3, "detection severity propagates up the subtree");
+  eq(cmd.subDet, 3, "cmd subtree carries the powershell detection");
+  eq(exp.det, 0, "own det stays 0 while subDet reflects descendants");
+  // guid-reuse / cycle guard: a parent created AFTER the child is not linked (would cycle)
+  const cyc=Engine.buildProcessTree([
+    { idx:0, guid:"A", pguid:"B", tms:200, host:"H" },
+    { idx:1, guid:"B", pguid:"A", tms:100, host:"H" },
+  ]);
+  ok(cyc.roots.length>=1 && JSON.stringify(cyc).length<100000, "cycle guard keeps the forest acyclic");
+})();
+
+(function testLateralGraph(){
+  const raw=[
+    { from:"10.0.0.5", ftype:"ip", to:"WS01", ttype:"host", kind:"rdp", user:"alice", idx:1, tms:100, det:3 },
+    { from:"10.0.0.5", ftype:"ip", to:"WS01", ttype:"host", kind:"rdp", user:"alice", idx:2, tms:200, det:0 },   // same edge, repeats
+    { from:"WS01", ftype:"host", to:"DC01", ttype:"host", kind:"explicit-cred", user:"admin", idx:3, tms:300, det:0 },
+    { from:"HOSTX", ftype:"host", to:"HOSTX", ttype:"host", kind:"network", user:"bob", idx:4, tms:400, det:0 },   // self-loop dropped
+    { from:"", ftype:"host", to:"DC01", ttype:"host", kind:"ntlm", idx:5, tms:500, det:0 },                       // empty source dropped
+  ];
+  const g=Engine.buildLateralGraph(raw);
+  eq(g.nodes.length, 3, "three distinct nodes (self-loop + empty edge dropped)");
+  eq(g.edges.length, 2, "two aggregated edges");
+  const e=g.edges.find(x=>x.from==="10.0.0.5"&&x.to==="WS01");
+  eq(e.count, 2, "repeat movement collapses to one edge with count 2");
+  eq(e.det, 3, "edge carries max detection severity");
+  eq(e.kinds.rdp, 2, "per-technique counts kept");
+  eq(JSON.stringify(e.samples), JSON.stringify([1,2]), "sample event indices captured");
+  eq(e.firstTms, 100, "edge first timestamp"); eq(e.lastTms, 200, "edge last timestamp");
+  const ip=g.nodes.find(n=>n.id==="10.0.0.5"); eq(ip.type, "ip", "ip node typed as ip");
+  eq(ip.out, 2, "ip node has 2 outbound"); eq(ip.det, 3, "detection severity reaches the node");
+  const dc=g.nodes.find(n=>n.id==="DC01"); eq(dc.in, 1, "DC01 has one inbound movement");
+  eq(g.nodes[0].det, 3, "nodes sorted with highest-detection nodes first");
+})();
+
+/* =====================================================================
    3. YARA-LITE
    ===================================================================== */
 (function testYara(){
