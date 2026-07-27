@@ -1283,7 +1283,7 @@ app.get("/api/rarity", async (req,res)=>{
     if(!fs.existsSync(EVENTS)) return res.json({ ok:true, processes:null, parentChild:null, logons:null, services:null, eventCount:0 });
     let detHits={}; try{ detHits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{}
     const detLvl=i=>{ const h=detHits[i]; if(!h||!h.length)return 0; let m=0; for(const x of h){ const n=sevNumS(x.level); if(n>m)m=n; } return m; };
-    const procItems=[], pcItems=[], logonItems=[], svcItems=[];
+    const procItems=[], pcItems=[], logonItems=[], svcItems=[], hashItems=[];
     let eventCount=0;
     await forEachEvent((ev, i)=>{
       eventCount++;
@@ -1300,6 +1300,14 @@ app.get("/api/rarity", async (req,res)=>{
         if(parent){ const bp=Engine.baseName(parent).toLowerCase();
           pcItems.push({ key:bp+" → "+bi, host, user, idx:i, tms:T, det,
             extra:{ parent:bp, child:bi, suspicious:Engine.suspiciousParentChild(parent, image) } }); } }
+      // executable hashes — one bucket per distinct binary (Sysmon EID 1 Hashes field), so it can be checked in VT
+      if(eid==="1" && /sysmon/i.test(prov)){ const hraw=U("Hashes"); if(hraw){ const hm={};
+        for(const part of hraw.split(",")){ const eq=part.indexOf("="); if(eq<=0) continue;
+          const a=part.slice(0,eq).trim().toUpperCase(); const v=part.slice(eq+1).trim().toLowerCase();
+          if(/^(SHA256|SHA1|MD5)$/.test(a) && /^[a-f0-9]{32,64}$/.test(v)) hm[a]=v; }
+        const best=hm.SHA256||hm.SHA1||hm.MD5;
+        if(best) hashItems.push({ key:best, host, user, idx:i, tms:T, det,
+          extra:{ algo:hm.SHA256?"SHA256":hm.SHA1?"SHA1":"MD5", image:Engine.baseName(image||"") } }); } }
       // logon origin — 4624 for real (non-machine) users
       if(eid==="4624"){ const lt=U("LogonType"); const u=U("TargetUserName");
         if(u && !/\$$/.test(u) && !/^(SYSTEM|ANONYMOUS LOGON|LOCAL SERVICE|NETWORK SERVICE|DWM-\d|UMFD-\d)$/i.test(u)){
@@ -1313,7 +1321,8 @@ app.get("/api/rarity", async (req,res)=>{
       processes: Engine.buildStacks(procItems),
       parentChild: Engine.buildStacks(pcItems),
       logons: Engine.buildStacks(logonItems),
-      services: Engine.buildStacks(svcItems) });
+      services: Engine.buildStacks(svcItems),
+      hashes: Engine.buildStacks(hashItems) });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 

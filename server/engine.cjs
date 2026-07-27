@@ -867,7 +867,7 @@ function buildStacks(items, opts){
     value:a.value, count:a.count, rare:a.count<=rareThreshold, pct:total?a.count/total:0,
     hosts:[...a.hosts].slice(0,20), users:[...a.users].slice(0,20), samples:a.samples,
     firstTms:a.firstTms, lastTms:a.lastTms, det:a.det,
-    parent:a.parent, child:a.child, suspicious:!!a.suspicious })) };
+    parent:a.parent, child:a.child, suspicious:!!a.suspicious, algo:a.algo, image:a.image })) };
 }
 
 /* ----------------- HEURISTICS ---------------------------------------------- */

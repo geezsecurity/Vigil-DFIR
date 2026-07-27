@@ -148,7 +148,7 @@ mapped to events tagged by source with the original line preserved as the messag
 | POST   | `/api/watchlist`      | `{text}` bulk-add / `{add:[]}` / `{remove:[]}` / `{clear:true}` |
 | GET    | `/api/watchlist/scan` | scan the active case for watchlist matches |
 | GET    | `/api/observed`       | IPs / hashes / domains carved from the active case |
-| GET    | `/api/rarity`         | frequency stacks (processes / parent→child / logons / services), rarest-first |
+| GET    | `/api/rarity`         | frequency stacks (processes / parent→child / logons / services / file hashes), rarest-first |
 | GET    | `/api/casework`       | per-case analyst verdicts, tags, notes, findings + narrative |
 | POST   | `/api/casework/annotate` | `{idx, verdict, tags[], note}` set/clear an event verdict |
 | POST   | `/api/casework/finding`  | `{title, severity, note}` add / `{id, remove:true}` a finding |

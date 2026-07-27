@@ -7120,12 +7120,15 @@ const RAR_VIEWS=[
   { k:"parentChild",label:"Parent → Child",desc:"Process-ancestry pairs. Rare or flagged combinations expose abnormal execution — e.g. an Office or web-server process spawning a shell (highlighted)." },
   { k:"logons",     label:"Logon origins", desc:"Distinct user × host × logon-type × source. A rare origin is an account authenticating from somewhere it normally doesn't." },
   { k:"services",   label:"Services",      desc:"Installed services (7045 / 4697). New/rare service names and Temp-path binaries are common persistence." },
+  { k:"hashes",     label:"File hashes",   desc:"Distinct executable hashes (Sysmon EID 1), rarest first. Click 🔎 VT to check a binary against VirusTotal — confirm whether an .exe is known malware or clean." },
 ];
 async function renderRarity(){
   const w=$("rarWrap");
   if(!SERVER){ w.innerHTML=ptNote("Rarity analysis runs server-side — run the backend to use this view."); return; }
   if(rarData===null){ w.innerHTML=ptNote("Computing frequency stacks across the case…");
     try{ rarData=await (await api("/api/rarity")).json(); }catch(err){ w.innerHTML='<div class="dash-note err">'+esc(err.message||err)+'</div>'; return; } }
+  if(wlSettings===null){ try{ wlSettings=await (await api("/api/settings")).json(); }catch{ wlSettings={}; } }
+  await prefillEnrichFromCache();                         // restore any VT verdicts checked earlier
   paintRarity();
 }
 function rarPivotTarget(view,r){
@@ -7145,11 +7148,35 @@ function paintRarity(){
     '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0">'+
     (stack?'<b>'+stack.distinct.toLocaleString()+'</b> distinct · '+stack.total.toLocaleString()+' observations':'')+
     ' · from '+(rarData.eventCount||0).toLocaleString()+' events</span></div>';
-  if(!stack || !stack.rows.length){ w.innerHTML=bar+'<p class="rarbar-desc">'+esc(meta.desc)+'</p>'+'<div class="hint" style="padding:16px">No '+meta.label.toLowerCase()+' data in this case (needs Sysmon EID 1 / 4688 for processes, 4624 for logons, 7045/4697 for services).</div>'; return; }
+  if(!stack || !stack.rows.length){ w.innerHTML=bar+'<p class="rarbar-desc">'+esc(meta.desc)+'</p>'+'<div class="hint" style="padding:16px">No '+meta.label.toLowerCase()+' data in this case '+(rarView==="hashes"?'(needs Sysmon EID 1 events with the Hashes field enabled).':'(needs Sysmon EID 1 / 4688 for processes, 4624 for logons, 7045/4697 for services).')+'</div>'; return; }
   let list=stack.rows;
   if(rarRareOnly) list=list.filter(r=>r.rare);
-  if(rarQ){ const q=rarQ; list=list.filter(r=>((r.value||"")+" "+(r.hosts||[]).join(" ")+" "+(r.users||[]).join(" ")).toLowerCase().indexOf(q)>=0); }
+  if(rarQ){ const q=rarQ; list=list.filter(r=>((r.value||"")+" "+(r.image||"")+" "+(r.hosts||[]).join(" ")+" "+(r.users||[]).join(" ")).toLowerCase().indexOf(q)>=0); }
   const RENDER=2000; const shown=list.slice(0,RENDER);
+  // ---- File hashes view: image + VirusTotal reputation + check ----
+  if(rarView==="hashes"){
+    const canCheck=!!(wlSettings&&wlSettings.virustotalConfigured);
+    if(canCheck) bar=bar.replace('<span class="vsp"></span>','<button class="vbtn" data-rarcheckall title="check the shown hashes against VirusTotal (throttled)">🔎 Check all shown</button><span class="vsp"></span>');
+    else bar=bar.replace('<span class="vsp"></span>','<button class="vbtn" data-rarneedkey title="add a VirusTotal key first">🔑 Add VT key</button><span class="vsp"></span>');
+    let hrows="";
+    for(const r of shown){ const key=String(r.value).toLowerCase();
+      const hosts=r.hosts.map(x=>'<span class="shost">'+esc(x)+'</span>').join(" ");
+      hrows+='<tr>'+
+        '<td>'+(r.det?'<span class="ptdet" style="display:inline-block;background:'+numColor(r.det)+'" title="on a detected event"></span> ':'')+'<b>'+r.count.toLocaleString()+'</b>'+(r.rare?' <span class="stag rare-t">rare</span>':'')+'</td>'+
+        '<td class="mono">'+esc(r.image||"?")+'</td>'+
+        '<td class="mono" style="font-size:10.5px;word-break:break-all">'+(r.algo?'<span class="ioct hash">'+esc(r.algo)+'</span> ':'')+esc(r.value)+'</td>'+
+        '<td>'+hosts+'</td>'+
+        '<td data-verdict="'+esc(key)+'">'+verdictBadge(enrichMap[key])+'</td>'+
+        '<td><span class="wlpivot" data-rarpivot="'+esc(r.value)+'">grid ↗</span>'+
+          (canCheck?' · <span class="wlcheck" data-rarcheck="'+esc(r.value)+'">🔎 VT</span>':'')+'</td>'+
+        '</tr>';
+    }
+    const htable='<div style="overflow:auto"><table class="wlhits"><thead><tr><th>Count</th><th>Executable</th><th>Hash</th><th>Hosts</th><th>VirusTotal</th><th></th></tr></thead><tbody>'+hrows+'</tbody></table></div>'+
+      (list.length>RENDER?'<div class="hint" style="padding:8px 14px">Showing the first '+RENDER.toLocaleString()+' of '+list.length.toLocaleString()+'.</div>':'');
+    const note=!canCheck?'<p class="hint" style="margin:0 0 10px">Add a VirusTotal key in <b>⚙ Settings</b> to check these hashes.</p>':'';
+    w.innerHTML=bar+'<p class="rarbar-desc">'+esc(meta.desc)+'</p>'+note+'<div class="wlpanel" style="padding:0;overflow:hidden">'+htable+'</div>';
+    return;
+  }
   let rows2="";
   for(const r of shown){
     const hosts=r.hosts.map(x=>'<span class="shost">'+esc(x)+'</span>').join(" ");
@@ -7172,9 +7199,27 @@ function paintRarity(){
 let _rarSearchT=null;
 $("rarWrap").addEventListener("input",e=>{ if(e.target.id!=="rarSearch")return;
   rarQ=e.target.value.trim().toLowerCase(); clearTimeout(_rarSearchT); _rarSearchT=setTimeout(()=>{ paintRarity(); const s=$("rarSearch"); if(s){ s.focus(); s.setSelectionRange(s.value.length,s.value.length);} },130); });
+async function rarCheckAllHashes(btn){
+  let list=((rarData.hashes&&rarData.hashes.rows)||[]);
+  if(rarRareOnly) list=list.filter(r=>r.rare);
+  if(rarQ){ const q=rarQ; list=list.filter(r=>((r.value||"")+" "+(r.image||"")).toLowerCase().indexOf(q)>=0); }
+  list=list.slice(0,2000).filter(r=>!enrichMap[String(r.value).toLowerCase()]).slice(0,40);
+  if(!list.length) return;
+  btn.disabled=true; let done=0, rate=0;
+  for(const r of list){ btn.textContent="Checking "+(++done)+"/"+list.length+"…";
+    await checkObserved(r.value, "hash");
+    const j=enrichMap[String(r.value).toLowerCase()];
+    if(j&&j.errors&&j.errors.some(e=>/429|rate|quota/i.test(e))){ if(++rate>=3) break; } else rate=0;
+    if(done<list.length) await new Promise(x=>setTimeout(x,1200)); }
+  btn.disabled=false; btn.textContent="🔎 Check all shown";
+  if(rate>=3) alert("Stopped — VirusTotal is rate-limiting (free-tier quota). Wait a bit or check hashes individually; results cache for 24h.");
+}
 $("rarWrap").addEventListener("click",e=>{
   const rv=e.target.closest("[data-rarview]"); if(rv){ rarView=rv.getAttribute("data-rarview"); paintRarity(); return; }
   const rr=e.target.closest("[data-rarrare]"); if(rr){ rarRareOnly=!rarRareOnly; paintRarity(); return; }
+  const rc=e.target.closest("[data-rarcheck]"); if(rc){ checkObserved(rc.getAttribute("data-rarcheck"), "hash"); return; }
+  const rca=e.target.closest("[data-rarcheckall]"); if(rca){ rarCheckAllHashes(rca); return; }
+  const rnk=e.target.closest("[data-rarneedkey]"); if(rnk){ openSettings(); return; }
   const pv=e.target.closest("[data-rarpivot]"); if(pv){ latPivot(pv.getAttribute("data-rarpivot")); return; }
   const op=e.target.closest("[data-raropen]"); if(op){ const i=+op.getAttribute("data-raropen"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
 });

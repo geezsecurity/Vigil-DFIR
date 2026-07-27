@@ -57,8 +57,9 @@ running server-side so multi-hundred-MB logs never choke your tab.
   (git-ignored); results cache for 24h. Fully opt-in.
 - **Rarity & stacking** — long-tail frequency analysis to surface what rules miss: distinct
   **processes**, **parent → child** pairs (abnormal ancestry like Office/web-server → shell is
-  flagged), **logon origins** (user × host × type × source) and **services**, each sorted
-  rarest-first with a *rare only* filter, hosts, first/last seen, and grid pivot.
+  flagged), **logon origins** (user × host × type × source), **services**, and **executable file
+  hashes** (each with a one-click **VirusTotal** check to confirm if an `.exe` is known malware) —
+  each sorted rarest-first with a *rare only* filter, hosts, first/last seen, and grid pivot.
 - **Super-timeline** — full-log activity histogram + a merged, filterable notable-event
   feed (detections, logons, RDP, lateral movement …) with click-to-zoom time windows.
 - **Evidence** — mined forensic artifacts (accounts, services, tasks, LSASS access, share
