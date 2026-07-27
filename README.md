@@ -49,6 +49,10 @@ running server-side so multi-hundred-MB logs never choke your tab.
   IPs/hashes/domains match on exact tokens (no substring false positives), files/users via an
   Aho-Corasick pass. Matches show hit counts, affected hosts, first/last seen, and pivot to the
   grid or the event.
+- **Threat-intel enrichment** — with an API key configured in **⚙ Settings**, click a matched
+  IP or hash in the Watchlist to check it against **AbuseIPDB** (abuse score, ISP, Tor) and
+  **VirusTotal** (malicious-engine ratio, file name/type). Keys live server-side (git-ignored);
+  results are cached for 24h. Fully opt-in.
 - **Super-timeline** — full-log activity histogram + a merged, filterable notable-event
   feed (detections, logons, RDP, lateral movement …) with click-to-zoom time windows.
 - **Evidence** — mined forensic artifacts (accounts, services, tasks, LSASS access, share
@@ -157,8 +161,12 @@ Key endpoints: `/api/upload`, `/api/search` (SQLite/FTS, paginated), `/api/bodie
   never expose it directly to the internet.
 - The optional **AI** feature sends selected event JSON to an external API — don't use it
   on data you can't share externally.
-- **Case data is never committed** — `data/` is git-ignored. Keep real incident data out
-  of version control.
+- **Threat-intel enrichment** is opt-in and only runs when you click an indicator. It sends
+  that single IP/hash to **AbuseIPDB / VirusTotal**. API keys are stored server-side in the
+  git-ignored `data/settings.json` (or the `ABUSEIPDB_API_KEY` / `VIRUSTOTAL_API_KEY` env
+  vars) and are never returned to the browser.
+- **Case data, watchlists and API keys are never committed** — `data/` is git-ignored. Keep
+  real incident data out of version control.
 
 ---
 

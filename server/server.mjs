@@ -390,12 +390,22 @@ function listCasesView(){
     .map(c=>({ id:c.id, name:c.name, count:c.count, tsMin:c.tsMin, tsMax:c.tsMax,
       createdAt:c.createdAt, active:c.id===ACTIVE }));
 }
+// A case is "empty" if it holds no events on disk (freshly created / abandoned).
+function caseIsEmpty(id){ const p=path.join(caseDir(id),"events.jsonl"); try{ return !fs.existsSync(p) || fs.statSync(p).size===0; }catch{ return true; } }
+// Remove abandoned empty cases (no events) so the switcher doesn't fill with 0-event entries.
+function pruneEmptyCases(exceptId){
+  for(const c of catalog.listCases()){
+    if(c.id===exceptId || c.id===ACTIVE) continue;
+    if(caseIsEmpty(c.id)){ try{ fs.rmSync(caseDir(c.id),{recursive:true,force:true}); }catch{} catalog.deleteCase(c.id); }
+  }
+}
 app.get("/api/cases", (req,res)=> res.json({ ok:true, active:ACTIVE, cases:listCasesView() }));
 // create a new empty case and make it active (the upload that follows populates it)
 app.post("/api/cases", (req,res)=>{
   const name=(req.body&&String(req.body.name||"").trim())||("Case "+new Date().toISOString().slice(0,16).replace("T"," "));
   const id=newCaseId(); setActiveCase(id);
   catalog.upsertCase({ id, name, createdAt:new Date().toISOString(), count:0, tsMin:null, tsMax:null });
+  pruneEmptyCases(id);                             // drop previously-abandoned empty cases
   res.json({ ok:true, active:ACTIVE, cases:listCasesView() });
 });
 // switch the active case
@@ -435,9 +445,12 @@ app.post("/api/upload", upload.array("file"), async (req,res)=>{
     if(!req.files||!req.files.length) return res.status(400).json({error:"no file"});
     const cat = (req.query.cat==="firewall"||req.query.cat==="vpn") ? req.query.cat : null;
     const append = String(req.query.mode||"")==="append" && ACTIVE && fs.existsSync(EVENTS);
-    if(!append){                                   // a plain upload starts a NEW case (old cases are kept)
-      setActiveCase(newCaseId());
+    if(!append){                                   // a plain upload populates a fresh case
+      // reuse the active case if it's still empty (e.g. just created via "New case"),
+      // otherwise start a new one — either way, drop other abandoned empty cases.
+      if(!(ACTIVE && caseIsEmpty(ACTIVE))) setActiveCase(newCaseId());
       catalog.clearCustody(ACTIVE);
+      pruneEmptyCases(ACTIVE);
     }
     const prev = append ? (readMeta()||{}) : {};
     const ws = fs.createWriteStream(EVENTS, append ? { flags:"a" } : {});
@@ -564,6 +577,44 @@ function mergeIocs(existing, add){
     if(byVal.has(k)){ const cur=byVal.get(k); if(it.label&&!cur.label)cur.label=it.label; if(it.type)cur.type=it.type; }
     else if(byVal.size<IOC_CAP){ byVal.set(k, { value:it.value, type:it.type, label:it.label||"", added:new Date().toISOString() }); } }
   return [...byVal.values()];
+}
+
+// ---- Settings (API keys, gitignored) + threat-intel enrichment (AbuseIPDB / VirusTotal) ----
+const SETTINGS_FILE = path.join(DATA, "settings.json");
+function loadSettings(){ try{ return JSON.parse(fs.readFileSync(SETTINGS_FILE,"utf8"))||{}; }catch{ return {}; } }
+function saveSettings(s){ try{ fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s), { mode:0o600 }); }catch(e){ console.error(e); } }
+// key lookup: saved settings win, else environment. Never returned to the browser.
+function getApiKey(provider){ const s=loadSettings();
+  return String(s[provider+"ApiKey"] || process.env[provider.toUpperCase()+"_API_KEY"] || "").trim(); }
+const ENRICH_CACHE_FILE = path.join(DATA, "enrich-cache.json");
+const ENRICH_TTL_MS = 24*3600*1000;
+function loadEnrichCache(){ try{ return JSON.parse(fs.readFileSync(ENRICH_CACHE_FILE,"utf8"))||{}; }catch{ return {}; } }
+function saveEnrichCache(c){ try{ const keys=Object.keys(c); if(keys.length>5000){ for(const k of keys.slice(0,keys.length-5000)) delete c[k]; } fs.writeFileSync(ENRICH_CACHE_FILE, JSON.stringify(c)); }catch(e){ console.error(e); } }
+
+function fetchWithTimeout(url, opt, ms){ const ac=new AbortController(); const t=setTimeout(()=>ac.abort(), ms||15000);
+  return fetch(url, { ...opt, signal:ac.signal }).finally(()=>clearTimeout(t)); }
+async function abuseipdbCheck(ip, key){
+  const u=new URL("https://api.abuseipdb.com/api/v2/check");
+  u.searchParams.set("ipAddress", ip); u.searchParams.set("maxAgeInDays", "90");
+  const r=await fetchWithTimeout(u, { headers:{ Key:key, Accept:"application/json" } });
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const d=(await r.json()).data||{};
+  return { provider:"abuseipdb", indicator:d.ipAddress||ip, type:"ip",
+    score:d.abuseConfidenceScore, reports:d.totalReports, country:d.countryCode,
+    isp:d.isp, domain:d.domain, usage:d.usageType, tor:d.isTor, lastReport:d.lastReportedAt,
+    link:"https://www.abuseipdb.com/check/"+encodeURIComponent(ip) };
+}
+async function virustotalCheck(indicator, type, key){
+  const p = type==="ip" ? "ip_addresses/"+encodeURIComponent(indicator) : "files/"+encodeURIComponent(indicator);
+  const r=await fetchWithTimeout("https://www.virustotal.com/api/v3/"+p, { headers:{ "x-apikey":key } });
+  if(r.status===404) return { provider:"virustotal", indicator, type, found:false, stats:{malicious:0,suspicious:0,harmless:0,undetected:0} };
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const attr=(((await r.json()).data)||{}).attributes||{}; const st=attr.last_analysis_stats||{};
+  return { provider:"virustotal", indicator, type, found:true,
+    stats:{ malicious:st.malicious||0, suspicious:st.suspicious||0, harmless:st.harmless||0, undetected:st.undetected||0 },
+    reputation:attr.reputation, name:attr.meaningful_name, fileType:attr.type_description,
+    asOwner:attr.as_owner, country:attr.country,
+    link:"https://www.virustotal.com/gui/"+(type==="ip"?"ip-address/":"file/")+encodeURIComponent(indicator) };
 }
 
 // Assemble the full detection payload (timeline + ATT&CK + entities + chains + aggregates)
@@ -1158,6 +1209,45 @@ app.get("/api/watchlist/scan", async (req,res)=>{
       hosts:[...a.hosts].slice(0,20), samples:a.samples, firstTms:a.firstTms, lastTms:a.lastTms }))
       .sort((x,y)=>(y.det-x.det)||(y.count-x.count));
     res.json({ ok:true, hits, iocCount:iocs.length, matched:hits.length, eventCount, matchedEvents });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+
+// ---- Settings: report which intel providers are configured; save keys (never returned) ----
+app.get("/api/settings", (req,res)=>{
+  res.json({ ok:true, abuseipdbConfigured:!!getApiKey("abuseipdb"), virustotalConfigured:!!getApiKey("virustotal"),
+    enrichTtlHours:Math.round(ENRICH_TTL_MS/3600000) });
+});
+app.post("/api/settings", (req,res)=>{
+  try{
+    const b=req.body||{}; const s=loadSettings();
+    // a provided string sets/replaces the key; an explicit empty string clears it; undefined leaves it
+    if(b.abuseipdbApiKey!==undefined){ const v=String(b.abuseipdbApiKey).trim(); if(v)s.abuseipdbApiKey=v; else delete s.abuseipdbApiKey; }
+    if(b.virustotalApiKey!==undefined){ const v=String(b.virustotalApiKey).trim(); if(v)s.virustotalApiKey=v; else delete s.virustotalApiKey; }
+    saveSettings(s);
+    res.json({ ok:true, abuseipdbConfigured:!!getApiKey("abuseipdb"), virustotalConfigured:!!getApiKey("virustotal") });
+  }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
+});
+// ---- Threat-intel enrichment for a single indicator (IP -> AbuseIPDB+VT, hash -> VT) ----
+app.post("/api/enrich", async (req,res)=>{
+  try{
+    const b=req.body||{}; const value=String(b.value||"").trim();
+    if(!value) return res.status(400).json({ error:"no value" });
+    const type=b.type||Engine.iocType(value);
+    if(type!=="ip"&&type!=="hash") return res.json({ ok:false, error:"Only IP and file-hash indicators can be checked against threat intel." });
+    const cache=loadEnrichCache(); const ckey=type+":"+value.toLowerCase();
+    if(!b.refresh && cache[ckey] && (Date.now()-cache[ckey].at < ENRICH_TTL_MS))
+      return res.json({ ok:true, value, type, results:cache[ckey].results, cached:true, at:cache[ckey].at });
+    const results=[], errors=[];
+    if(type==="ip"){
+      const ak=getApiKey("abuseipdb"); if(ak){ try{ results.push(await abuseipdbCheck(value, ak)); }catch(e){ errors.push("AbuseIPDB: "+e.message); } }
+      const vk=getApiKey("virustotal"); if(vk){ try{ results.push(await virustotalCheck(value, "ip", vk)); }catch(e){ errors.push("VirusTotal: "+e.message); } }
+    } else {
+      const vk=getApiKey("virustotal"); if(vk){ try{ results.push(await virustotalCheck(value, "file", vk)); }catch(e){ errors.push("VirusTotal: "+e.message); } }
+    }
+    if(!results.length && !errors.length)
+      return res.json({ ok:false, error:"No API key configured for "+(type==="ip"?"IP":"hash")+" lookups. Add one in ⚙ Settings." });
+    if(results.length){ cache[ckey]={ at:Date.now(), results }; saveEnrichCache(cache); }
+    res.json({ ok:true, value, type, results, errors, cached:false, at:Date.now() });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 

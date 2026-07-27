@@ -545,6 +545,31 @@
   .wlhits .shost{display:inline-block;font-size:10px;color:var(--txt-dim);background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:0 6px;margin:1px 2px 1px 0}
   .wlpivot{cursor:pointer;color:var(--accent);font-size:11px;white-space:nowrap}
   .wlpivot:hover{text-decoration:underline}
+  .wlcheck{cursor:pointer;color:#c07cff;font-size:11px;white-space:nowrap}
+  .wlcheck:hover{text-decoration:underline}
+  .enrich{margin-top:6px;padding:8px 10px;border:1px solid var(--line-2);border-radius:7px;background:var(--bg);font-size:11.5px;line-height:1.6}
+  .enrich .eprov{font-weight:600}
+  .enrich .escore{display:inline-block;padding:1px 8px;border-radius:9px;font-weight:600;font-size:11px}
+  .enrich a{color:var(--accent)} .enrich .edim{color:var(--txt-dim)}
+  .enrich .ebad{color:#ff6b6b;font-weight:600} .enrich .eok{color:#5ac77a;font-weight:600}
+  /* settings modal */
+  .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:8vh 16px}
+  .modal-card{background:var(--bg);border:1px solid var(--line-2);border-radius:12px;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:82vh;display:flex;flex-direction:column}
+  .modal-h{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);font-size:14px}
+  .modal-h .modal-x{margin-left:auto;cursor:pointer;color:var(--txt-dim);font-size:16px}
+  .modal-h .modal-x:hover{color:var(--txt)}
+  .modal-b{padding:16px 18px;overflow:auto}
+  .set-h{margin:0 0 6px;font-size:13px}
+  .set-note{color:var(--txt-dim);font-size:11.5px;line-height:1.6;margin:0 0 12px}
+  .set-row{display:block;margin:12px 0 3px;font-size:12.5px}
+  .set-row>span{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+  .set-row input{width:100%;box-sizing:border-box;font-family:var(--mono);font-size:12px;padding:8px;border:1px solid var(--line-2);border-radius:7px;background:var(--bg-2);color:var(--txt)}
+  .set-tag{font-size:10px;padding:1px 7px;border-radius:8px;background:var(--line);color:var(--txt-dim)}
+  .set-tag.on{background:rgba(90,199,122,.18);color:#5ac77a}
+  .set-hint{color:var(--txt-dim);font-size:10.5px;margin:0 0 4px}
+  .ext-link{color:var(--accent);cursor:pointer} .ext-link:hover{text-decoration:underline}
+  .set-acts{display:flex;gap:8px;align-items:center;margin-top:16px}
+  .set-msg{font-size:11.5px;color:var(--txt-dim)}
   body[data-mode="fw"] #fwWrap{display:block} body[data-mode="fw"] #eventsWrap{display:none} body[data-mode="fw"] aside{display:none}
   body[data-mode="vpn"] #vpnWrap{display:block} body[data-mode="vpn"] #eventsWrap{display:none} body[data-mode="vpn"] aside{display:none}
   .cat-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -640,8 +665,33 @@
   <input type="file" id="addFile" accept=".json,.jsonl,.ndjson,.log,.txt,.evtx,.evt" multiple hidden>
   <input type="file" id="addFwFile" accept=".json,.jsonl,.ndjson,.log,.txt,.csv,.syslog,.evtx" multiple hidden>
   <input type="file" id="addVpnFile" accept=".json,.jsonl,.ndjson,.log,.txt,.csv,.syslog,.evtx" multiple hidden>
+  <button class="btn icon" id="settingsBtn" title="Settings (threat-intel API keys)">⚙</button>
   <button class="btn icon" id="themeBtn" title="Toggle light / dark theme">🌙</button>
 </header>
+
+<div id="settingsModal" class="modal-back" style="display:none">
+  <div class="modal-card">
+    <div class="modal-h"><b>⚙ Settings</b><span class="modal-x" id="settingsClose">✕</span></div>
+    <div class="modal-b">
+      <h4 class="set-h">Threat-intel enrichment</h4>
+      <p class="set-note">Add API keys so the Watchlist can check IPs and file hashes against reputation services on click.
+        Keys are stored server-side (in the git-ignored <code>data/settings.json</code>) and never sent to the browser.
+        Lookups send the indicator to the provider and are cached for 24h.</p>
+      <label class="set-row"><span>AbuseIPDB API key <span class="set-tag" id="abStatus">not set</span></span>
+        <input type="password" id="abKey" placeholder="paste AbuseIPDB key (IP reputation)" autocomplete="off"></label>
+      <div class="set-hint">Free key: <span class="ext-link" data-ext="https://www.abuseipdb.com/account/api">abuseipdb.com/account/api</span> — used for IP abuse score, ISP, Tor.</div>
+      <label class="set-row"><span>VirusTotal API key <span class="set-tag" id="vtStatus">not set</span></span>
+        <input type="password" id="vtKey" placeholder="paste VirusTotal v3 key (IP + hash)" autocomplete="off"></label>
+      <div class="set-hint">Free key: <span class="ext-link" data-ext="https://www.virustotal.com/gui/my-apikey">virustotal.com/gui/my-apikey</span> — used for IP reputation and file-hash detections.</div>
+      <p class="set-note" style="color:var(--yellow,#e6b450)">⚠ Enrichment makes outbound requests to third parties — only enable on data you're permitted to share externally.</p>
+      <div class="set-acts">
+        <button class="vbtn" id="settingsSave">Save keys</button>
+        <button class="vbtn" id="settingsClear">Clear all keys</button>
+        <span id="settingsMsg" class="set-msg"></span>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div id="app">
   <aside>
@@ -4846,6 +4896,7 @@ async function uploadToServer(files){
     const j=await uploadWithProgress("/api/upload", fd, "uploading "+files.length+" file"+(files.length>1?"s":""));
     setProgressPct(100, "loading events into grid…");
     await loadSessionFromServer(j.meta);     // fetch parsed-event window (indices align with server detect)
+    await refreshCaseSwitcher();             // new/reused case is now populated -> update the dropdown
     if(navigator.onLine!==false && !defaultRulesTried){ defaultRulesTried=true;
       try{ setRulesStatus('<span class="spin"></span> loading default rules on server…');
         await api("/api/rules/default",{method:"POST"}); updateRulesCountsFromServer(); }catch(_){}
@@ -5739,6 +5790,10 @@ function renderCaseSwitcher(cases, active){
     }).join("");
   } else { sel.style.display="none"; db.style.display="none"; }
 }
+async function refreshCaseSwitcher(){
+  if(!SERVER) return;
+  try{ const j=await (await api("/api/cases")).json(); renderCaseSwitcher(j.cases||[], j.active||null); }catch(_){}
+}
 $("caseSel").onchange=async(e)=>{
   const id=e.target.value; if(!id)return;
   try{ showProgress(true); $("progLbl").textContent="switching case…";
@@ -6585,10 +6640,12 @@ function paintLateral(){
   const detN=latData.nodes.filter(n=>n.det>0).length;
   const bar='<div class="latbar">'+
     '<button class="vbtn'+(latState.detonly?' on':'')+'" data-lt="detonly">◆ Detection paths ('+detN+')</button>'+
+    '<button class="vbtn" data-lt="fit">⤢ Fit</button>'+
+    '<button class="vbtn" data-lt="zin">＋</button><button class="vbtn" data-lt="zout">－</button>'+
     '<button class="vbtn" data-lt="relayout">↻ Re-layout</button>'+
     '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0"><b>'+nodes.length+
       '</b> hosts/IPs · <b>'+edges.length+'</b> paths'+(capped?' · <span class="warn-text">capped</span>':'')+
-      ' · click a node to pivot the grid · drag to arrange</span></div>';
+      ' · scroll to zoom · drag bg to pan · drag node to arrange · click to pivot</span></div>';
   w.innerHTML=bar+'<div id="latSvgWrap"><svg id="latSvg"></svg><div class="lattip" id="latTip"></div></div>';
   const wrap=$("latSvgWrap"); const W=wrap.clientWidth||900, H=wrap.clientHeight||600;
   // ---- force layout ----
@@ -6597,8 +6654,8 @@ function paintLateral(){
   nodes.forEach((n,i)=>{ const a=i/nodes.length*Math.PI*2; const R=Math.min(W,H)*0.36;
     n.x=W/2+Math.cos(a)*R*(0.6+0.4*rnd()); n.y=H/2+Math.sin(a)*R*(0.6+0.4*rnd()); n.vx=0; n.vy=0; });
   const links=edges.map(e=>({s:idx.get(e.from),t:idx.get(e.to),w:e.count})).filter(l=>l.s!=null&&l.t!=null);
-  const k=Math.max(40,Math.sqrt((W*H)/Math.max(1,nodes.length))*0.8);
-  const ITER=nodes.length>120?140:190;
+  const k=Math.max(70,Math.sqrt((W*H)/Math.max(1,nodes.length))*1.15);
+  const ITER=nodes.length>120?170:230;
   for(let it=0; it<ITER; it++){
     const cool=1-it/ITER;
     for(let i=0;i<nodes.length;i++){ let fx=0,fy=0; const A=nodes[i];
@@ -6618,7 +6675,7 @@ function paintLateral(){
   const ncolor=n=> n.det>0 ? numColor(n.det) : (n.type==="ip"?"#e6b450":"#5aa0ff");
   let sv='<defs><marker id="latArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8aa0b4"/></marker>'+
     '<marker id="latArrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e5736a"/></marker></defs>';
-  sv+='<g id="latEdges">';
+  sv+='<g id="latView"><g id="latEdges">';
   edges.forEach((e,i)=>{ const A=nodes[idx.get(e.from)], B=nodes[idx.get(e.to)]; if(!A||!B)return;
     const kind=latDominantKind(e.kinds); const col=e.det>0?numColor(e.det):(LAT_KIND[kind]?LAT_KIND[kind].c:"#8aa0b4");
     const wdt=Math.min(6,1+Math.log(e.count+1)); const op=e.det>0?0.85:0.42;
@@ -6628,7 +6685,7 @@ function paintLateral(){
   nodes.forEach((n,i)=>{ const r=nrad(n); const lab=n.type==="ip"?n.id:ptBase(n.id);
     sv+='<g class="lnode" data-ni="'+i+'" data-id="'+esc(n.id)+'"><circle cx="'+n.x.toFixed(1)+'" cy="'+n.y.toFixed(1)+'" r="'+r.toFixed(1)+
       '" fill="'+ncolor(n)+'"/><text x="'+n.x.toFixed(1)+'" y="'+(n.y-r-4).toFixed(1)+'" text-anchor="middle">'+esc(lab.slice(0,26))+'</text></g>'; });
-  sv+='</g>';
+  sv+='</g></g>';
   svg.innerHTML=sv;
   // legend
   const kinds=new Set(); edges.forEach(e=>kinds.add(latDominantKind(e.kinds)));
@@ -6638,10 +6695,14 @@ function paintLateral(){
   leg+='<div class="lk"><span class="sw" style="background:#e5736a"></span>detection on path</div>'+
     '<div class="lk" style="margin-top:5px"><span class="sw" style="background:#5aa0ff;height:10px;width:10px;border-radius:50%"></span>host &nbsp;<span class="sw" style="background:#e6b450;height:10px;width:10px;border-radius:50%"></span>IP</div></div>';
   wrap.insertAdjacentHTML("beforeend",leg);
-  latBind(svg, nodes, edges, idx);
+  latBind(svg, nodes, edges, W, H);
 }
-function latBind(svg, nodes, edges, idx){
-  const tip=$("latTip"); let drag=null, moved=false;
+let latCtl=null;
+function latBind(svg, nodes, edges, W, H){
+  const tip=$("latTip"); const gView=svg.querySelector("#latView");
+  let drag=null, moved=false, pan=null;
+  const vt={ tx:0, ty:0, s:1 };
+  const setT=()=>{ gView.setAttribute("transform","translate("+vt.tx.toFixed(2)+","+vt.ty.toFixed(2)+") scale("+vt.s.toFixed(4)+")"); };
   const nodeEls=[...svg.querySelectorAll(".lnode")], edgeEls=[...svg.querySelectorAll(".ledge")];
   const apply=n=>{ const g=nodeEls[nodes.indexOf(n)]; if(!g)return;
     g.querySelector("circle").setAttribute("cx",n.x.toFixed(1)); g.querySelector("circle").setAttribute("cy",n.y.toFixed(1));
@@ -6652,10 +6713,25 @@ function latBind(svg, nodes, edges, idx){
       if(e.to===n.id){ el.setAttribute("x2",n.x.toFixed(1)); el.setAttribute("y2",n.y.toFixed(1)); } }); };
   const svgPt=ev=>{ const b=svg.getBoundingClientRect(); const vb=svg.viewBox.baseVal;
     return { x:(ev.clientX-b.left)/b.width*vb.width, y:(ev.clientY-b.top)/b.height*vb.height }; };
-  svg.addEventListener("pointerdown",ev=>{ const g=ev.target.closest(".lnode"); if(!g)return;
-    drag=nodes[+g.getAttribute("data-ni")]; moved=false; svg.classList.add("grabbing"); svg.setPointerCapture(ev.pointerId); });
+  const graphPt=ev=>{ const p=svgPt(ev); return { x:(p.x-vt.tx)/vt.s, y:(p.y-vt.ty)/vt.s }; };
+  const zoomAt=(sp, factor)=>{ const ns=Math.max(0.2,Math.min(6, vt.s*factor)); const gx=(sp.x-vt.tx)/vt.s, gy=(sp.y-vt.ty)/vt.s;
+    vt.s=ns; vt.tx=sp.x-gx*ns; vt.ty=sp.y-gy*ns; setT(); };
+  const fit=()=>{ if(!nodes.length)return; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    for(const n of nodes){ x0=Math.min(x0,n.x); y0=Math.min(y0,n.y); x1=Math.max(x1,n.x); y1=Math.max(y1,n.y); }
+    const pad=60; const bw=(x1-x0)||1, bh=(y1-y0)||1;
+    vt.s=Math.max(0.2,Math.min(2.2, Math.min((W-pad*2)/bw,(H-pad*2)/bh)));
+    vt.tx=W/2-((x0+x1)/2)*vt.s; vt.ty=H/2-((y0+y1)/2)*vt.s; setT(); };
+  latCtl={ fit, zoom:f=>zoomAt({x:W/2,y:H/2}, f) };
+  svg.addEventListener("pointerdown",ev=>{
+    const g=ev.target.closest(".lnode");
+    if(g){ drag=nodes[+g.getAttribute("data-ni")]; moved=false; }
+    else { pan={ x:ev.clientX, y:ev.clientY, tx:vt.tx, ty:vt.ty }; moved=false; }
+    svg.classList.add("grabbing"); svg.setPointerCapture(ev.pointerId);
+  });
   svg.addEventListener("pointermove",ev=>{
-    if(drag){ const p=svgPt(ev); drag.x=p.x; drag.y=p.y; moved=true; apply(drag); return; }
+    if(drag){ const p=graphPt(ev); drag.x=p.x; drag.y=p.y; moved=true; apply(drag); tip.style.display="none"; return; }
+    if(pan){ const b=svg.getBoundingClientRect(); const vb=svg.viewBox.baseVal; const sc=vb.width/b.width;
+      vt.tx=pan.tx+(ev.clientX-pan.x)*sc; vt.ty=pan.ty+(ev.clientY-pan.y)*sc; moved=true; setT(); tip.style.display="none"; return; }
     const g=ev.target.closest(".lnode"), l=ev.target.closest(".ledge");
     if(g){ const n=nodes[+g.getAttribute("data-ni")];
       tip.innerHTML='<b>'+esc(n.id)+'</b> <span class="tk">'+(n.type==="ip"?"IP":"host")+'</span><br><span class="tk">'+n.out+' outbound · '+n.in+' inbound movement</span>';
@@ -6671,14 +6747,16 @@ function latBind(svg, nodes, edges, idx){
     tip.style.display="block"; let x=ev.clientX-wrap.left+14, y=ev.clientY-wrap.top+14;
     if(x+tip.offsetWidth>wrap.width) x=ev.clientX-wrap.left-tip.offsetWidth-14;
     tip.style.left=x+"px"; tip.style.top=y+"px"; };
-  const endDrag=ev=>{ if(drag){ svg.classList.remove("grabbing"); try{svg.releasePointerCapture(ev.pointerId);}catch{} }
+  const endDrag=ev=>{ svg.classList.remove("grabbing"); try{svg.releasePointerCapture(ev.pointerId);}catch{}
     const g=ev.target.closest && ev.target.closest(".lnode");
     if(drag && !moved && g){ const n=nodes[+g.getAttribute("data-ni")]; latPivot(n.id); }
-    drag=null; };
+    drag=null; pan=null; };
   svg.addEventListener("pointerup",endDrag);
   svg.addEventListener("pointerleave",()=>{ tip.style.display="none"; });
+  svg.addEventListener("wheel",ev=>{ ev.preventDefault(); zoomAt(svgPt(ev), ev.deltaY<0?1.15:1/1.15); }, { passive:false });
   svg.addEventListener("click",ev=>{ const l=ev.target.closest(".ledge"); if(l && !moved){ const e=edges[+l.getAttribute("data-ei")];
     if(e.samples&&e.samples.length){ const i=e.samples[0]; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); } } });
+  fit();
 }
 function latPivot(id){ clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
   showDetOnly=false; $("detBtn").classList.remove("on"); ruleFilter=""; techniqueFilter=""; renderDetChip&&renderDetChip();
@@ -6689,6 +6767,9 @@ $("latWrap").addEventListener("click",e=>{
   const a=b.getAttribute("data-lt");
   if(a==="detonly"){ latState.detonly=!latState.detonly; paintLateral(); }
   else if(a==="relayout"){ latState.seed=(latState.seed*7+3)%9973||1; paintLateral(); }
+  else if(a==="fit"){ latCtl&&latCtl.fit(); }
+  else if(a==="zin"){ latCtl&&latCtl.zoom(1.25); }
+  else if(a==="zout"){ latCtl&&latCtl.zoom(1/1.25); }
 });
 
 /* ---------- IOC watchlist ---------- */
@@ -6742,7 +6823,8 @@ function paintWatchlist(){
         '<td>'+hosts+'</td>'+
         '<td class="mono" style="font-size:10.5px;color:var(--txt-dim)">'+esc(when)+'</td>'+
         '<td><span class="wlpivot" data-wlpivot="'+esc(h.value)+'">grid ↗</span>'+
-          (h.samples&&h.samples.length?' · <span class="wlpivot" data-wlopen="'+h.samples[0]+'">event ↗</span>':'')+'</td>'+
+          (h.samples&&h.samples.length?' · <span class="wlpivot" data-wlopen="'+h.samples[0]+'">event ↗</span>':'')+
+          ((h.type==="ip"||h.type==="hash")?' · <span class="wlcheck" data-wlcheck="'+esc(h.value)+'" data-wltype="'+esc(h.type)+'" title="check reputation (AbuseIPDB / VirusTotal)">🔎 intel</span>':'')+'</td>'+
         '</tr>';
     }
     const summary='<b>'+wlHits.length+'</b> of '+wlIocs.length+' indicators matched · '+wlScanMsg;
@@ -6771,6 +6853,8 @@ $("wlWrap").addEventListener("click",async e=>{
   if(pv){ latPivot(pv.getAttribute("data-wlpivot")); return; }
   const op=e.target.closest("[data-wlopen]");
   if(op){ const i=+op.getAttribute("data-wlopen"); if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
+  const ck=e.target.closest("[data-wlcheck]");
+  if(ck){ enrichIoc(ck.getAttribute("data-wlcheck"), ck.getAttribute("data-wltype"), ck); return; }
   const b=e.target.closest("[data-wl]"); if(!b) return;
   const a=b.getAttribute("data-wl");
   if(a==="add"){ const ta=$("wlInput"); const t=ta.value.trim(); if(!t)return;
@@ -6786,6 +6870,81 @@ $("wlWrap").addEventListener("change",async e=>{
   if(text.trim()){ await wlPost({ text }); wlHits=null; paintWatchlist(); }
   e.target.value="";
 });
+
+/* ---------- threat-intel enrichment (AbuseIPDB / VirusTotal) ---------- */
+function enrScoreColor(pct){ pct=+pct||0; return pct>=75?"#ff3b3b":pct>=40?"#ff6b6b":pct>=10?"#e6b450":"#5ac77a"; }
+function renderEnrich(j){
+  let h="";
+  for(const r of (j.results||[])){
+    if(r.provider==="abuseipdb"){
+      const s=r.score==null?"?":r.score; const col=enrScoreColor(s);
+      h+='<div><span class="eprov">AbuseIPDB</span> · <span class="escore" style="background:'+col+'22;color:'+col+'">'+esc(String(s))+'% abuse</span> '+
+        '<span class="edim">'+(r.reports!=null?r.reports+' reports · ':'')+(r.country?esc(r.country)+' · ':'')+(r.isp?esc(r.isp):'')+(r.tor?' · <span class="ebad">Tor exit</span>':'')+'</span>'+
+        (r.link?' · <a href="'+esc(r.link)+'" target="_blank" rel="noopener">view ↗</a>':'')+'</div>';
+    } else if(r.provider==="virustotal"){
+      if(r.found===false){ h+='<div><span class="eprov">VirusTotal</span> · <span class="edim">no record for this indicator</span>'+(r.link?' · <a href="'+esc(r.link)+'" target="_blank" rel="noopener">view ↗</a>':'')+'</div>'; }
+      else { const st=r.stats||{}; const m=st.malicious||0, s=st.suspicious||0; const total=m+s+(st.harmless||0)+(st.undetected||0);
+        const cls=m>0?"ebad":(s>0?"":"eok");
+        h+='<div><span class="eprov">VirusTotal</span> · <span class="'+cls+'">'+m+'/'+total+' malicious</span>'+(s?' · '+s+' suspicious':'')+
+          ' <span class="edim">'+(r.name?esc(r.name)+' · ':'')+(r.fileType?esc(r.fileType)+' · ':'')+(r.asOwner?esc(r.asOwner):'')+(r.country?' · '+esc(r.country):'')+'</span>'+
+          (r.link?' · <a href="'+esc(r.link)+'" target="_blank" rel="noopener">view ↗</a>':'')+'</div>'; }
+    }
+  }
+  for(const er of (j.errors||[])) h+='<div class="ebad">'+esc(er)+'</div>';
+  if(j.cached) h+='<div class="edim" style="font-size:10px">cached (within 24h)</div>';
+  return h||'<span class="edim">no data returned</span>';
+}
+async function enrichIoc(value, type, el){
+  const tr=el.closest("tr"); if(!tr) return;
+  let out=tr.nextElementSibling;
+  if(!out || !out.classList.contains("enrich-row")){
+    out=document.createElement("tr"); out.className="enrich-row";
+    out.innerHTML='<td colspan="6" style="padding:2px 10px 10px"><div class="enrich"></div></td>';
+    tr.parentNode.insertBefore(out, tr.nextSibling);
+  }
+  const box=out.querySelector(".enrich"); box.innerHTML='<span class="edim">checking threat intel…</span>';
+  try{ const j=await (await api("/api/enrich",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ value, type }) })).json();
+    box.innerHTML = j.ok ? renderEnrich(j) : '<span class="ebad">'+esc(j.error||"lookup failed")+'</span>'+
+      (/Settings/.test(j.error||"")?' <span class="wlcheck" id="enrOpenSettings">open ⚙</span>':'');
+  }catch(err){ box.innerHTML='<span class="ebad">'+esc(err.message||err)+'</span>'; }
+}
+document.addEventListener("click",e=>{ if(e.target&&e.target.id==="enrOpenSettings") openSettings(); });
+
+/* ---------- settings modal (threat-intel API keys) ---------- */
+const settingsModal=$("settingsModal");
+async function openSettings(){
+  try{ const j=await (await api("/api/settings")).json();
+    $("abStatus").textContent=j.abuseipdbConfigured?"configured":"not set"; $("abStatus").classList.toggle("on",!!j.abuseipdbConfigured);
+    $("vtStatus").textContent=j.virustotalConfigured?"configured":"not set"; $("vtStatus").classList.toggle("on",!!j.virustotalConfigured);
+  }catch(_){}
+  $("abKey").value=""; $("vtKey").value=""; $("settingsMsg").textContent="";
+  settingsModal.style.display="flex";
+}
+$("settingsBtn").onclick=openSettings;
+$("settingsClose").onclick=()=>settingsModal.style.display="none";
+settingsModal.addEventListener("click",e=>{
+  if(e.target===settingsModal){ settingsModal.style.display="none"; return; }
+  const x=e.target.closest("[data-ext]"); if(x) window.open(x.getAttribute("data-ext"),"_blank","noopener");
+});
+$("settingsSave").onclick=async()=>{
+  const ab=$("abKey").value.trim(), vt=$("vtKey").value.trim();
+  if(!ab&&!vt){ $("settingsMsg").textContent="Enter a key to save."; return; }
+  const body={}; if(ab)body.abuseipdbApiKey=ab; if(vt)body.virustotalApiKey=vt;
+  $("settingsMsg").textContent="Saving…";
+  try{ const j=await (await api("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+    $("abStatus").textContent=j.abuseipdbConfigured?"configured":"not set"; $("abStatus").classList.toggle("on",!!j.abuseipdbConfigured);
+    $("vtStatus").textContent=j.virustotalConfigured?"configured":"not set"; $("vtStatus").classList.toggle("on",!!j.virustotalConfigured);
+    $("abKey").value=""; $("vtKey").value=""; $("settingsMsg").textContent="Saved ✓";
+  }catch(err){ $("settingsMsg").textContent="Save failed: "+(err.message||err); }
+};
+$("settingsClear").onclick=async()=>{
+  if(!confirm("Clear all saved API keys?"))return;
+  try{ await api("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({abuseipdbApiKey:"",virustotalApiKey:""})});
+    $("abStatus").textContent="not set"; $("abStatus").classList.remove("on"); $("vtStatus").textContent="not set"; $("vtStatus").classList.remove("on");
+    $("abKey").value=""; $("vtKey").value=""; $("settingsMsg").textContent="Cleared";
+  }catch(err){ $("settingsMsg").textContent="Failed: "+(err.message||err); }
+};
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&settingsModal.style.display==="flex") settingsModal.style.display="none"; });
 
 $("detWrap").addEventListener("click",e=>{
   const sup=e.target.closest("[data-suppress]");

@@ -147,6 +147,9 @@ mapped to events tagged by source with the original line preserved as the messag
 | GET    | `/api/watchlist`      | list IOC indicators                        |
 | POST   | `/api/watchlist`      | `{text}` bulk-add / `{add:[]}` / `{remove:[]}` / `{clear:true}` |
 | GET    | `/api/watchlist/scan` | scan the active case for watchlist matches |
+| GET    | `/api/settings`       | which intel providers are configured (booleans; never the keys) |
+| POST   | `/api/settings`       | `{abuseipdbApiKey?, virustotalApiKey?}` — save/clear keys (server-side) |
+| POST   | `/api/enrich`         | `{value,type}` → AbuseIPDB (IP) + VirusTotal (IP/hash) reputation, 24h cache |
 | GET    | `/api/suppressions`   | list suppressed rule IDs                  |
 | POST   | `/api/suppressions`   | `{ruleId,suppress}` toggle (or `{suppressed:[]}`) — re-filters detections |
 | GET    | `/api/cases`          | list cases (id, name, count, active)      |
@@ -164,6 +167,11 @@ flagged, timeRange, sort, limit, offset }` and runs against the per-case SQLite 
   stored events, and trigger outbound rule fetches. Bind it to localhost and reach it over
   an SSH tunnel, or put it behind a reverse proxy with auth / IP allow-listing.
 - It makes **outbound HTTPS** to `raw.githubusercontent.com` only when you load rules.
+- **Threat-intel enrichment** (⚙ Settings) is opt-in. When you click an IP/hash in the
+  Watchlist it sends that one indicator to **AbuseIPDB** and/or **VirusTotal**. Keys are stored
+  in the git-ignored `data/settings.json` (or `ABUSEIPDB_API_KEY` / `VIRUSTOTAL_API_KEY` env
+  vars), kept server-side, and never returned to the browser. Results cache for 24h in
+  `data/enrich-cache.json`.
 - Single-session design: one "current log" at a time (a new upload replaces the old).
 - `data/` holds your event data in clear JSON — protect that directory.
 
