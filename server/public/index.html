@@ -229,6 +229,22 @@
   .chip:hover{border-color:var(--amber)}
   .dash-note{color:var(--txt-faint);font-family:var(--mono);font-size:11px;margin-bottom:14px}
   .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .sigwrap{margin-bottom:16px}
+  .sig-hd{font-size:12px;font-weight:600;color:var(--txt);margin:2px 2px 8px}
+  .sig-hd span{font-weight:400;color:var(--txt-dim);font-size:11px}
+  .sigrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  .sigcard{text-align:left;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);
+           font:inherit;cursor:pointer;transition:border-color .15s,transform .12s;position:relative}
+  .sigcard[disabled]{cursor:default;opacity:.55}
+  .sigcard:not([disabled]):hover{transform:translateY(-1px)}
+  .sigcard .sig-n{font-family:var(--mono);font-size:26px;line-height:1.05;font-weight:700}
+  .sigcard .sig-l{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt-dim);margin-top:2px}
+  .sigcard .sig-s{font-size:10.5px;color:var(--txt-faint);margin-top:4px}
+  .sig-bad .sig-n{color:#ff5252}    .sig-bad{border-color:#ff525255}    .sig-bad:not([disabled]):hover{border-color:#ff5252}
+  .sig-info .sig-n{color:var(--accent)} .sig-info{border-color:color-mix(in srgb,var(--accent) 45%,transparent)} .sig-info:not([disabled]):hover{border-color:var(--accent)}
+  .sig-zero .sig-n{color:var(--txt-faint)}
+  .sig-bad::before,.sig-info::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px}
+  .sig-bad::before{background:#ff5252} .sig-info::before{background:var(--accent)}
   .card{background:linear-gradient(160deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:12px;padding:14px 16px;
         box-shadow:var(--shadow);transition:border-color .15s,transform .12s}
   .stat-card{position:relative;overflow:hidden}
@@ -5384,7 +5400,7 @@ function logonPanel(D){
 }
 function renderDashboard(){
   if(serverWindowed||SCROLL){
-    if(fullDash && fullDash.ok){ $("dashWrap").innerHTML=renderFullDash(fullDash); return; }
+    if(fullDash && fullDash.ok){ $("dashWrap").innerHTML=renderFullDash(fullDash); loadDashSignals(); return; }
     loadFullDashboard();   // fetch full-log aggregates; will re-render when ready
     if(!fullDash){ $("dashWrap").innerHTML='<div class="dash-note">Computing full-log overview on the server…</div>'; return; }
   }
@@ -5392,6 +5408,7 @@ function renderDashboard(){
   if(!D||!D.total){ $("dashWrap").innerHTML='<div class="empty-dash">Load events to see the dashboard.</div>'; return; }
   let h=reportBtns()+'<div class="dash-note">Overview of all '+D.total.toLocaleString()+
         ' loaded events · independent of grid filters · click any item to drill into the Events tab</div>';
+  h+=(SERVER?'<div id="dashSignals" class="sigwrap"><div class="dash-note" style="margin:0;padding:0">Scanning for threat signals…</div></div>':'');
   h+='<div class="cards">'+
      statCard(D.total.toLocaleString(),"events","")+
      statCard(D.providers.size,"providers","")+
@@ -5404,6 +5421,7 @@ function renderDashboard(){
      suspPanel(D)+barPanel("Top providers",D.providers,12,"prov")+
      barPanel("Top computers",D.computers,8,"search")+barPanel("Top usernames",D.users,8,"search")+'</div></div>';
   $("dashWrap").innerHTML=h;
+  loadDashSignals();
 }
 
 /* tab switching */
@@ -5437,6 +5455,10 @@ function clearGridFilters(){ eidFilter=""; $("eid").value=""; query=""; $("q").v
   showFlaggedOnly=false; $("flagBtn").classList.remove("on");
   ruleFilter=""; $("detChip").style.display="none"; }
 $("dashWrap").addEventListener("click",e=>{
+  const sig=e.target.closest("[data-sig]");
+  if(sig){ const [tab,arg]=sig.getAttribute("data-sig").split(":");
+    if(tab==="rar"&&arg){ rarView=arg; rarRareOnly=false; rarQ=""; }
+    setTab(tab); return; }
   const el=e.target.closest("[data-act]"); if(!el)return;
   const act=el.getAttribute("data-act"), val=el.getAttribute("data-val");
   if(act==="eid"){ clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
@@ -5575,7 +5597,7 @@ async function streamEventsInto(url, cap){
 async function loadSessionFromServer(meta, offset){
   window.__meta = meta || window.__meta;
   window.__caseId = (meta && meta.caseId) || window.__caseId || "local";
-  wlObserved=null; wlHits=null; enrichMap={}; rarData=null;   // per-case watchlist/rarity state is stale on a new load
+  wlObserved=null; wlHits=null; enrichMap={}; rarData=null; dashSignals=null;   // per-case watchlist/rarity state is stale on a new load
   await loadCaseworkState();                                  // per-case verdicts/notes align with event indices
   const cap=Math.min(window.__browseCap||200000, BROWSER_WINDOW_MAX);
   serverWindowCap=cap;
@@ -5643,6 +5665,7 @@ function fullTimeline(fd){
 function renderFullDash(fd){
   let h=reportBtns()+'<div class="dash-note">Full-log overview — all <b>'+(fd.total||0).toLocaleString()+'</b> events across the whole case '+
         '(Firewall/VPN have their own tabs). The Events grid streams the whole log in one continuous scroll.</div>';
+  h+='<div id="dashSignals" class="sigwrap"><div class="dash-note" style="margin:0;padding:0">Scanning for threat signals…</div></div>';
   h+='<div class="cards">'+
      statCard((fd.total||0).toLocaleString(),"events","")+
      statCard((fd.fail||0).toLocaleString(),"failed logons",fd.fail?"warn":"")+
@@ -5657,6 +5680,69 @@ function renderFullDash(fd){
      barPanel("Top computers", new Map(fd.computers||[]), 10, "search")+
      barPanel("Top usernames", new Map(fd.users||[]), 10, "search")+'</div></div>';
   return h;
+}
+/* ---------- Dashboard threat-signal cards ---------- */
+let dashSignals=null, dashSignalsCase=null;
+// classify a cached enrichment result into a severity level (mirrors verdictBadge)
+function enrichLevelFromResults(results){
+  let mal=0, susp=0, abuse=null;
+  for(const r of (results||[])){
+    if(r.provider==="virustotal" && r.found!==false){ mal=Math.max(mal,(r.stats||{}).malicious||0); susp=Math.max(susp,(r.stats||{}).suspicious||0); }
+    if(r.provider==="abuseipdb"){ abuse=r.score; }
+  }
+  if(mal>0 || (abuse!=null&&abuse>=50)) return 4;
+  if(susp>0 || (abuse!=null&&abuse>=25)) return 2;
+  return 0;
+}
+async function loadDashSignals(){
+  if(!SERVER) return;
+  const host=$("dashSignals"); if(!host) return;
+  const cid=window.__caseId;
+  if(dashSignals && dashSignalsCase===cid){ paintDashSignals(dashSignals); return; }
+  try{
+    const [rar,ev,cw,cache]=await Promise.all([
+      api("/api/rarity").then(r=>r.json()).catch(()=>null),
+      api("/api/evidence").then(r=>r.json()).catch(()=>null),
+      api("/api/casework").then(r=>r.json()).catch(()=>null),
+      api("/api/enrich/cache").then(r=>r.json()).catch(()=>null),
+    ]);
+    const entries=(cache&&cache.entries)||[];
+    let malIntel=0, suspIntel=0;
+    for(const e of entries){ const lvl=enrichLevelFromResults(e.results); if(lvl>=4)malIntel++; else if(lvl>=2)suspIntel++; }
+    const pc=(rar&&rar.parentChild&&rar.parentChild.rows)||[];
+    const suspAnc=pc.filter(r=>r.suspicious).length;
+    const E=(ev&&ev.evidence)||{};
+    const suspPipes=(E.namedPipes||[]).filter(p=>p.susp).length;
+    const credDump=(E.lsassAccess||[]).length;
+    const antiF=(E.logCleared||[]).length + (E.fileDeletes||[]).length;
+    const anns=(cw&&cw.casework&&cw.casework.annotations)||{};
+    let tp=0; for(const k in anns){ if(anns[k]&&anns[k].verdict==="tp")tp++; }
+    dashSignals={ malIntel, suspIntel, suspAnc, suspPipes, credDump, antiF, tp, intelChecked:entries.length };
+    dashSignalsCase=cid;
+    paintDashSignals(dashSignals);
+  }catch(_){ const h2=$("dashSignals"); if(h2)h2.innerHTML='<div class="dash-note" style="margin:0;padding:0">Threat-signal scan unavailable.</div>'; }
+}
+function paintDashSignals(s){
+  const host=$("dashSignals"); if(!host) return;
+  const intelSub = s.intelChecked ? (s.suspIntel?s.suspIntel+" suspicious · ":"")+s.intelChecked+" IOCs checked" : "none checked yet — see Watchlist";
+  const cards=[
+    { n:s.malIntel,  label:"malicious IOC"+(s.malIntel===1?"":"s"), nav:"wl",             sub:intelSub },
+    { n:s.suspAnc,   label:"suspicious ancestry",                   nav:"rar:parentChild", sub:"abnormal parent → child" },
+    { n:s.suspPipes, label:"suspicious pipe"+(s.suspPipes===1?"":"s"), nav:"ev",           sub:"PsExec / C2 named pipes" },
+    { n:s.credDump,  label:"cred-dump event"+(s.credDump===1?"":"s"), nav:"ev",            sub:"LSASS access" },
+    { n:s.antiF,     label:"anti-forensics",                        nav:"ev",              sub:"log clears + file deletes" },
+    { n:s.tp,        label:"analyst TP"+(s.tp===1?"":"s"),          nav:"cw",              sub:"confirmed true positives", tone:"info" },
+  ];
+  let h='<div class="sig-hd">🎯 Threat signals <span>— high-value findings across the case · click a lit card to pivot</span></div><div class="sigrow">';
+  for(const c of cards){
+    const active=c.n>0; const cls=active?(c.tone==="info"?"sig-info":"sig-bad"):"sig-zero";
+    h+='<button class="sigcard '+cls+'"'+(active?' data-sig="'+c.nav+'"':' disabled')+'>'+
+       '<div class="sig-n">'+c.n.toLocaleString()+'</div>'+
+       '<div class="sig-l">'+esc(c.label)+'</div>'+
+       '<div class="sig-s">'+esc(c.sub)+'</div></button>';
+  }
+  h+='</div>';
+  host.innerHTML=h;
 }
 /* ---------- case / multi-file management ---------- */
 let caseSources=[];
