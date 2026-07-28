@@ -400,7 +400,10 @@
   .tl-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
   .tl-search{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;color:var(--txt);
     font-size:12px;padding:3px 9px;margin-left:auto;min-width:160px}
-  .tl-feedhd{font-family:var(--mono);font-size:11px;color:var(--txt-dim);margin:4px 2px}
+  .tl-feedhd{font-family:var(--mono);font-size:11px;color:var(--txt-dim);margin:4px 2px;display:flex;align-items:center;gap:10px}
+  .tl-feedhd .tl-sort{min-width:150px;flex:0 0 auto;cursor:pointer;color:var(--accent);font-weight:600;user-select:none;padding:2px 6px;border:1px solid var(--line);border-radius:5px;background:var(--panel)}
+  .tl-feedhd .tl-sort:hover{border-color:var(--accent)}
+  .tl-feedhd .tl-count{color:var(--txt-dim)}
   .tl-feed{border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .tl-row{display:flex;align-items:center;gap:10px;padding:5px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px}
   .tl-row:last-child{border-bottom:none}
@@ -6150,7 +6153,8 @@ function paintFeed(){
   let feed=tlFeedFiltered().slice().sort((a,c)=> ((a.tms==null?Infinity:a.tms)-(c.tms==null?Infinity:c.tms)) || ((a.idx||0)-(c.idx||0)));
   if(!tlFilters.sortAsc) feed.reverse();   // toggle -> newest first
   const hd=$("tlFeedHd"), fc=$("tlFeed"); if(!fc)return;
-  if(hd)hd.textContent=feed.length.toLocaleString()+" events";
+  if(hd)hd.innerHTML='<span class="tl-sort" data-tlsort title="click to sort by time">Time '+(tlFilters.sortAsc?'▲':'▼')+'</span>'+
+    '<span class="tl-count">'+feed.length.toLocaleString()+' events'+(tlFilters.sortAsc?' · oldest first':' · newest first')+'</span>';
   const SHOW=2000; let h="";
   for(const e of feed.slice(0,SHOW)){ const km=TL_KIND[e.kind]||{label:e.kind,c:"#888"};
     h+='<div class="tl-row" data-idx="'+e.idx+'">'+
@@ -6183,7 +6187,6 @@ function paintTimeline(){
     h+='<button class="tl-chip'+(on?" on":"")+'" data-kind="'+k+'"><span class="tl-dot" style="background:'+TL_KIND[k].c+'"></span>'+esc(TL_KIND[k].label)+'</button>'; }
   h+='<span class="tl-flabel" style="margin-left:12px">Severity</span>';
   for(const [lbl,v] of [["all",-1],["med+",2],["high+",3],["crit",4]]) h+='<button class="tl-chip'+(tlFilters.sevMin===v?" on":"")+'" data-sev="'+v+'">'+lbl+'</button>';
-  h+='<button class="tl-chip'+(tlFilters.sortAsc?" on":"")+'" data-tlsort title="toggle order">'+(tlFilters.sortAsc?"⏱ chronological (oldest → newest)":"↓ newest first")+'</button>';
   h+='<input class="tl-search" id="tlq" placeholder="filter…" value="'+esc(tlFilters.q)+'"></div>';
   h+='<div class="tl-feedhd" id="tlFeedHd"></div><div class="tl-feed" id="tlFeed"></div>';
   w.innerHTML=h;
@@ -6202,7 +6205,7 @@ $("tlWrap").addEventListener("click",e=>{
     if(tlFilters.kinds.size===1&&tlFilters.kinds.has(k)) tlFilters.kinds=new Set(); else tlFilters.kinds=new Set([k]);
     paintTimeline(); return; }
   const sc=e.target.closest("[data-sev]"); if(sc){ tlFilters.sevMin=+sc.getAttribute("data-sev"); paintTimeline(); return; }
-  if(e.target.closest("[data-tlsort]")){ tlFilters.sortAsc=!tlFilters.sortAsc; paintTimeline(); return; }
+  if(e.target.closest("[data-tlsort]")){ tlFilters.sortAsc=!tlFilters.sortAsc; paintFeed(); return; }
   const row=e.target.closest(".tl-row[data-idx]"); if(row){ const i=+row.getAttribute("data-idx"); MODAL_IDX=i; if(rows[i])openDetail(rows[i]); else if(SERVER)openServerEvent(i); return; }
 });
 /* ===================== ONE-CLICK IR REPORT ===================== */
