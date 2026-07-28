@@ -7631,6 +7631,7 @@ let evidCache=null, evidCacheCase=null;
 function mapSetRevive(k,v){ if(v&&v.__t==="M")return new Map(v.v); if(v&&v.__t==="S")return new Set(v.v); return v; }
 async function renderEvidenceScroll(){
   const w=$("evWrap");
+  if(SERVER){ if(wlSettings===null){ try{ wlSettings=await (await api("/api/settings")).json(); }catch{ wlSettings={}; } } await prefillEnrichFromCache(); }
   if(evidCache && evidCacheCase===window.__caseId){ EVID=evidCache; renderEvidence(); return; }
   w.innerHTML='<div class="dash-note">Mining forensic artifacts across the full log on the server…</div>';
   try{ const r=await api("/api/evidence"); const txt=await r.text();
@@ -7753,19 +7754,26 @@ function renderEvidence(){
      E.auditChanges.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.by},{t:x.cat,cls:"ev-trunc",title:x.cat}],"","4719")));
   h+=evPanel("BITS transfers",E.bits.length,["Time","URL","Local file"],
      E.bits.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.url,cls:"ev-trunc",title:x.url},{t:x.file,cls:"ev-trunc",title:x.file}],x.url)));
-  // IOC rollup
+  // IOC rollup — with one-click threat-intel (VirusTotal / AbuseIPDB) when a key is configured
+  const canIp=!!(wlSettings&&(wlSettings.virustotalConfigured||wlSettings.abuseipdbConfigured));
+  const canHash=!!(wlSettings&&wlSettings.virustotalConfigured);
+  const repCell=(val,type)=>{ const key=String(val).toLowerCase();
+    return '<span data-verdict="'+esc(key)+'">'+verdictBadge(enrichMap[key])+'</span> <span class="wlcheck" data-evcheck="'+esc(val)+'" data-evtype="'+type+'">🔎</span>'; };
   const ips=[...E.ips.entries()].sort((a,b)=>b[1]-a[1]);
-  h+=evPanel("External IP indicators",ips.length,["IP","Events"],
-     ips.slice(0,CAP).map(([ip,c])=>evRow([{t:ip},{t:c,cls:"cnt"}],ip)));
-  if(E.hashes.size) h+=evPanel("File hashes (Sysmon)",E.hashes.size,["Hash"],
-     [...E.hashes].slice(0,CAP).map(x=>evRow([{t:x,cls:"ev-trunc",title:x}],x)));
+  h+=evPanel("External IP indicators",ips.length,canIp?["IP","Events","Reputation"]:["IP","Events"],
+     ips.slice(0,CAP).map(([ip,c])=>evRow(canIp?[{t:ip},{t:c,cls:"cnt"},{html:repCell(ip,"ip")}]:[{t:ip},{t:c,cls:"cnt"}],ip)));
+  if(E.hashes.size) h+=evPanel("File hashes (Sysmon)",E.hashes.size,canHash?["Hash","Reputation"]:["Hash"],
+     [...E.hashes].slice(0,CAP).map(x=>evRow(canHash?[{t:x,cls:"ev-trunc",title:x},{html:repCell(x,"hash")}]:[{t:x,cls:"ev-trunc",title:x}],x)));
   h+='</div>';
   // nothing-found note
   if(!E.accountsCreated.length&&!E.procs.length&&!E.services.length&&!E.extLogons.size&&!E.netConns.size&&!E.psBlocks.length)
     h+='<div class="dash-note">No high-value artifacts extracted. This log may be a single channel (e.g. only Security) — load Sysmon / PowerShell / System logs too for richer evidence.</div>';
   w.innerHTML=h;
 }
-$("evWrap").addEventListener("click",e=>{ const tr=e.target.closest("tr[data-q]"); if(!tr)return;
+$("evWrap").addEventListener("click",e=>{
+  const ec=e.target.closest("[data-evcheck]");
+  if(ec){ e.stopPropagation(); checkObserved(ec.getAttribute("data-evcheck"), ec.getAttribute("data-evtype")); return; }
+  const tr=e.target.closest("tr[data-q]"); if(!tr)return;
   clearGridFilters(); providerFilter=null; timeRange=null; $("timeChip").style.display="none";
   showDetOnly=false; $("detBtn").classList.remove("on"); setRuleFilter("","");
   const q=tr.getAttribute("data-q")||"", eid=tr.getAttribute("data-eid")||"";
