@@ -8035,6 +8035,28 @@ async function fetchSigmaFolder(prefix,label){
   const CAP=300; const truncated=paths.length>CAP; if(truncated)paths=paths.slice(0,CAP);
   const urls=paths.map(p=>"https://raw.githubusercontent.com/"+SIGMA_REPO+"/"+SIGMA_BRANCH+"/"+p);
   setRulesStatus('<span class="spin"></span> fetching '+urls.length+' rule files…');
+  if(SERVER){
+    // path-aligned fetch so we keep each rule's real filename, then SAVE to the server
+    // (additive — existing rules stay put; server /api/rules/upload never clears)
+    const results=new Array(urls.length); let n=0, done=0; const CC=Math.min(8,urls.length||1);
+    async function w(){ while(n<urls.length){ const k=n++;
+      try{ const r=await fetch(urls[k]); if(r.ok)results[k]=await r.text(); }catch(_){}
+      done++; if((done&7)===0||done===urls.length)setRulesStatus('<span class="spin"></span> fetching '+done+' / '+urls.length+' rules…'); } }
+    await Promise.all(Array.from({length:CC},w));
+    const picked=[]; for(let k=0;k<results.length;k++) if(results[k]!=null) picked.push([paths[k].split("/").pop(), results[k]]);
+    if(!picked.length){ setRulesStatus('<span class="err">Could not fetch any rules (network / GitHub rate-limit). Existing rules are unchanged.</span>'); return; }
+    try{
+      const B=400;
+      for(let k=0;k<picked.length;k+=B){ const fd=new FormData();
+        for(const [name,text] of picked.slice(k,k+B)) fd.append("file", new Blob([text],{type:"text/plain"}), name);
+        await api("/api/rules/upload",{method:"POST",body:fd});
+        setRulesStatus('<span class="spin"></span> saving '+Math.min(k+B,picked.length)+' / '+picked.length+' rules to server…'); }
+      await updateRulesCountsFromServer();
+      setRulesStatus("Added <b>"+picked.length+"</b> Sigma rule"+(picked.length===1?"":"s")+" from "+esc(label)+(truncated?" (first "+CAP+")":"")+" · existing rules kept.");
+      runDetections();
+    }catch(e){ setRulesStatus('<span class="err">Saving rules to server failed: '+esc(e.message)+'</span>'); }
+    return;
+  }
   const texts=await fetchAllRaw(urls,(d,t)=>setRulesStatus('<span class="spin"></span> fetching '+d+' / '+t+' rules…'));
   const added=addSigmaText(texts.join("\n---\n"),label+(truncated?" (first "+CAP+")":""));
   if(added)runDetections();
