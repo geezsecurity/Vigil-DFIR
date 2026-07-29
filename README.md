@@ -70,7 +70,7 @@ running server-side so multi-hundred-MB logs never choke your tab.
   📝 Case Notes tab. All persisted per-case and folded into the IR report.
 - **One-click IR report** — export a full triage summary — now including the **analyst
   assessment** (narrative, findings, and True-Positive / Suspicious verdicts) — as **HTML,
-  PDF, or DOCX**.
+  or real server-rendered PDF / DOCX** (proper paginated documents, downloaded directly).
 - **✦ AI Support** — bring your own model (**Claude**, **ChatGPT**, or **Gemini** — pick one in
   ⚙ Settings and paste its key). A context-aware **AI Support** button in every section explains
   what it's looking at; on the **Dashboard** it narrates *what happened* across the case, in
@@ -196,4 +196,4 @@ Key endpoints: `/api/upload`, `/api/search` (SQLite/FTS, paginated), `/api/bodie
 
 Actively developed. Detection engine, ATT&CK, correlation, entity profiles, super-timeline,
 evidence, and reporting are implemented and covered by the test harness. Firewall/VPN
-analytics are on the roadmap.
+sections display imported logs; dedicated Firewall/VPN analytics are on the roadmap.
