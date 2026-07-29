@@ -1,4 +1,4 @@
-# Log-Triage (Vigil)
+# Log-Triage (Vigil DFIR)
 
 **Fast, self-hosted Windows Event Log (.evtx) triage for DFIR.** Load a case, and in
 seconds get rule + heuristic + YARA detections, MITRE ATT&CK coverage, reconstructed
@@ -157,7 +157,7 @@ server/
   store.mjs         SQLite layer (node:sqlite): case catalog, chain of custody,
                     per-case event index + FTS5 search
   engine.cjs        Detection engine (heuristics + Sigma + YARA + ATT&CK + correlation)
-  public/index.html Single-file UI ("Vigil") - engine is inlined for offline use
+  public/index.html Single-file UI ("Vigil DFIR") - engine is inlined for offline use
   test/             engine regression harness  (npm test)
   Dockerfile        Alpine image (node:22, pure-JS, no native build)
   docker-compose.yml

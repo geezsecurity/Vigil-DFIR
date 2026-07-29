@@ -123,7 +123,7 @@ mapped to events tagged by source with the original line preserved as the messag
 7. **Light / dark theme** - toggle with the 🌙 / ☀ button in the top-right corner.
 
 > Tip: after deploying a new build, do one hard refresh (Ctrl/Cmd+Shift+R). Open the browser
-> console - it logs the build stamp (e.g. `Vigil build 2026-06-25 · flags+localStorage`) so
+> console - it logs the build stamp (e.g. `Vigil DFIR build 2026-06-25 · flags+localStorage`) so
 > you can confirm you're running the latest code rather than a cached page.
 
 ## API (for scripting)
