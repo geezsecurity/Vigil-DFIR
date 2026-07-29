@@ -1,4 +1,4 @@
-# EVTX Triage — Server Edition
+# EVTX Triage - Server Edition
 
 Run the analyzer as a small web service on a Linux box. **Parsing and rule scanning
 happen on the server**, the current log + rules + detections are **persisted on disk**,
@@ -8,13 +8,13 @@ Log** wipes it and starts fresh (your loaded rules are kept).
 ## What moved to the server
 - `.evtx` / JSONL parsing (no longer uses browser memory/CPU).
 - Sigma + YARA + heuristic detection scanning.
-- Rule storage — rules pulled from the internet **or** uploaded from your machine are
+- Rule storage - rules pulled from the internet **or** uploaded from your machine are
   saved under `data/rules/` and survive restarts.
-- Session persistence — the parsed log and its detections are stored under `data/`, so a
+- Session persistence - the parsed log and its detections are stored under `data/`, so a
   browser refresh re-loads them instead of starting empty.
 
 ## Requirements
-- Node.js **22.5+** — the case index uses Node's built-in `node:sqlite` (SQLite + FTS5),
+- Node.js **22.5+** - the case index uses Node's built-in `node:sqlite` (SQLite + FTS5),
   which is still pure-JS (no native build / toolchain). The server checks your version on
   startup and tells you if it's too old.
 
@@ -98,13 +98,13 @@ sudo systemctl enable --now evtx-triage
    PowerShell …) to the current case without losing what's loaded. A progress bar shows
    upload %, then server-side parsing. ★ flags are kept and detections re-run across
    everything. The **case bar** above the grid shows a chip per source log (empty logs
-   hidden) with its count — click one to filter the grid to that log.
+   hidden) with its count - click one to filter the grid to that log.
 
 ### Firewall & VPN sections
 There are dedicated **🔥 Firewall** and **🔒 VPN** tabs, each with its own
 **+ Add Firewall/VPN log** button. Logs added there (pfSense, FortiGate, Palo Alto,
 iptables, Cisco ASA, OpenVPN, AnyConnect, WireGuard, GlobalProtect, IPsec, syslog, etc.)
-are parsed, tagged by category, and shown **only in their own section** — they are kept out
+are parsed, tagged by category, and shown **only in their own section** - they are kept out
 of the main Events grid and the case bar so they don't drown out the Windows event flow.
 Each tab shows a live count, and rows are clickable for full detail. Raw text log lines are
 mapped to events tagged by source with the original line preserved as the message.
@@ -113,17 +113,17 @@ mapped to events tagged by source with the original line preserved as the messag
    lights up detections and evidence (brute force, external RDP, rogue account + priv-esc,
    Kerberoasting, malicious PowerShell, LSASS access, persistence, log clearing).
 4. Default well-known SigmaHQ rules are fetched **by the server** on first load. Add more
-   via **⚑ Rules** — paste, URL, or **Choose rules folder…** (uploads your local Hayabusa
+   via **⚑ Rules** - paste, URL, or **Choose rules folder…** (uploads your local Hayabusa
    `rules/` to the server, where they're saved).
 5. Detections, Evidence, and Dashboard populate from the server's scan across the case.
-6. **Refresh anytime** — your case, detections, and **flagged events (★)** all come back.
-   Flags are saved two ways — instantly in the browser (localStorage) **and** on the server —
+6. **Refresh anytime** - your case, detections, and **flagged events (★)** all come back.
+   Flags are saved two ways - instantly in the browser (localStorage) **and** on the server -
    and merged on reload, so they survive a refresh reliably. **Remove Current Log** clears the
    case (keeps saved rules).
-7. **Light / dark theme** — toggle with the 🌙 / ☀ button in the top-right corner.
+7. **Light / dark theme** - toggle with the 🌙 / ☀ button in the top-right corner.
 
 > Tip: after deploying a new build, do one hard refresh (Ctrl/Cmd+Shift+R). Open the browser
-> console — it logs the build stamp (e.g. `Vigil build 2026-06-25 · flags+localStorage`) so
+> console - it logs the build stamp (e.g. `Vigil build 2026-06-25 · flags+localStorage`) so
 > you can confirm you're running the latest code rather than a cached page.
 
 ## API (for scripting)
@@ -158,7 +158,7 @@ mapped to events tagged by source with the original line preserved as the messag
 | POST   | `/api/enrich`         | `{value,type}` → AbuseIPDB (IP) + VirusTotal (IP/hash) reputation, 24h cache |
 | POST   | `/api/ai`             | `{system, prompt}` → completion from the configured AI provider (Claude / ChatGPT / Gemini) |
 | GET    | `/api/suppressions`   | list suppressed rule IDs                  |
-| POST   | `/api/suppressions`   | `{ruleId,suppress}` toggle (or `{suppressed:[]}`) — re-filters detections |
+| POST   | `/api/suppressions`   | `{ruleId,suppress}` toggle (or `{suppressed:[]}`) - re-filters detections |
 | GET    | `/api/cases`          | list cases (id, name, count, active)      |
 | POST   | `/api/cases`          | `{name}` → create + activate a new case   |
 | POST   | `/api/cases/:id/activate` | switch the active case                |
@@ -180,7 +180,7 @@ flagged, timeRange, sort, limit, offset }` and runs against the per-case SQLite 
   vars), kept server-side, and never returned to the browser. Results cache for 24h in
   `data/enrich-cache.json`.
 - Single-session design: one "current log" at a time (a new upload replaces the old).
-- `data/` holds your event data in clear JSON — protect that directory.
+- `data/` holds your event data in clear JSON - protect that directory.
 
 ## Very large logs (millions of events)
 Parsing and detection run **server-side with constant memory**, so multi-GB `.evtx` files and
@@ -199,13 +199,13 @@ large server (very large windows will stress the browser).
   the full log. True on-demand row virtualization across 10M+ rows with server-side search is
   a possible future step.
 - YARA support is a lightweight subset (strings/regex/hex/counts), not full libyara.
-- Sigma **pipe-aggregations** are supported — `count() / count(field) / sum / min / max /
+- Sigma **pipe-aggregations** are supported - `count() / count(field) / sum / min / max /
   avg`, optional `by <field>`, with a sliding `timeframe` window (brute force, password
   spray, user guessing, Kerberoasting…). `near` and Sigma v2 reference-based correlation
   rules are not yet evaluated.
 - Sigma field mapping uses a synonym map, not the full Sigma pipeline config.
 
 ## Offline / static fallback
-The same UI still works as a standalone file (`evtx-analyzer.html`) with no server — open
+The same UI still works as a standalone file (`evtx-analyzer.html`) with no server - open
 it directly and parsing/detection run in the browser. When served by this backend, it
 automatically uses the server instead.

