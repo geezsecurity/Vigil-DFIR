@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import crypto from "node:crypto";
 import { Catalog, CaseIndex } from "./store.mjs";
+import { renderPdf, renderDocx } from "./report.mjs";
 
 const require = createRequire(import.meta.url);
 const Engine = require("./engine.cjs");
@@ -1472,6 +1473,28 @@ app.post("/api/casework/finding", (req,res)=>{
     if(!f.title) return res.status(400).json({error:"title required"});
     const i=cw.findings.findIndex(x=>x.id===f.id); if(i>=0){ f.at=cw.findings[i].at; cw.findings[i]=f; } else cw.findings.push(f); }
   saveCasework(cw); res.json({ ok:true, findings:cw.findings });
+});
+
+// ---- DFIR report export: the browser assembles the report object (from the same case
+// APIs it already reads) and POSTs it here; we render it to a PDF / DOCX byte stream. ----
+function reportFilename(data, ext){
+  const base=String((data&&data.meta&&(data.meta.caseName||data.meta.title))||"case")
+    .replace(/[^A-Za-z0-9._-]+/g,"_").replace(/^_+|_+$/g,"").slice(0,60) || "case";
+  return "DFIR_Report_"+base+"."+ext;
+}
+app.post("/api/report.pdf", async (req,res)=>{
+  try{ const data=req.body||{}; const buf=await renderPdf(data);
+    res.setHeader("Content-Type","application/pdf");
+    res.setHeader("Content-Disposition",'attachment; filename="'+reportFilename(data,"pdf")+'"');
+    res.send(buf);
+  }catch(err){ console.error("report.pdf",err); res.status(500).json({error:String(err.message||err)}); }
+});
+app.post("/api/report.docx", async (req,res)=>{
+  try{ const data=req.body||{}; const buf=await renderDocx(data);
+    res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition",'attachment; filename="'+reportFilename(data,"docx")+'"');
+    res.send(buf);
+  }catch(err){ console.error("report.docx",err); res.status(500).json({error:String(err.message||err)}); }
 });
 
 // "Remove Current Log" — wipe the active case's log + detections + flags + index, keep saved rules

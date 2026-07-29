@@ -6495,6 +6495,70 @@ function reportBtns(){ return '<div style="display:flex;gap:8px;justify-content:
   '<button class="btn" onclick="aiSupport(\'dash\')" title="AI Support — what happened in this case">✦ AI Support</button>'+
   '<button class="btn" onclick="generateIRReport(\'pdf\',this)">📄 PDF report</button>'+
   '<button class="btn" onclick="generateIRReport(\'docx\',this)">📝 Word (DOCX)</button></div>'; }
+/* Flatten the rich client report model into the plain-JSON payload the server renderer
+   (report.mjs) consumes, so PDF/DOCX come out as real downloadable files. */
+function buildServerReport(S, dash, ev, meta, opts){
+  opts=opts||{};
+  const d=reportData(S,dash,ev,meta), A=d.A||{}, c=d.cnt;
+  const hosts = dash&&dash.computers ? dash.computers.map(x=>x[0]).filter(Boolean).slice(0,20)
+    : (caseSources||[]).filter(s=>s.cat!=="firewall"&&s.cat!=="vpn").map(s=>s.name).slice(0,20);
+  const files = (meta&&meta.files&&meta.files.length)? meta.files.slice(0,20)
+    : (caseSources||[]).map(s=>s.name).slice(0,20);
+  const R = {
+    meta:{
+      title: opts.title || "Windows Event Log Triage Report",
+      classification: "CONFIDENTIAL",
+      caseName: (files[0]) || d.caseId,
+      caseId: d.caseId, generated: d.generated, span: d.span,
+      scope: d.totalEvents.toLocaleString()+" events · "+d.hosts+" host(s) · "+d.sources,
+      hosts, files, analyst: opts.analyst||"",
+    },
+    posture: d.posture,
+    bannerText: d.bySev.crit+" critical · "+d.bySev.high+" high · "+d.bySev.med+" medium detection(s) across "+d.totalEvents.toLocaleString()+" event(s).",
+    exec: d.exec,
+    cards:[
+      {n:d.totalEvents.toLocaleString(), l:"events analysed"},
+      {n:(d.sm.withDetections||0).toLocaleString(), l:"flagged events"},
+      {n:(d.sm.total||0).toLocaleString(), l:"total detections"},
+      {n:(d.bySev.crit+d.bySev.high).toLocaleString(), l:"critical + high"},
+      {n:String(A.techniqueCount||0), l:"ATT&CK techniques"},
+      {n:String(d.chains.length), l:"attack chains"},
+    ],
+    analyst:{
+      summary: (d.cw&&d.cw.summary)||"",
+      findings: ((d.cw&&d.cw.findings)||[]).map(f=>({severity:f.severity,title:f.title,note:f.note||""})),
+      verdictSummary: Object.keys(d.vcount).map(k=>(VERDICT_LABELS[k]||k)+": "+d.vcount[k]).join(" · "),
+      verdicts: d.cwAnns.filter(a=>a.verdict==="tp"||a.verdict==="suspicious").slice(0,40)
+        .map(a=>({verdict:VERDICT_LABELS[a.verdict]||a.verdict, idx:a.idx, tags:(a.tags||[]).join(", "), note:a.note||""})),
+    },
+    bySev: d.bySev,
+    engineLine: (d.sm.sigma!=null||d.sm.correlation!=null||d.sm.yara!=null)
+      ? ("Rule engines — Sigma: "+(d.sm.sigma||0)+" · Correlation: "+(d.sm.correlation||0)+" · YARA: "+(d.sm.yara||0)) : "",
+    attack:{
+      tacticsLine: (A.tactics||[]).map(t=>t.name+" ("+t.techniques+")").join(" · "),
+      techniques: (A.techniques||[]).slice(0,30).map(t=>({id:t.id,name:t.name,count:t.count})),
+    },
+    chains: d.chains.slice(0,10).map(ch=>({
+      name: ch.name,
+      meta: ch.host+(ch.users&&ch.users.length?" · user(s): "+ch.users.slice(0,3).join(", "):"")+" · "+ch.count.toLocaleString()+" detections · "+fmtTime(ch.startTms)+" → "+fmtTime(ch.endTms),
+      steps: ch.steps.slice(0,12).map(s=>s.title+(s.technique?" ["+s.technique+"]":"")).join("  →  "),
+    })),
+    entities: d.entities.slice(0,15).map(e=>({type:e.type,name:e.name,score:e.score.toLocaleString(),hits:e.hits.toLocaleString(),techniques:e.techniques.length})),
+    byRule: d.byRule.slice(0,30).map(g=>({level:g.level,title:g.title,source:g.source,count:g.count.toLocaleString()})),
+    evidence: d.ev ? [
+      ["Log clears", c(d.ev.logCleared)], ["Accounts created", c(d.ev.accountsCreated)], ["Priv-group adds", c(d.ev.groupAdds)],
+      ["Services installed", c(d.ev.services)], ["External/RDP logons", (d.ev.extLogons&&d.ev.extLogons.size)||0],
+      ["LSASS access", c(d.ev.lsassAccess)], ["Logon sessions", c(d.ev.sessions)], ["Defender events", c(d.ev.defender)],
+    ].map(([artifact,count])=>({artifact,count:String(count)})) : [],
+    iocs:{
+      ips: d.ips.slice(0,60).map(([ip,n])=>({v:ip,n})),
+      domains: d.domains.slice(0,60),
+      hashes: d.hashes.slice(0,50),
+    },
+    recommendations: d.rec,
+  };
+  return R;
+}
 async function generateIRReport(fmt, btn){
   const haveDet = (SERVER&&serverDet) || detections.size;
   if(!haveDet){ alert("Run detections first (⚑ Detections tab)."); return; }
@@ -6511,7 +6575,16 @@ async function generateIRReport(fmt, btn){
       attack:clientAttack||computeAttackFromDetections(), chains:clientChains||computeChainsFromDetections(),
       entities:clientEntities||computeEntitiesFromDetections(), byRule:[] };
     const base="IR-report-"+(window.__caseId||"case");
-    if(fmt==="docx"){ const bytes=buildReportDocx(S, dash, ev, window.__meta);
+    // Server-rendered real PDF / DOCX (pdfkit + docx) — direct download, no print dialog.
+    if((fmt==="pdf"||fmt==="docx") && SERVER){
+      const payload=buildServerReport(S, dash, ev, window.__meta, {});
+      const r=await fetch("/api/report."+fmt, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+      if(!r.ok){ let msg="server "+r.status; try{ msg=(await r.json()).error||msg; }catch(_){} throw new Error(msg); }
+      const blob=await r.blob(); const cd=r.headers.get("Content-Disposition")||"";
+      const m=/filename="([^"]+)"/.exec(cd); dlBlob(blob, (m&&m[1]) || (base+"."+fmt));
+    }
+    // Fallback (static/offline mode, no backend): client-side generation.
+    else if(fmt==="docx"){ const bytes=buildReportDocx(S, dash, ev, window.__meta);
       dlBlob(new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}), base+".docx"); }
     else if(fmt==="pdf"){ const html=buildReportHTML(S, dash, ev, window.__meta);
       const wnd=window.open("","_blank"); if(!wnd){ alert("Allow pop-ups to export as PDF (or use Word / HTML)."); return; }

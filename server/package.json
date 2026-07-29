@@ -4,12 +4,19 @@
   "type": "module",
   "description": "Server-side EVTX parsing + detection for EVTX Triage",
   "main": "server.mjs",
-  "engines": { "node": ">=22.5" },
-  "scripts": { "start": "node server.mjs", "test": "node test/engine.test.cjs && node test/store.test.mjs" },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test/engine.test.cjs && node test/store.test.mjs"
+  },
   "dependencies": {
+    "docx": "^9.7.1",
     "express": "^4.19.2",
     "js-yaml": "^4.1.0",
     "multer": "^2.2.0",
+    "pdfkit": "^0.19.1",
     "winevtx": "^0.1.2"
   }
 }
