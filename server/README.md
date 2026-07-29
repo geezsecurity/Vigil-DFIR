@@ -2,14 +2,15 @@
 
 Run the analyzer as a small web service on a Linux box. **Parsing and rule scanning
 happen on the server**, the current log + rules + detections are **persisted on disk**,
-and the browser just renders. Refreshing the page restores your session; **Remove Current
-Log** wipes it and starts fresh (your loaded rules are kept).
+and the browser just renders. Refreshing the page restores your session, and you can keep
+several **cases** side by side and switch between them (your loaded rules persist across cases).
 
 ## What moved to the server
 - `.evtx` / JSONL parsing (no longer uses browser memory/CPU).
 - Sigma + YARA + heuristic detection scanning.
 - Rule storage - rules pulled from the internet **or** uploaded from your machine are
-  saved under `data/rules/` and survive restarts..
+  saved under `data/rules/` (`sigma/` + `yara/`) and survive restarts. Loading more rules is
+  **additive** - it never removes the rules you already have.
 - Session persistence - the parsed log and its detections are stored under `data/`, so a
   browser refresh re-loads them instead of starting empty.
 
@@ -29,7 +30,7 @@ npm start
 # -> EVTX Triage server on http://localhost:8742  (data: ./server/data)
 ```
 Open `http://<server-ip>:8742/` in your browser. The page detects the backend
-automatically and switches to server mode (title shows "EVTX Triage (server)").
+automatically and switches to server mode (title shows "Vigil DFIR (server)").
 
 ### Run with Docker (one command)
 ```bash
@@ -108,18 +109,20 @@ are parsed, tagged by category, and shown **only in their own section** - they a
 of the main Events grid and the case bar so they don't drown out the Windows event flow.
 Each tab shows a live count, and rows are clickable for full detail. Raw text log lines are
 mapped to events tagged by source with the original line preserved as the message.
-3. **Load sample** → generates a small **synthetic** incident across three fake source logs
-   using `example.com` domains and TEST-NET IPs (no real data). Good for a quick demo; it
-   lights up detections and evidence (brute force, external RDP, rogue account + priv-esc,
-   Kerberoasting, malicious PowerShell, LSASS access, persistence, log clearing).
+3. **Load sample** → generates a small **synthetic** incident across five fake source logs
+   (Security, Sysmon, PowerShell, plus a **firewall** and a **VPN** log) using `example.com`
+   domains and TEST-NET IPs (no real data). If a case is already loaded it asks before
+   replacing it. Good for a quick demo; it lights up detections and evidence (brute force,
+   external RDP, rogue account + priv-esc, Kerberoasting, malicious PowerShell, LSASS access
+   incl. a PsExec pipe and file-delete, persistence, log clearing) and the Firewall/VPN tabs.
 4. Default well-known SigmaHQ rules are fetched **by the server** on first load. Add more
    via **⚑ Rules** - paste, URL, or **Choose rules folder…** (uploads your local Hayabusa
    `rules/` to the server, where they're saved).
 5. Detections, Evidence, and Dashboard populate from the server's scan across the case.
 6. **Refresh anytime** - your case, detections, and **flagged events (★)** all come back.
    Flags are saved two ways - instantly in the browser (localStorage) **and** on the server -
-   and merged on reload, so they survive a refresh reliably. **Remove Current Log** clears the
-   case (keeps saved rules).
+   and merged on reload, so they survive a refresh reliably. Use the case switcher in the
+   toolbar to start a new case or delete one; saved rules persist across cases.
 7. **Light / dark theme** - toggle with the 🌙 / ☀ button in the top-right corner.
 
 > Tip: after deploying a new build, do one hard refresh (Ctrl/Cmd+Shift+R). Open the browser
@@ -140,7 +143,15 @@ mapped to events tagged by source with the original line preserved as the messag
 | GET    | `/api/rules`          | rule file counts                          |
 | POST   | `/api/detect`         | scan stored log with stored rules         |
 | GET    | `/api/detections`     | stored detection results                  |
-| POST   | `/api/reset`          | remove current log + detections           |
+| GET    | `/api/dashboard`      | full-log overview aggregates (totals, top providers/EIDs/hosts/users, histogram) |
+| GET    | `/api/evidence`       | mined forensic artifacts (LSASS access, named pipes, log clears, file deletes, services, tasks …) |
+| GET    | `/api/timeline`       | merged notable-event feed + activity histogram |
+| POST   | `/api/cat`            | `{cat}` → Firewall / VPN events for their dedicated sections |
+| GET    | `/api/flags`          | flagged event indices (★)                 |
+| POST   | `/api/flags`          | `{indices:[]}` save the flagged set        |
+| POST   | `/api/report.pdf`     | render the IR report as a **PDF** (client posts the report model) |
+| POST   | `/api/report.docx`    | render the IR report as a **DOCX**        |
+| POST   | `/api/reset`          | wipe the current case's log + detections (endpoint only; no longer a UI button) |
 | GET    | `/api/proctree`       | Sysmon process-ancestry forest (EID 1/5)  |
 | GET    | `/api/sessions`       | reconstructed logon sessions (4624↔4634/4647, durations, RDP/ext flags) |
 | GET    | `/api/lateral`        | cross-host lateral-movement node-link graph (nodes + edges) |
@@ -179,7 +190,8 @@ flagged, timeRange, sort, limit, offset }` and runs against the per-case SQLite 
   in the git-ignored `data/settings.json` (or `ABUSEIPDB_API_KEY` / `VIRUSTOTAL_API_KEY` env
   vars), kept server-side, and never returned to the browser. Results cache for 24h in
   `data/enrich-cache.json`.
-- Single-session design: one "current log" at a time (a new upload replaces the old).
+- Multi-case workspace: keep several cases side by side and switch between them. A plain
+  upload starts a new case; **+ Add logs** appends to the current one.
 - `data/` holds your event data in clear JSON - protect that directory.
 
 ## Very large logs (millions of events)
@@ -206,6 +218,6 @@ large server (very large windows will stress the browser).
 - Sigma field mapping uses a synonym map, not the full Sigma pipeline config.
 
 ## Offline / static fallback
-The same UI still works as a standalone file (`evtx-analyzer.html`) with no server - open
-it directly and parsing/detection run in the browser. When served by this backend, it
-automatically uses the server instead.
+The same UI still works as a standalone file (`server/public/index.html`) with no server -
+open it directly in a browser and parsing/detection run client-side. When served by this
+backend, it automatically uses the server instead.
