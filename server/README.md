@@ -9,7 +9,7 @@ Log** wipes it and starts fresh (your loaded rules are kept).
 - `.evtx` / JSONL parsing (no longer uses browser memory/CPU).
 - Sigma + YARA + heuristic detection scanning.
 - Rule storage - rules pulled from the internet **or** uploaded from your machine are
-  saved under `data/rules/` and survive restarts.
+  saved under `data/rules/` and survive restarts..
 - Session persistence - the parsed log and its detections are stored under `data/`, so a
   browser refresh re-loads them instead of starting empty.
 
