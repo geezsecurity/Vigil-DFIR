@@ -910,7 +910,8 @@ app.get("/api/evidence", async (req,res)=>{
           if(LSASS_DUMP.test(cmd)) push(E.lsassAccess,{i,src:U("Image")||cmd.slice(0,90),ga:"process dump",user:U("User"),ts,via:"process"});
           addProcArtifacts(i,cmd,U("User"),ts); }
           const h=U("Hashes"); if(h)h.split(",").forEach(x=>{x=x.trim();if(x)E.hashes.add(x);}); } break;
-        case "4104": { const sb=U("ScriptBlockText"); if(sb&&sb.length>3)push(E.psBlocks,{i,text:sb,ts}); break; }
+        case "4104": { const sb=U("ScriptBlockText"); if(sb&&sb.length>3)push(E.psBlocks,{i,text:sb,ts});
+          if(sb&&LSASS_DUMP.test(sb)) push(E.lsassAccess,{i,src:"PowerShell: "+sb.slice(0,80),ga:"script-block dump",user:"",ts,via:"powershell"}); break; }
         case "7045": push(E.services,{i,name:U("ServiceName"),path:U("ImagePath"),start:U("StartType"),ts}); break;
         case "4697": push(E.services,{i,name:U("ServiceName"),path:U("ServiceFileName"),ts}); break;
         case "4698": case "4702": case "4699": case "4700": case "4701": {
