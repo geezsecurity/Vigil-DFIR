@@ -474,7 +474,8 @@ app.post("/api/upload", upload.array("file"), async (req,res)=>{
     const meta={ caseId:ACTIVE, count:total, tsMin, tsMax, sources, files:sources.map(s=>s.name), uploadedAt:new Date().toISOString() };
     fs.writeFileSync(META, JSON.stringify(meta));
     const existing=catalog.getCase(ACTIVE);
-    catalog.upsertCase({ id:ACTIVE, name:(existing&&existing.name)||(sources[0]&&sources[0].name)||("Case "+new Date().toISOString().slice(0,10)),
+    const wantName = !append ? String(req.query.name||"").trim() : "";   // analyst-supplied case name on a fresh upload
+    catalog.upsertCase({ id:ACTIVE, name:(existing&&existing.name)||wantName||(sources[0]&&sources[0].name)||("Case "+new Date().toISOString().slice(0,10)),
       createdAt:(existing&&existing.createdAt)||meta.uploadedAt, count:total, tsMin, tsMax });
     try{ fs.unlinkSync(DETS); }catch{}            // detections must be recomputed for the new case contents
     if(!append){ try{ fs.unlinkSync(FLAGS); }catch{} }  // keep flags when appending (indices stay valid)

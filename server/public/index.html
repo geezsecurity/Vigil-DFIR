@@ -5003,8 +5003,14 @@ function loadFiles(fl){ const files=[...fl]; if(!files.length)return;
   }).catch(err=>{ showProgress(false); alert("Could not read file: "+err.message); }); }
 async function uploadToServer(files){
   try{
+    // Name the case up front (a DFIR case should be named, not silently auto-labelled by filename).
+    const base = files.length===1 ? files[0].name.replace(/\.[^.]+$/,"") : ("Case "+new Date().toISOString().slice(0,16).replace("T"," "));
+    let caseName = prompt("Name this case:", base);
+    if(caseName===null) caseName = base;                 // Cancel -> keep the default, don't abort the upload
+    caseName = String(caseName).trim() || base;
+    // Send the name with the upload itself (one atomic request) so the new case is named on creation.
     const fd=new FormData(); for(const f of files) fd.append("file", f, f.name);
-    const j=await uploadWithProgress("/api/upload", fd, "uploading "+files.length+" file"+(files.length>1?"s":""));
+    const j=await uploadWithProgress("/api/upload?name="+encodeURIComponent(caseName), fd, "uploading "+files.length+" file"+(files.length>1?"s":""));
     setProgressPct(100, "loading events into grid…");
     await loadSessionFromServer(j.meta);     // fetch parsed-event window (indices align with server detect)
     await refreshCaseSwitcher();             // new/reused case is now populated -> update the dropdown
