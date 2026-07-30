@@ -25,6 +25,14 @@ running server-side so multi-hundred-MB logs never choke your tab.
 - Heuristics for log clearing, brute force / password spray, encoded PowerShell, new
   services, external RDP, account & privileged-group changes, Kerberoasting, **DCSync,
   LSASS dumping, PsExec, overpass-the-hash, and malicious scheduled tasks**.
+- **Bring your own rules** - the **⚑ Rules** panel lets you load detections four ways:
+  the server pulls a curated **SigmaHQ** set online on first run; quick-load more **SigmaHQ
+  categories/folders** straight from GitHub; **paste** Sigma or YARA text; fetch a single
+  rule **by URL**; or **upload your own rule folder** (e.g. a Hayabusa `rules/` tree or your
+  own `.yml` / `.yar` files). Everything is saved server-side under `data/rules/`
+  (`sigma/` + `yara/`), **survives restarts, and is shared across every case**.
+- **Additive by design** - loading more rules **never removes** the ones you already have;
+  the counter only grows. Rules are cleared only when you explicitly click *Clear rules*.
 
 **Investigation surface**
 - **MITRE ATT&CK** - coverage matrix (tactics × techniques), click a technique to filter
