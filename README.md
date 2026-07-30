@@ -9,6 +9,8 @@ running server-side so multi-hundred-MB logs never choke your tab.
 > Parsing and rule scanning happen on the server; the browser only renders. A 335k-event
 > case loads as one continuous scroll (fetch-on-scroll), and search/filter is instant.
 
+![Vigil DFIR dashboard](docs/screenshots/dashboard.png)
+
 ---
 
 ## Highlights
@@ -91,6 +93,22 @@ running server-side so multi-hundred-MB logs never choke your tab.
   its size, type and ingest time.
 - Dedicated Firewall and VPN sections; multi-file case management; flagging; session
   persistence across refreshes.
+
+---
+
+## Screenshots
+
+**Detections — severity, attack-chain correlation, MITRE ATT&CK coverage & risk-ranked entities**
+
+![Detections](docs/screenshots/detections.png)
+
+| Entity risk dossier | Super-timeline |
+|:---:|:---:|
+| ![Entity profile](docs/screenshots/entity-profile.png) | ![Super-timeline](docs/screenshots/timeline.png) |
+| **Forensic evidence** | **Rarity / long-tail stacking** |
+| ![Evidence](docs/screenshots/evidence.png) | ![Rarity](docs/screenshots/rarity.png) |
+| **Event grid + instant search** | **Firewall / VPN + analyst verdict** |
+| ![Events](docs/screenshots/events.png) | ![Firewall](docs/screenshots/firewall.png) |
 
 ---
 
