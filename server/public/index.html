@@ -177,8 +177,19 @@
 
   #progress{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
             background:rgba(8,11,16,.98);z-index:20;backdrop-filter:blur(3px)}
-  #progress .box{width:380px;text-align:center}
+  #progress .box{width:420px;text-align:center}
   #progress .lbl{font-family:var(--mono);font-size:12px;color:var(--txt-dim);margin-bottom:10px}
+  .steps{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+  .steps .st{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;
+    color:var(--txt-faint);padding:4px 9px;border:1px solid var(--line-2);border-radius:999px;
+    background:var(--panel-2);transition:color .2s,border-color .2s,background .2s}
+  .steps .st .dot{width:7px;height:7px;border-radius:50%;background:var(--txt-faint);flex:none}
+  .steps .st.done{color:var(--txt-dim);border-color:var(--line-2)}
+  .steps .st.done .dot{background:var(--accent)}
+  .steps .st.active{color:var(--accent);border-color:var(--accent);background:rgba(31,95,191,.12)}
+  .steps .st.active .dot{background:var(--accent);animation:stpulse 1s infinite ease-in-out}
+  .steps .sep{width:12px;height:1px;background:var(--line-2);flex:none}
+  @keyframes stpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
   .track{height:6px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:4px;overflow:hidden}
   .fill{height:100%;width:0;background:var(--grad-accent);transition:width .12s linear}
   #progress.indet .fill{width:100%!important;background:linear-gradient(90deg,transparent,var(--accent),transparent);
@@ -852,6 +863,7 @@
       </div></div>
 
       <div id="progress"><div class="box">
+        <div id="progSteps" class="steps" hidden></div>
         <div class="lbl" id="progLbl">parsing…</div>
         <div class="track"><div class="fill" id="progFill"></div></div>
       </div></div>
@@ -5041,7 +5053,16 @@ $("gridwrap").addEventListener("drop",e=>{ e.preventDefault();drop.classList.rem
   if(e.dataTransfer&&e.dataTransfer.files.length)loadFiles(e.dataTransfer.files); });
 
 /* ---------- progress ---------- */
-function showProgress(on){ const p=$("progress"); p.style.display=on?"flex":"none"; if(!on)p.classList.remove("indet"); if(on){ setProgress(0,0,1); $("empty").style.display="none"; } }
+function showProgress(on){ const p=$("progress"); p.style.display=on?"flex":"none"; if(!on){ p.classList.remove("indet"); clearPhase(); } if(on){ setProgress(0,0,1); $("empty").style.display="none"; } }
+// ---- pipeline stepper: shows which stage of ingest is running so the user isn't left guessing ----
+const PIPELINE=[["upload","Upload"],["parse","Parse & index"],["load","Load grid"],["detect","Detect"]];
+function setPhase(key){ const box=$("progSteps"); if(!box)return;
+  const at=PIPELINE.findIndex(s=>s[0]===key); if(at<0){ clearPhase(); return; }
+  box.hidden=false; let h="";
+  PIPELINE.forEach((s,i)=>{ const cls=i<at?"done":i===at?"active":""; if(i)h+='<span class="sep"></span>';
+    h+='<span class="st '+cls+'"><span class="dot"></span>'+s[1]+'</span>'; });
+  box.innerHTML=h; }
+function clearPhase(){ const box=$("progSteps"); if(box){ box.hidden=true; box.innerHTML=""; } }
 function setProgress(f,d,t){ $("progFill").style.width=(f*100).toFixed(1)+"%";
   $("progLbl").textContent="parsing  "+d.toLocaleString()+" / "+t.toLocaleString()+" lines"; }
 function setProgressPct(pct,label){ $("progFill").style.width=Math.max(0,Math.min(100,pct)).toFixed(1)+"%";
@@ -5051,11 +5072,12 @@ function fmtBytes(b){ if(b<1024)return b+" B"; if(b<1048576)return (b/1024).toFi
 // upload via XHR so we can show real upload progress (fetch can't report upload %)
 function uploadWithProgress(url, formData, label){
   return new Promise((resolve,reject)=>{
-    showProgress(true); setProgressPct(0, (label||"uploading")+"…");
+    showProgress(true); setPhase("upload"); setProgressPct(0, (label||"uploading")+"…");
     const xhr=new XMLHttpRequest(); xhr.open("POST", url, true);
     xhr.upload.onprogress=e=>{ if(e.lengthComputable){ const pct=e.loaded/e.total*100;
       setProgressPct(pct, (label||"uploading")+" - "+fmtBytes(e.loaded)+" / "+fmtBytes(e.total)+"  ("+pct.toFixed(0)+"%)"); } };
-    xhr.upload.onload=()=>{ $("progress").classList.add("indet"); setProgressPct(100, "parsing & indexing on server…"); };
+    xhr.upload.onload=()=>{ $("progress").classList.add("indet"); setPhase("parse");
+      setProgressPct(100, "parsing & indexing events on the server… (this can take a moment on large logs)"); };
     xhr.onload=()=>{ $("progress").classList.remove("indet");
       if(xhr.status>=200&&xhr.status<300){ try{ resolve(JSON.parse(xhr.responseText)); }catch(e){ reject(new Error("bad server response")); } }
       else { let m="HTTP "+xhr.status; try{ m=JSON.parse(xhr.responseText).error||m; }catch(_){ } reject(new Error(m)); } };
@@ -5587,7 +5609,8 @@ let serverWindowed=false;      // true when the grid shows only a window of a la
 async function runDetectionsServer(){
   detections=new Map();
   for(const r of rows){ r._dets=null; r._detmax=-1; }
-  $("progLbl").textContent="scanning on server…"; showProgress(true);
+  showProgress(true); $("progress").classList.add("indet"); setPhase("detect");
+  $("progLbl").textContent="running detections - Sigma + YARA + heuristics scanning the log…";
   setRulesStatus('<span class="spin"></span> server is scanning the log…');
   try{ const r=await api("/api/detect",{method:"POST"}); applyServerDetections(await r.json()); }
   catch(err){ showProgress(false); setRulesStatus('<span class="err">Server detect failed: '+esc(err.message)+'</span>'); }
@@ -5618,7 +5641,7 @@ let serverOffset=0, serverWindowCap=0;
 const BROWSER_WINDOW_MAX=300000;   // hard ceiling the browser can hold in the grid at once
 async function streamEventsInto(url, cap){
   rows=[]; skipped=0; tsMin=tsMax=null; flagged=new Set();
-  showProgress(true); $("progress").classList.remove("indet"); setProgressPct(2,"loading events…");
+  showProgress(true); $("progress").classList.remove("indet"); setPhase("load"); setProgressPct(2,"loading events into the grid…");
   const r=await api(url); let n=0;
   if(r.body && r.body.getReader){            // stream line-by-line so we never hold the whole response in memory
     const reader=r.body.getReader(); const dec=new TextDecoder(); let buf="";
@@ -5658,6 +5681,8 @@ async function loadSessionFromServer(meta, offset){
 }
 // Set up the grid for fetch-on-scroll: no dense rows[]; ids + levels come from /api/search.
 async function enterScrollMode(meta){
+  showProgress(true); $("progress").classList.add("indet"); setPhase("load");
+  $("progLbl").textContent="loading events into the grid… (fetch-on-scroll for this large case)";
   SCROLL=true; rows=[]; skipped=0;
   bodyCache=new Map(); bodyPending=new Set(); sLevels=[];
   tsMin=(meta&&meta.tsMin)||null; tsMax=(meta&&meta.tsMax)||null;
