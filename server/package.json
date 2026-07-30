@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Server-side EVTX parsing + detection for Vigil DFIR",
+  "license": "GPL-3.0-only",
   "main": "server.mjs",
   "engines": {
     "node": ">=22.5"

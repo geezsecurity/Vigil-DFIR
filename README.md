@@ -235,3 +235,13 @@ Key endpoints: `/api/upload`, `/api/search` (SQLite/FTS, paginated), `/api/bodie
 Actively developed. Detection engine, ATT&CK, correlation, entity profiles, super-timeline,
 evidence, and reporting are implemented and covered by the test harness. Firewall/VPN
 sections display imported logs; dedicated Firewall/VPN analytics are on the roadmap.
+
+---
+
+## License
+
+Vigil DFIR is free software, licensed under the **GNU General Public License v3.0**
+(GPL-3.0). You may use, study, share and modify it under the terms of that license; see
+the [`LICENSE`](LICENSE) file for the full text.
+
+Copyright (C) 2026 geezsecurity.
