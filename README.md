@@ -1,4 +1,4 @@
-# Log-Triage (Vigil DFIR)
+# Vigil DFIR
 
 **Fast, self-hosted Windows Event Log (.evtx) triage for DFIR.** Load a case, and in
 seconds get rule + heuristic + YARA detections, MITRE ATT&CK coverage, reconstructed
