@@ -1,4 +1,4 @@
-# EVTX Triage - Server Edition
+# Vigil DFIR - Server Edition
 
 Run the analyzer as a small web service on a Linux box. **Parsing and rule scanning
 happen on the server**, the current log + rules + detections are **persisted on disk**,
@@ -27,7 +27,7 @@ and retry.
 cd server
 npm install
 npm start
-# -> EVTX Triage server on http://localhost:8742  (data: ./server/data)
+# -> Vigil DFIR server on http://localhost:8742  (data: ./server/data)
 ```
 Open `http://<server-ip>:8742/` in your browser. The page detects the backend
 automatically and switches to server mode (title shows "Vigil DFIR (server)").
@@ -38,9 +38,9 @@ cd server
 docker compose up -d --build      # builds the image and starts it
 # -> http://localhost:8742
 docker compose logs -f            # follow logs
-docker compose down               # stop (cases persist in the evtx-data volume)
+docker compose down               # stop (cases persist in the vigil-data volume)
 ```
-Cases, rules and detections live in the **`evtx-data`** named volume, so they survive
+Cases, rules and detections live in the **`vigil-data`** named volume, so they survive
 restarts and rebuilds. To keep them in a host folder instead, edit `docker-compose.yml`
 and change the volume line to `- ./data:/data`. Configuration is via the same env vars
 below (set them under `environment:` in the compose file). The image is pure-JS (Alpine
@@ -56,40 +56,44 @@ npm test          # engine regression harness (fast, no dependencies)
 |---------------------|----------------|----------------------------------------------------|
 | `PORT`              | `8742`         | Port to listen on                                  |
 | `EVTX_DATA`         | `./data`       | Where logs/rules/detections live                   |
-| `EVTX_BROWSE_CAP`   | `1000000`       | Max events streamed to the grid (UI window)        |
-| `EVTX_DETECT_CAP`   | `2000000`      | Max events scanned per detection pass (RAM bound)  |
+| `EVTX_BROWSE_CAP`   | `1000000`      | Max events streamed to the grid (UI window)        |
+| `EVTX_DETECT_CAP`   | `500000`       | Max events scanned per detection pass (RAM bound)  |
+| `EVTX_RECORD_CACHE` | `500000`       | Parsed events cached in RAM before streaming falls back |
 
 Large logs (multi-GB `.evtx`) are parsed in **constant memory** by streaming 64 KB chunks
 straight to disk, so the server won't OOM. The browser then loads the first
 `EVTX_BROWSE_CAP` events for the interactive grid (a banner shows the window), while
 **detections are computed server-side across up to `EVTX_DETECT_CAP` events** and shown in
-the ⚑ Detections tab. Raise `EVTX_DETECT_CAP` if you have the RAM and want the whole log
-scanned in one pass.
+the ⚑ Detections tab. Detection holds those events in RAM, so raise `EVTX_DETECT_CAP` only
+if you also raise the V8 heap (`--max-old-space-size`) and have the memory — roughly 4 GB of
+heap per extra million events with the full Sigma set. The default (500 000) fits in the
+3 GB heap the Docker image ships with.
 
 ```bash
-PORT=9000 EVTX_DATA=/var/lib/evtx-triage EVTX_DETECT_CAP=5000000 npm start
+PORT=9000 EVTX_DATA=/var/lib/vigil-dfir \
+  EVTX_DETECT_CAP=1000000 NODE_OPTIONS=--max-old-space-size=6144 npm start
 ```
 
 ### Run as a service (systemd)
 ```ini
-# /etc/systemd/system/evtx-triage.service
+# /etc/systemd/system/vigil-dfir.service
 [Unit]
-Description=EVTX Triage
+Description=Vigil DFIR
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/evtx-triage/server
+WorkingDirectory=/opt/vigil-dfir/server
 ExecStart=/usr/bin/node server.mjs
 Environment=PORT=8742
-Environment=EVTX_DATA=/var/lib/evtx-triage
+Environment=EVTX_DATA=/var/lib/vigil-dfir
 Restart=on-failure
-User=evtx
+User=vigil
 
 [Install]
 WantedBy=multi-user.target
 ```
 ```bash
-sudo systemctl enable --now evtx-triage
+sudo systemctl enable --now vigil-dfir
 ```
 
 ## Usage

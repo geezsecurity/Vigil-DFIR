@@ -1,5 +1,5 @@
 /* ============================================================================
-   EVTX Triage — Detection Engine
+   Vigil DFIR — Detection Engine
    Self-contained. Works in browser (inlined) and Node (module.exports at end).
    Three layers:
      1. Heuristics  — behavioral, always-on, no rules required

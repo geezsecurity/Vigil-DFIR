@@ -1,4 +1,4 @@
-// EVTX Triage — server backend
+// Vigil DFIR — server backend
 // Moves .evtx parsing and rule scanning off the browser and onto this Linux host,
 // persists the current log + rules + detections on disk, and serves the UI.
 import express from "express";
@@ -26,7 +26,7 @@ function httpGetText(url, redirects = 5){
   return new Promise((resolve, reject)=>{
     let lib;
     try { lib = new URL(url).protocol === "http:" ? http : https; } catch(e){ return reject(e); }
-    lib.get(url, { headers: { "User-Agent": "evtx-triage" } }, (res)=>{
+    lib.get(url, { headers: { "User-Agent": "vigil-dfir" } }, (res)=>{
       const code = res.statusCode || 0;
       if (code >= 300 && code < 400 && res.headers.location && redirects > 0){
         res.resume();
@@ -208,7 +208,7 @@ function ruleCounts(){ return { sigmaFiles:listRuleFiles(SIGMA_DIR).length, yara
 function safeName(s){ return String(s||"rule").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120); }
 
 /* ---------- meta / events ---------- */
-const DETECT_CAP = parseInt(process.env.EVTX_DETECT_CAP || "2000000", 10); // max events scanned in one pass
+const DETECT_CAP = parseInt(process.env.EVTX_DETECT_CAP || "500000", 10); // max events scanned in one pass (RAM bound — detection holds these in memory)
 function readMeta(){ try{ return JSON.parse(fs.readFileSync(META,"utf8")); }catch{ return null; } }
 // engine records for detection — reuses the shared parsed-event cache when available
 async function eventRecords(cap){
@@ -228,7 +228,7 @@ async function eventRecords(cap){
    the whole file — the parse is the expensive part. Keyed by mtime+size; bounded so
    multi-GB logs fall back to streaming rather than exhausting RAM. Big servers can
    raise EVTX_RECORD_CACHE.                                                          */
-const RECORD_CACHE_MAX = parseInt(process.env.EVTX_RECORD_CACHE || "3000000", 10);
+const RECORD_CACHE_MAX = parseInt(process.env.EVTX_RECORD_CACHE || "500000", 10);
 // _evCache declared in the multi-case state block above  // { mtimeMs, size, evs:[{i, ev}] }
 async function getParsedEvents(){
   if(!fs.existsSync(EVENTS)) return null;
@@ -1520,11 +1520,11 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
   const [maj, min] = process.versions.node.split(".").map(n=>parseInt(n,10));
   if (maj < 22 || (maj === 22 && min < 5)) {   // node:sqlite (the case index) needs Node >=22.5
-    console.error(`\n  Node ${process.versions.node} is too old. EVTX Triage needs Node 22.5+ (uses the built-in node:sqlite).`);
+    console.error(`\n  Node ${process.versions.node} is too old. Vigil DFIR needs Node 22.5+ (uses the built-in node:sqlite).`);
     console.error("  Install a newer Node, e.g.:  nvm install 22   (or)   https://nodejs.org/\n");
     process.exit(1);
   }
-  app.listen(PORT, ()=> console.log(`EVTX Triage server on http://localhost:${PORT}  (data: ${DATA})`));
+  app.listen(PORT, ()=> console.log(`Vigil DFIR server on http://localhost:${PORT}  (data: ${DATA})`));
 }
 
 export { app, DATA };

@@ -1,4 +1,4 @@
-// EVTX Triage — SQLite store (Phase 1)
+// Vigil DFIR — SQLite store (Phase 1)
 // A pure-JS persistence layer built on Node's built-in `node:sqlite` (no native
 // dependency, so the Alpine/Docker image stays build-free). Two roles:
 //   1. Catalog  (data/catalog.db)  — the list of cases + SHA-256 chain of custody.

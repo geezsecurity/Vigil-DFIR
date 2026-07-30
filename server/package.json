@@ -1,8 +1,8 @@
 {
-  "name": "evtx-triage-server",
+  "name": "vigil-dfir-server",
   "version": "1.0.0",
   "type": "module",
-  "description": "Server-side EVTX parsing + detection for EVTX Triage",
+  "description": "Server-side EVTX parsing + detection for Vigil DFIR",
   "main": "server.mjs",
   "engines": {
     "node": ">=22.5"

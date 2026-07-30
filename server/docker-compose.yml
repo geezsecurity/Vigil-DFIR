@@ -1,24 +1,26 @@
-# EVTX Triage — one-command deployment:
+# Vigil DFIR — one-command deployment:
 #   docker compose up -d      → http://localhost:8742
-#   docker compose down       → stop (cases persist in the evtx-data volume)
+#   docker compose down       → stop (cases persist in the vigil-data volume)
 #
 # To keep cases on the host instead of a named volume, replace the volume line with:
 #   - ./data:/data
 services:
-  evtx-triage:
+  vigil-dfir:
     build: .
-    image: evtx-triage:latest
-    container_name: evtx-triage
+    image: vigil-dfir:latest
+    container_name: vigil-dfir
     ports:
       - "8742:8742"
     volumes:
-      - evtx-data:/data
+      - vigil-data:/data
     environment:
       # events sent to the browser grid before fetch-on-scroll kicks in (raise for huge cases)
       EVTX_BROWSE_CAP: "1000000"
-      # cap events scanned by server-side detection (0/unset = all)
-      # EVTX_DETECT_CAP: "0"
+      # max events scanned by server-side detection — the RAM bound. Default 500000 keeps
+      # the container under its heap ceiling; raise only if you also raise NODE_OPTIONS
+      # (--max-old-space-size in the Dockerfile) and have the memory to back it.
+      # EVTX_DETECT_CAP: "500000"
     restart: unless-stopped
 
 volumes:
-  evtx-data:
+  vigil-data:

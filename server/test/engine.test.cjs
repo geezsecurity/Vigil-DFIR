@@ -1,5 +1,5 @@
 /* ============================================================================
-   EVTX Triage — engine.cjs regression harness
+   Vigil DFIR — engine.cjs regression harness
    Dependency-free. Run:  node test/engine.test.cjs
    Locks in current heuristics / Sigma / YARA / index behavior so later work
    (MITRE tags, risk scoring, correlation, dedup) can't silently regress it.

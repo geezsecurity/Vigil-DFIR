@@ -1,4 +1,4 @@
-# EVTX Triage — server image
+# Vigil DFIR — server image
 # Pure-JS deps (winevtx has no native build) + Node's built-in node:sqlite (needs
 # Node >=22.5), so a slim Alpine base is still enough — no native toolchain required.
 FROM node:22-alpine
@@ -13,9 +13,12 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY . .
 
 # Cases + rules + detections persist under /data (mount a volume here)
+# --max-old-space-size caps the V8 heap so a huge log can't exhaust RAM and hard-crash
+# the container; past the detection/cache caps the server streams from disk instead.
 ENV NODE_ENV=production \
     PORT=8742 \
-    EVTX_DATA=/data
+    EVTX_DATA=/data \
+    NODE_OPTIONS=--max-old-space-size=3072
 
 EXPOSE 8742
 VOLUME ["/data"]

@@ -101,7 +101,7 @@ running server-side so multi-hundred-MB logs never choke your tab.
 cd server
 npm install
 npm start
-# → EVTX Triage server on http://localhost:8742
+# → Vigil DFIR server on http://localhost:8742
 ```
 > Requires **Node.js 22.5+** (the case index uses the built-in `node:sqlite`). The server
 > checks your version on startup and tells you if it's too old.
@@ -110,7 +110,7 @@ npm start
 ```bash
 cd server
 docker compose up -d --build
-# → http://localhost:8742      (cases persist in the evtx-data volume)
+# → http://localhost:8742      (cases persist in the vigil-data volume)
 docker compose down
 ```
 
@@ -129,7 +129,15 @@ UI switches to server mode automatically.
 | `PORT`             | `8742`      | Port to listen on                                  |
 | `EVTX_DATA`        | `./data`    | Where logs / rules / detections are stored         |
 | `EVTX_BROWSE_CAP`  | `1000000`   | Events streamed to the grid before fetch-on-scroll |
-| `EVTX_DETECT_CAP`  | `2000000`   | Max events scanned per detection pass (RAM bound)  |
+| `EVTX_DETECT_CAP`  | `500000`    | Max events scanned per detection pass (RAM bound)  |
+| `EVTX_RECORD_CACHE`| `500000`    | Parsed events held in RAM before streaming fallback|
+
+Detection loads up to `EVTX_DETECT_CAP` events into memory at once, so it's the main
+RAM bound. The defaults keep the server under the Docker heap ceiling
+(`NODE_OPTIONS=--max-old-space-size` in the `Dockerfile`, 3 GB by default); past those
+caps the browse grid, search and analytics still work by streaming from disk, and
+detection scans the first `EVTX_DETECT_CAP` events (the report flags the result as
+truncated). Raise the caps only if you also raise the heap ceiling and have the RAM.
 
 In Docker, set these under `environment:` in `docker-compose.yml`.
 
