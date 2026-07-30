@@ -97,8 +97,9 @@ sudo systemctl enable --now vigil-dfir
 ```
 
 ## Usage
-1. **Open file** → pick one or more `.evtx` / JSONL files (multi-select works). They upload;
-   the server parses and stores them as a **case**.
+1. **Open file** → pick one or more `.evtx` / JSONL files (multi-select works). You're asked
+   to **name the case** (pre-filled from the filename - just press Enter to accept); the files
+   then upload and the server parses and stores them under that named **case**.
 2. **+ Add logs** → append more Windows event logs (Security + System + Sysmon +
    PowerShell …) to the current case without losing what's loaded. A progress bar shows
    upload %, then server-side parsing. ★ flags are kept and detections re-run across
