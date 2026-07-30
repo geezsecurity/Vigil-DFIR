@@ -146,6 +146,10 @@ UI switches to server mode automatically.
 > **Offline mode:** opening `server/public/index.html` directly as a file also works -
 > parsing and detection then run entirely in the browser (best for small logs).
 
+> **Full operator & API guide:** [`server/README.md`](server/README.md) has the deep-dive -
+> step-by-step usage, systemd deployment, memory tuning for millions of events, engine
+> limits, and the complete **~40-endpoint HTTP API** reference for scripting.
+
 ---
 
 ## Configuration
