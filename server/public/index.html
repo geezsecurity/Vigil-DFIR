@@ -204,7 +204,10 @@
   #modal .sheet.max{width:96vw}
   #modal .mhead{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line)}
   #modal .mhead .t{font-family:var(--mono);font-size:12px;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #modal pre{margin:0;flex:1;overflow:auto;padding:16px;font-family:var(--mono);font-size:12.5px;line-height:1.6;
+  /* single scroll region for everything under the header (detections + verdict + script + JSON)
+     so long detection lists don't push the JSON off the bottom of the sheet unreachably */
+  #modal .msheet-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column}
+  #modal pre{margin:0;flex:0 0 auto;overflow-x:auto;padding:16px;font-family:var(--mono);font-size:12.5px;line-height:1.6;
              white-space:pre;tab-size:2}
   /* readable multi-line field panels (PowerShell ScriptBlockText, command lines) */
   #modalScript{flex:0 0 auto;padding:0 16px;max-height:46vh;overflow:auto}
@@ -899,10 +902,12 @@
         <span class="hint" style="cursor:pointer" id="aiClose">dismiss ✕</span></div>
       <div class="aibody" id="aiBody"></div>
     </div>
-    <div id="modalDet"></div>
-    <div id="modalAnnot"></div>
-    <div id="modalScript"></div>
-    <pre id="modalBody"></pre>
+    <div class="msheet-scroll">
+      <div id="modalDet"></div>
+      <div id="modalAnnot"></div>
+      <div id="modalScript"></div>
+      <pre id="modalBody"></pre>
+    </div>
   </div>
 </div>
 
