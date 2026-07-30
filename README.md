@@ -106,7 +106,7 @@ running server-side so multi-hundred-MB logs never choke your tab.
 
 ## Screenshots
 
-**Detections — severity, attack-chain correlation, MITRE ATT&CK coverage & risk-ranked entities**
+**Detections - severity, attack-chain correlation, MITRE ATT&CK coverage & risk-ranked entities**
 
 ![Detections](docs/screenshots/detections.png)
 

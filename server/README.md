@@ -65,7 +65,7 @@ straight to disk, so the server won't OOM. The browser then loads the first
 `EVTX_BROWSE_CAP` events for the interactive grid (a banner shows the window), while
 **detections are computed server-side across up to `EVTX_DETECT_CAP` events** and shown in
 the ⚑ Detections tab. Detection holds those events in RAM, so raise `EVTX_DETECT_CAP` only
-if you also raise the V8 heap (`--max-old-space-size`) and have the memory — roughly 4 GB of
+if you also raise the V8 heap (`--max-old-space-size`) and have the memory - roughly 4 GB of
 heap per extra million events with the full Sigma set. The default (500 000) fits in the
 3 GB heap the Docker image ships with.
 
