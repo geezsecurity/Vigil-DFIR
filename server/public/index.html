@@ -5743,7 +5743,8 @@ function fullTimeline(fd){
 }
 function renderFullDash(fd){
   let h=reportBtns()+'<div class="dash-note">Full-log overview - all <b>'+(fd.total||0).toLocaleString()+'</b> events across the whole case '+
-        '(Firewall/VPN have their own tabs). The Events grid streams the whole log in one continuous scroll.</div>';
+        '(Firewall/VPN have their own tabs). The Events grid streams the whole log in one continuous scroll.'+
+        (fd.truncated?' · <span class="warn-text">scan capped - stats reflect only part of this huge log, raise EVTX_SCAN_CAP for full coverage</span>':'')+'</div>';
   h+='<div id="dashSignals" class="sigwrap"><div class="dash-note" style="margin:0;padding:0">Scanning for threat signals…</div></div>';
   h+='<div class="cards">'+
      statCard((fd.total||0).toLocaleString(),"events","")+
@@ -5891,7 +5892,7 @@ async function renderCatSectionScroll(cat){
     w.innerHTML=head+'<div class="dash-note">Loading '+info.label+' events from the server…</div>';
     $("add"+cat+"Btn").onclick=()=>$(info.addId).click();
     try{ const r=await api("/api/cat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cat})});
-      const j=await r.json(); c=catCache[cat]={caseId:window.__caseId,total:j.total||0,rows:j.rows||[]};
+      const j=await r.json(); c=catCache[cat]={caseId:window.__caseId,total:j.total||0,rows:j.rows||[],truncated:!!j.truncated};
     }catch(err){ w.innerHTML=head+'<div class="dash-note">Could not load '+info.label+' events: '+esc(err.message||err)+'</div>'; return; }
     if(document.body.getAttribute("data-mode")!==cat) return;   // user navigated away while loading
   }
@@ -5906,6 +5907,7 @@ async function renderCatSectionScroll(cat){
       '<td class="mono" style="white-space:normal">'+esc(String(x.msg||"").slice(0,400))+'</td></tr>'; }
     h+='</tbody></table></div>';
     if(total>idxs.length) h+='<div class="dash-note">Showing first '+idxs.length.toLocaleString()+' of '+total.toLocaleString()+'.</div>';
+    if(c.truncated) h+='<div class="dash-note"><span class="warn-text">huge log - not the whole case was scanned for '+info.label+' events</span></div>';
   }
   w.innerHTML=h;
   const sub=$("catSub_"+cat); if(sub)sub.textContent=total.toLocaleString()+' event'+(total===1?'':'s');
@@ -6220,6 +6222,7 @@ function renderProfileInto(ov,p){
     statCard(p.logonFail.toLocaleString(),"failed logons",p.logonFail?"warn":"")+
     statCard(p.techniques.length,"ATT&CK techniques","")+'</div>';
   h+='<div class="dash-note">First seen <b>'+esc(entTime(p.tMin))+'</b> · last seen <b>'+esc(entTime(p.tMax))+'</b>'+
+     (p.truncated?' · <span class="warn-text">huge log, profile covers only part of it</span>':'')+
      '<button class="chain-focus" data-entpivot="'+esc(p.name)+'" style="float:right">view all '+p.count.toLocaleString()+' events ›</button></div>';
   if(p.detCount){
     const segs=[["critical",p.bySev.critical],["high",p.bySev.high],["medium",p.bySev.medium],["low",p.bySev.low],["info",p.bySev.info]];
@@ -6326,7 +6329,8 @@ function paintTimeline(){
     const col=b.d>0?numColor(b.lvl<0?0:b.lvl):"var(--line-2)";
     bars+='<div class="tlb'+(sel?" sel":"")+'" data-b="'+k+'" title="'+esc(fmtTime(b.t))+' - '+b.n.toLocaleString()+' events'+(b.d?' · '+b.d.toLocaleString()+' notable':'')+'" style="height:'+hh.toFixed(1)+'%;background:'+col+'"></div>'; }
   const win=tlWindow();
-  let h='<div class="dash-note">Merged notable timeline - <b>'+j.notableTotal.toLocaleString()+'</b> notable events ('+j.detTotal.toLocaleString()+' detections'+(j.truncated?'; feed shows the highest-signal 12,000':'')+') across the whole case. Click the histogram to zoom a window.</div>';
+  let h='<div class="dash-note">Merged notable timeline - <b>'+j.notableTotal.toLocaleString()+'</b> notable events ('+j.detTotal.toLocaleString()+' detections'+(j.truncated?'; feed shows the highest-signal 12,000':'')+') across the whole case. Click the histogram to zoom a window.'+
+    (j.scanTruncated?' <span class="warn-text">scan capped - huge log, histogram/totals cover only part of it</span>':'')+'</div>';
   h+='<div class="tl-hist">'+bars+'</div>';
   h+='<div class="tl-ax"><span>'+esc(fmtTime(t0))+'</span>'+
      (win?'<span class="tl-win">'+esc(fmtTime(win.from))+' → '+esc(fmtTime(win.to))+' <button class="tl-clear" data-tlclear>✕</button> <button class="chain-focus" data-tlgrid>view in grid ›</button></span>':'')+
@@ -6881,14 +6885,14 @@ $("procWrap").addEventListener("click",e=>{
 });
 
 /* ---------- logon-session reconstruction ---------- */
-let sessData=null; let sessSort={ key:"onTms", dir:-1 }; let sessState={ q:"", rdp:false, ext:false };
+let sessData=null; let sessTruncated=false; let sessSort={ key:"onTms", dir:-1 }; let sessState={ q:"", rdp:false, ext:false };
 async function renderSessions(){
   const w=$("sessWrap");
   if(!SERVER){ w.innerHTML=ptNote("Logon-session reconstruction runs server-side - run the backend to use this view."); return; }
   w.innerHTML=ptNote("Reconstructing logon sessions…");
   try{
     const j=await (await api("/api/sessions")).json();
-    sessData=j.sessions||[];
+    sessData=j.sessions||[]; sessTruncated=!!j.truncated;
     paintSessions();
   }catch(err){ w.innerHTML='<div class="dash-note err">Could not build sessions: '+esc(err&&err.message||err)+'</div>'; }
 }
@@ -6911,7 +6915,8 @@ function paintSessions(){
     '<button class="vbtn'+(sessState.rdp?' on':'')+'" data-ss="rdp">🖥 RDP only ('+rdpN+')</button>'+
     '<button class="vbtn'+(sessState.ext?' on':'')+'" data-ss="ext">🌐 External source ('+extN+')</button>'+
     '<input class="vsearch" id="ssSearch" placeholder="filter user / host / source IP…" value="'+esc(sessState.q)+'">'+
-    '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0"><b>'+list.length.toLocaleString()+'</b> of '+sessData.length.toLocaleString()+' sessions</span></div>';
+    '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0"><b>'+list.length.toLocaleString()+'</b> of '+sessData.length.toLocaleString()+' sessions'+
+    (sessTruncated?' · <span class="warn-text">capped - huge log, not all sessions scanned</span>':'')+'</span></div>';
   const arrow=key=> key===sessSort.key ? (sessSort.dir<0?" ▾":" ▴") : "";
   const th=(key,label)=>'<th data-sk="'+key+'">'+label+arrow(key)+'</th>';
   let h=bar+'<table class="sesstbl"><thead><tr>'+
@@ -6989,6 +6994,7 @@ function paintLateral(){
     '<button class="vbtn" data-lt="relayout">↻ Re-layout</button>'+
     '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0"><b>'+nodes.length+
       '</b> hosts/IPs · <b>'+edges.length+'</b> paths'+(capped?' · <span class="warn-text">capped</span>':'')+
+      (latData.truncated?' · <span class="warn-text">huge log, not fully scanned</span>':'')+
       ' · scroll to zoom · drag bg to pan · drag node to arrange · click to pivot</span></div>';
   w.innerHTML=bar+'<div id="latSvgWrap"><svg id="latSvg"></svg><div class="lattip" id="latTip"></div></div>';
   const wrap=$("latSvgWrap"); const W=wrap.clientWidth||900, H=wrap.clientHeight||600;
@@ -7188,7 +7194,8 @@ function paintObserved(){
   if(checkable){ bar+= canCheck
     ? '<button class="vbtn" data-obcheckall title="check the shown indicators against threat intel (throttled for free tiers)">🔎 Check all shown</button>'
     : '<button class="vbtn" data-obneedkey title="configure an API key first">🔑 Add API key</button>'; }
-  bar+='<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0"><b>'+list.length+'</b> '+wlObsType+(list.length===1?"":"s")+' · from '+(o.eventCount||0).toLocaleString()+' events</span></div>';
+  bar+='<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0"><b>'+list.length+'</b> '+wlObsType+(list.length===1?"":"s")+' · from '+(o.eventCount||0).toLocaleString()+' events'+
+    (o.truncated?' · <span class="warn-text">huge log, not fully scanned</span>':'')+'</span></div>';
   let rows2="";
   for(const h of list){
     const hosts=h.hosts.map(x=>'<span class="shost">'+esc(x)+'</span>').join(" ");
@@ -7297,7 +7304,8 @@ async function wlPost(body){ const r=await api("/api/watchlist",{ method:"POST",
 async function wlScan(){
   const w=$("wlWrap"); const btns=w.querySelectorAll('[data-wl="scan"]'); btns.forEach(b=>{ b.textContent="Scanning…"; b.disabled=true; });
   try{ const j=await (await api("/api/watchlist/scan")).json();
-    wlHits=j.hits||[]; wlScanMsg=(j.matchedEvents||0).toLocaleString()+" matching events across "+(j.eventCount||0).toLocaleString()+" scanned";
+    wlHits=j.hits||[]; wlScanMsg=(j.matchedEvents||0).toLocaleString()+" matching events across "+(j.eventCount||0).toLocaleString()+" scanned"+
+      (j.truncated?' <span class="warn-text">(huge log, not fully scanned)</span>':"");
   }catch(err){ wlHits=[]; wlScanMsg="scan failed: "+esc(err.message||err); }
   paintManual();
 }
@@ -7373,7 +7381,8 @@ function paintRarity(){
     '<input class="vsearch" id="rarSearch" placeholder="filter…" value="'+esc(rarQ)+'">'+
     '<span class="vsp"></span><span class="dash-note" style="margin:0;padding:0">'+
     (stack?'<b>'+stack.distinct.toLocaleString()+'</b> distinct · '+stack.total.toLocaleString()+' observations':'')+
-    ' · from '+(rarData.eventCount||0).toLocaleString()+' events</span></div>';
+    ' · from '+(rarData.eventCount||0).toLocaleString()+' events'+
+    (rarData.truncated?' · <span class="warn-text">huge log, not fully scanned</span>':'')+'</span></div>';
   if(!stack || !stack.rows.length){ w.innerHTML=bar+'<p class="rarbar-desc">'+esc(meta.desc)+'</p>'+'<div class="hint" style="padding:16px">No '+meta.label.toLowerCase()+' data in this case '+(rarView==="hashes"?'(needs Sysmon EID 1 events with the Hashes field enabled).':'(needs Sysmon EID 1 / 4688 for processes, 4624 for logons, 7045/4697 for services).')+'</div>'; return; }
   let list=stack.rows;
   if(rarRareOnly) list=list.filter(r=>r.rare);
@@ -7854,7 +7863,7 @@ function decodePwshEnc(cmd){
     return printable(txt)>0.5 ? txt : null;
   }catch(_){ return null; }
 }
-let evidCache=null, evidCacheCase=null;
+let evidCache=null, evidCacheCase=null, evidTruncated=false;
 function mapSetRevive(k,v){ if(v&&v.__t==="M")return new Map(v.v); if(v&&v.__t==="S")return new Set(v.v); return v; }
 async function renderEvidenceScroll(){
   const w=$("evWrap");
@@ -7863,7 +7872,7 @@ async function renderEvidenceScroll(){
   w.innerHTML='<div class="dash-note">Mining forensic artifacts across the full log on the server…</div>';
   try{ const r=await api("/api/evidence"); const txt=await r.text();
     const j=JSON.parse(txt, mapSetRevive);
-    evidCache=EVID=j.evidence||null; evidCacheCase=window.__caseId;
+    evidCache=EVID=j.evidence||null; evidCacheCase=window.__caseId; evidTruncated=!!j.truncated;
   }catch(err){ w.innerHTML='<div class="dash-note">Could not extract evidence: '+esc(err.message||err)+'</div>'; return; }
   if(document.body.getAttribute("data-mode")==="ev") renderEvidence();
 }
@@ -7872,7 +7881,8 @@ function renderEvidence(){
   if(!EVID || (!rows.length && !SCROLL)){ w.innerHTML='<div class="empty-dash">Load events to extract evidence.</div>'; return; }
   const E=EVID; const CAP=120;
   const susp=/powershell|cmd\.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|wmic|psexec|-enc|encodedcommand|downloadstring|invoke-|frombase64|vssadmin|bcdedit|nltest|whoami|net\s+user|net\s+localgroup|schtasks|reg\s+add/i;
-  let h='<div class="dash-note">Forensic artifacts mined from <b>'+gridEventTotal().toLocaleString()+'</b> events - independent of rule hits. Click any row to pivot into the Events grid.</div>';
+  let h='<div class="dash-note">Forensic artifacts mined from <b>'+gridEventTotal().toLocaleString()+'</b> events - independent of rule hits. Click any row to pivot into the Events grid.'+
+    (evidTruncated?' · <span class="warn-text">huge log, not fully scanned</span>':'')+'</div>';
   // summary cards
   h+='<div class="cards">'+
      statCard(E.lsassAccess.length.toLocaleString(),"LSASS access",E.lsassAccess.length?"bad":"")+

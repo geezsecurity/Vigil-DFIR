@@ -1,12 +1,17 @@
 # dependencies
 node_modules/
 
-# case data — NEVER commit (may contain real incident / PII data)
-data/
+# case data — NEVER commit (rules, cases, catalog/index databases, raw logs — may contain
+# real incident / PII data). Matches ./data, ./server/data, and dev variants like data-dev/.
 **/data/
+**/data-*/
 !**/data/.gitkeep
 *.evtx
 *.jsonl
+*.db
+*.db-shm
+*.db-wal
+*.yml
 
 # archives / backups
 *.zip
@@ -16,3 +21,4 @@ data/
 scratchpad/
 tmp/
 .DS_Store
+.claude

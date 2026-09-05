@@ -10,13 +10,15 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test/engine.test.cjs && node test/store.test.mjs"
+    "test": "node test/engine.test.cjs && node test/store.test.mjs",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "docx": "^9.7.1",
     "express": "^4.19.2",
     "js-yaml": "^4.1.0",
     "multer": "^2.2.0",
+    "patch-package": "^8.0.1",
     "pdfkit": "^0.19.1",
     "winevtx": "^0.1.2"
   }

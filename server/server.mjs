@@ -105,6 +105,11 @@ const SIGMA_REPO = "SigmaHQ/sigma", SIGMA_BRANCH = "master";
 const SIGMA_RAW = `https://raw.githubusercontent.com/${SIGMA_REPO}/${SIGMA_BRANCH}/`;
 const BROWSE_CAP = parseInt(process.env.EVTX_BROWSE_CAP || "1000000", 10); // max events sent to the grid
 const TIMELINE_CAP = 8000;     // detection-timeline rows returned to the client
+// max events a single analytics pass (dashboard/timeline/proctree/sessions/lateral/observed/
+// rarity/watchlist-scan/evidence/cat) will scan. These endpoints stream + JSON.parse the whole
+// log on every request; without a cap an 11M-event case blocks the event loop for minutes and
+// the server looks hung. Raise EVTX_SCAN_CAP if your hardware can afford full scans of bigger logs.
+const SCAN_CAP = parseInt(process.env.EVTX_SCAN_CAP || "3000000", 10);
 
 const app = express();
 app.use(express.json({ limit: "8mb" }));
@@ -243,12 +248,25 @@ async function getParsedEvents(){
   _evCache={ mtimeMs:st.mtimeMs, size:st.size, evs };
   return evs; }
 // iterate every (parsed event, global index) — from the RAM cache when possible, else streaming
-async function forEachEvent(fn){
+// Walk every (parsed event, global index). `cap`, when given, bounds how many events a single
+// request will scan — without it a multi-million-event log blocks the (single-threaded) event
+// loop for the full JSON.parse pass, which freezes the whole server, not just this request.
+// Returns true when the walk stopped early because `cap` was hit (caller should flag results
+// as partial), false when the whole log was scanned.
+async function forEachEvent(fn, cap){
   const evs=await getParsedEvents();
-  if(evs){ for(const e of evs) fn(e.ev, e.i); return; }
+  if(evs){
+    let n=0;
+    for(const e of evs){ if(cap && n>=cap) return true; fn(e.ev, e.i); n++; }
+    return false;
+  }
   const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
-  let i=-1;
-  for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; } fn(ev, i); } }
+  let i=-1, n=0;
+  for await (const ln of rl){ i++; if(!ln) continue;
+    if(cap && n>=cap){ rl.close(); return true; }
+    let ev; try{ ev=JSON.parse(ln); }catch{ continue; } fn(ev, i); n++; }
+  return false;
+}
 
 /* ---------- byte-offset index (random access into events.jsonl) ----------------
    events.jsonl is one JSON event per line. events.idx holds the byte offset of each
@@ -740,7 +758,7 @@ app.get("/api/dashboard", async (req,res)=>{
   let total=0, fail=0, susp=0, tMin=null, tMax=null, fwCount=0, vpnCount=0;
   const bump=(m,k)=>{ if(k!=null&&k!=="") m.set(k,(m.get(k)||0)+1); };
   const SUSP=new Set(["4625","4720","4728","4732","4756","4724","1102","104","7045","4698","4697","1116","1117"]);
-  await forEachEvent((ev)=>{
+  const truncated=await forEachEvent((ev)=>{
     if(ev._cat==="firewall"){ fwCount++; return; }               // those have their own sections
     if(ev._cat==="vpn"){ vpnCount++; return; }
     total++;
@@ -753,9 +771,9 @@ app.get("/api/dashboard", async (req,res)=>{
     if(SUSP.has(eid)) susp++;
     if(ts){ if(tMin===null||ts<tMin)tMin=ts; if(tMax===null||ts>tMax)tMax=ts;
       const h=ts.slice(0,13); bump(hours,h); }   // hourly histogram (bounded)
-  });
+  }, SCAN_CAP);
   const top=(m,n)=>[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,n);
-  res.json({ ok:true, total, fail, susp, tsMin:tMin, tsMax:tMax, fwCount, vpnCount,
+  res.json({ ok:true, total, fail, susp, tsMin:tMin, tsMax:tMax, fwCount, vpnCount, truncated,
     providers: top(provs,15), computers: top(comps,12), users: top(users,12),
     eids: top(eids,30), hours: [...hours.entries()].sort() });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
@@ -825,12 +843,12 @@ app.post("/api/cat", async (req,res)=>{
     if(!fs.existsSync(EVENTS)) return res.json({ ok:true, total:0, rows:[] });
     const cat=(req.body&&req.body.cat)==="vpn"?"vpn":"firewall";
     const CAP=20000; const out=[]; let total=0;
-    await forEachEvent((ev, i)=>{
+    const truncated=await forEachEvent((ev, i)=>{
       if(ev._cat!==cat) return; total++;
       if(out.length<CAP){ const data=getData(ev);
         out.push({ i, ts:getTime(ev), src:ev._src||ev._source||"", msg:(data&&data.Message)||svSummary(data) }); }
-    });
-    res.json({ ok:true, total, rows:out });
+    }, SCAN_CAP);
+    res.json({ ok:true, total, rows:out, truncated });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
@@ -874,7 +892,7 @@ app.get("/api/evidence", async (req,res)=>{
       for(const sv of pa.services)push(E.services,{i,name:sv.name,path:sv.path,ts,via:"cmdline"}); };
     const sessById=new Map();                 // TargetLogonId -> session (paired 4624 logon / 4634-4647 logoff)
     const SESS_TYPES=new Set(["2","3","7","9","10","11"]);   // interactive/network/unlock/newcred/remote/cached
-    await forEachEvent((ev, i)=>{
+    const truncated=await forEachEvent((ev, i)=>{
       const sys=(ev.Event&&ev.Event.System)||ev.System||{};
       const provider=getProvider(ev), computer=getComputer(ev), ts=getTime(ev), d=getData(ev)||{};
       const id=String(getEventId(sys)||"");
@@ -957,12 +975,12 @@ app.get("/api/evidence", async (req,res)=>{
         case "4616": { const u=U("SubjectUserName"); if(u && !/\$$/.test(u) && !/^(LOCAL SERVICE|SYSTEM|NETWORK SERVICE)$/i.test(u))
           push(E.timeChange,{i,by:u,prev:U("PreviousTime"),nw:U("NewTime"),ts}); break; }
       }
-    });
+    }, SCAN_CAP);
     // finalize logon sessions (newest first), compute duration
     E.sessions=[...sessById.values()].map(s=>({ i:s.i, user:s.user, lt:s.lt, ip:s.ip, ws:s.ws, onTs:s.onTs,
       onTms:s.onTms, offTms:s.offTms, durationMs:(s.offTms&&s.onTms&&s.offTms>=s.onTms)?(s.offTms-s.onTms):null }))
       .sort((a,b)=>(b.onTms||0)-(a.onTms||0)).slice(0,5000);
-    res.type("application/json").send(JSON.stringify({ ok:true, evidence:E }, mapSetReplacer));
+    res.type("application/json").send(JSON.stringify({ ok:true, evidence:E, truncated }, mapSetReplacer));
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
@@ -983,8 +1001,10 @@ app.get("/api/entity", async (req,res)=>{
     const detSamples=[]; const recent=[]; const RECENT=40;
     const bump=(m,k)=>{ if(k!=null&&k!=="") m.set(k,(m.get(k)||0)+1); };
     const rl=readline.createInterface({ input: fs.createReadStream(EVENTS,{encoding:"utf8"}), crlfDelay:Infinity });
-    let i=-1;
-    for await (const ln of rl){ i++; if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
+    let i=-1, scanned=0, truncated=false;
+    for await (const ln of rl){ i++; if(!ln) continue;
+      if(scanned>=SCAN_CAP){ truncated=true; rl.close(); break; } scanned++;
+      let ev; try{ ev=JSON.parse(ln); }catch{ continue; }
       const sys=(ev.Event&&ev.Event.System)||ev.System||{};
       const data=getData(ev)||{}, comp=getComputer(ev), prov=getProvider(ev), ts=getTime(ev), eid=String(getEventId(sys)||"");
       const ents=Engine.extractEntities(data, comp);
@@ -1016,7 +1036,7 @@ app.get("/api/entity", async (req,res)=>{
       eids: top(eids,15), providers: top(provs,10),
       coUsers: top(coUsers,14), coHosts: top(coHosts,14), coIps: top(coIps,14),
       logonOk, logonFail, logonTypes: top(logonTypes,8),
-      detSamples, recent: recent.slice().reverse() } });
+      detSamples, recent: recent.slice().reverse(), truncated } });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
@@ -1043,7 +1063,7 @@ app.get("/api/timeline", async (req,res)=>{
     const NB=200, haveSpan=(t0!=null&&t1!=null&&t1>t0), span=haveSpan?(t1-t0):1;
     const buckets=Array.from({length:NB},()=>({n:0,d:0,lvl:-1}));
     const events=[]; const CAP=12000, COLLECT=80000; let notableTotal=0, detTotal=0;
-    await forEachEvent((ev, i)=>{
+    const scanTruncated=await forEachEvent((ev, i)=>{
       const sys=(ev.Event&&ev.Event.System)||ev.System||{};
       const ts=getTime(ev), tms=ts?Date.parse(ts):NaN, cat=ev._cat||"", eid=String(getEventId(sys)||"");
       let b=-1; if(haveSpan && !Number.isNaN(tms)){ b=Math.floor((tms-t0)/span*NB); if(b>=NB)b=NB-1; if(b<0)b=0; buckets[b].n++; }
@@ -1060,14 +1080,14 @@ app.get("/api/timeline", async (req,res)=>{
         if(b>=0){ buckets[b].d++; const n=sevNumS(level); if(n>buckets[b].lvl)buckets[b].lvl=n; }
         if(events.length<COLLECT) events.push({ idx:i, tms:Number.isNaN(tms)?null:tms, ts, kind, level, eid, host:getComputer(ev), title:String(title||"").slice(0,180) });
       }
-    });
+    }, SCAN_CAP);
     // 1) select the highest-signal events (severity, then rare non-detection artifacts, then recency)
     events.sort((a,c)=> (sevNumS(c.level)-sevNumS(a.level)) || ((c.kind!=="detection")-(a.kind!=="detection")) || ((c.tms||0)-(a.tms||0)) );
     const truncated=events.length>CAP;
     // 2) present them as a clean chronological flow: strictly by time, then log order as a stable tiebreaker
     const feed=events.slice(0,CAP);
     feed.sort((a,c)=> ((a.tms==null?Infinity:a.tms)-(c.tms==null?Infinity:c.tms)) || (a.idx-c.idx));
-    res.json({ ok:true, tMin:meta.tsMin, tMax:meta.tsMax, notableTotal, detTotal, truncated,
+    res.json({ ok:true, tMin:meta.tsMin, tMax:meta.tsMax, notableTotal, detTotal, truncated, scanTruncated,
       buckets: buckets.map((x,k)=>({ t: haveSpan?Math.round(t0+(k+0.5)*span/NB):null, n:x.n, d:x.d, lvl:x.lvl })),
       events: feed });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
@@ -1080,7 +1100,7 @@ app.get("/api/proctree", async (req,res)=>{
     if(!fs.existsSync(EVENTS)) return res.json({ ok:true, roots:[], count:0, hosts:[] });
     let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{}
     const CAP=30000; const procs=[]; const ends=new Map(); let truncated=false;
-    await forEachEvent((ev, i)=>{
+    if(await forEachEvent((ev, i)=>{
       const sys=(ev.Event&&ev.Event.System)||ev.System||{};
       if(!/sysmon/i.test(getProvider(ev))) return;              // ProcessGuid trees come from Sysmon
       const eid=String(getEventId(sys)||""); const d=getData(ev)||{};
@@ -1092,7 +1112,7 @@ app.get("/api/proctree", async (req,res)=>{
           pguid:d.ParentProcessGuid||"", pimage:d.ParentImage||"", user:d.User||"", ts, tms:ts?Date.parse(ts):NaN,
           host:getComputer(ev), det });
       } else if(eid==="5"){ const g=d.ProcessGuid; if(g) ends.set(g, getTime(ev)); }
-    });
+    }, SCAN_CAP)) truncated=true;
     for(const p of procs){ if(ends.has(p.guid)) p.end=ends.get(p.guid); }
     const tree=Engine.buildProcessTree(procs);
     res.json({ ok:true, roots:tree.roots, count:tree.count, hosts:tree.hosts, truncated });
@@ -1109,7 +1129,7 @@ app.get("/api/sessions", async (req,res)=>{
     let hits={}; try{ hits=JSON.parse(fs.readFileSync(DETS,"utf8")).hits||{}; }catch{}
     const detLvl=i=>{ const h=hits[i]; if(!h||!h.length)return 0; let m=0; for(const x of h){ const n=sevNumS(x.level); if(n>m)m=n; } return m; };
     const CAP=20000; const byId=new Map(); const open=[]; let truncated=false;
-    await forEachEvent((ev, i)=>{
+    if(await forEachEvent((ev, i)=>{
       const sys=(ev.Event&&ev.Event.System)||ev.System||{};
       const eid=String(getEventId(sys)||""); if(eid!=="4624"&&eid!=="4634"&&eid!=="4647") return;
       const d=getData(ev)||{}; const U=k=>d[k]!=null?String(d[k]):"";
@@ -1129,7 +1149,7 @@ app.get("/api/sessions", async (req,res)=>{
         const s=byId.get(lid);
         if(s && s.offTms==null){ s.offTs=ts; s.offTms=Number.isNaN(tms)?null:tms; }
       }
-    });
+    }, SCAN_CAP)) truncated=true;
     const sessions=[...byId.values()].map(s=>({ ...s,
       durationMs:(s.onTms!=null&&s.offTms!=null&&s.offTms>=s.onTms)?(s.offTms-s.onTms):null }))
       .sort((a,b)=>(b.det-a.det)||((b.onTms||0)-(a.onTms||0))).slice(0,CAP);
@@ -1148,7 +1168,7 @@ app.get("/api/lateral", async (req,res)=>{
     const clean=s=>{ s=String(s||"").trim(); if(!s||s==="-"||s==="::1"||/^127\./.test(s)||/^ANONYMOUS/i.test(s))return ""; return s; };
     const bare=h=>String(h||"").toUpperCase().split(".")[0];
     const raw=[]; const CAP=300000; let truncated=false;
-    await forEachEvent((ev, i)=>{
+    if(await forEachEvent((ev, i)=>{
       if(raw.length>=CAP){ truncated=true; return; }
       const sys=(ev.Event&&ev.Event.System)||ev.System||{};
       const eid=String(getEventId(sys)||"");
@@ -1174,7 +1194,7 @@ app.get("/api/lateral", async (req,res)=>{
         case "5140": case "5145":{ const share=U("ShareName"); const k=/\$$/.test(share||"")?"admin-share":"share";
           push(U("IpAddress"), "ip", host, "host", k, U("SubjectUserName")); break; }
       }
-    });
+    }, SCAN_CAP)) truncated=true;
     const g=Engine.buildLateralGraph(raw);
     res.json({ ok:true, nodes:g.nodes, edges:g.edges, count:g.nodes.length, edgeCount:g.edges.length, truncated });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
@@ -1207,7 +1227,7 @@ app.get("/api/watchlist/scan", async (req,res)=>{
     const metaByLower=matcher.meta;                          // lower -> {value,type}
     const agg=new Map();                                     // lower -> {value,type,count,hosts:Set,samples:[],det,firstTms,lastTms}
     let eventCount=0, matchedEvents=0;
-    await forEachEvent((ev, i)=>{
+    const truncated=await forEachEvent((ev, i)=>{
       eventCount++;
       const found=matcher.scan(bodyText(ev));                // bodyText is already lowercased
       if(!found.size) return;
@@ -1223,11 +1243,11 @@ app.get("/api/watchlist/scan", async (req,res)=>{
         if(det>a.det) a.det=det;
         if(!Number.isNaN(tms)){ if(a.firstTms==null||tms<a.firstTms)a.firstTms=tms; if(a.lastTms==null||tms>a.lastTms)a.lastTms=tms; }
       }
-    });
+    }, SCAN_CAP);
     const hits=[...agg.values()].map(a=>({ value:a.value, type:a.type, count:a.count, det:a.det,
       hosts:[...a.hosts].slice(0,20), samples:a.samples, firstTms:a.firstTms, lastTms:a.lastTms }))
       .sort((x,y)=>(y.det-x.det)||(y.count-x.count));
-    res.json({ ok:true, hits, iocCount:iocs.length, matched:hits.length, eventCount, matchedEvents });
+    res.json({ ok:true, hits, iocCount:iocs.length, matched:hits.length, eventCount, matchedEvents, truncated });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
 
@@ -1249,7 +1269,7 @@ app.get("/api/observed", async (req,res)=>{
     const IP_FIELDS=["IpAddress","DestinationIp","SourceIp","DestAddress","SourceAddress","ClientAddress","Address","DestinationAddress"];
     const HASH_ALGO=/^(md5|sha1|sha256)$/i;
     let eventCount=0;
-    await forEachEvent((ev, i)=>{
+    const truncated=await forEachEvent((ev, i)=>{
       eventCount++;
       const d=getData(ev)||{}; const host=getComputer(ev); const ts=getTime(ev); const tms=ts?Date.parse(ts):NaN; const T=Number.isNaN(tms)?null:tms;
       const det=detLvl(i);
@@ -1271,11 +1291,11 @@ app.get("/api/observed", async (req,res)=>{
       // Domains — from Sysmon DNS queries (EID 22)
       const q=d.QueryName; if(q){ const dn=String(q).trim().toLowerCase().replace(/\.$/,"");
         if(/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(dn) && !/\.(arpa|local)$/.test(dn)) add(domains, dn, { type:"domain" }, host, i, T, det); }
-    });
+    }, SCAN_CAP);
     const pack=map=>[...map.values()].map(a=>({ value:a.value, type:a.type, algo:a.algo, external:a.external,
       count:a.count, det:a.det, hosts:[...a.hosts].slice(0,20), samples:a.samples, firstTms:a.firstTms, lastTms:a.lastTms }))
       .sort((x,y)=>(y.det-x.det)||(y.count-x.count));
-    res.json({ ok:true, ips:pack(ips), hashes:pack(hashes), domains:pack(domains), eventCount,
+    res.json({ ok:true, ips:pack(ips), hashes:pack(hashes), domains:pack(domains), eventCount, truncated,
       capped:{ ips:ips.size>=CAP, hashes:hashes.size>=CAP, domains:domains.size>=CAP } });
   }catch(err){ console.error(err); res.status(500).json({error:String(err.message||err)}); }
 });
@@ -1288,7 +1308,7 @@ app.get("/api/rarity", async (req,res)=>{
     const detLvl=i=>{ const h=detHits[i]; if(!h||!h.length)return 0; let m=0; for(const x of h){ const n=sevNumS(x.level); if(n>m)m=n; } return m; };
     const procItems=[], pcItems=[], logonItems=[], svcItems=[], hashItems=[];
     let eventCount=0;
-    await forEachEvent((ev, i)=>{
+    const truncated=await forEachEvent((ev, i)=>{
       eventCount++;
       const sys=(ev.Event&&ev.Event.System)||ev.System||{};
       const eid=String(getEventId(sys)||""); const prov=getProvider(ev); const d=getData(ev)||{};
@@ -1319,8 +1339,8 @@ app.get("/api/rarity", async (req,res)=>{
       // service install — 7045 (System) / 4697 (Security)
       if(eid==="7045"||eid==="4697"){ const n=U("ServiceName"); const p=U("ImagePath")||U("ServiceFileName");
         if(n) svcItems.push({ key:n+(p?"  ["+p+"]":""), host, user:U("SubjectUserName"), idx:i, tms:T, det }); }
-    });
-    res.json({ ok:true, eventCount,
+    }, SCAN_CAP);
+    res.json({ ok:true, eventCount, truncated,
       processes: Engine.buildStacks(procItems),
       parentChild: Engine.buildStacks(pcItems),
       logons: Engine.buildStacks(logonItems),

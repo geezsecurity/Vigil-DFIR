@@ -1,0 +1,15 @@
+diff --git a/node_modules/winevtx/dist/binxml.js b/node_modules/winevtx/dist/binxml.js
+index 357198e..104b069 100644
+--- a/node_modules/winevtx/dist/binxml.js
++++ b/node_modules/winevtx/dist/binxml.js
+@@ -305,5 +305,10 @@ function normalizeEventData(expanded) {
+             return;
+         result.set(name, value);
+     }
++    // preserve EventData siblings of Data (e.g. Binary) instead of discarding them
++    for (const [k, v] of eventData) {
++        if (k !== "Data")
++            result.set(k, v);
++    }
+     expanded.set("EventData", result);
+ }
